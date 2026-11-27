@@ -1,0 +1,5 @@
+packages:
+  - gateway-ui
+  - hub-app
+  - shared
+  - ../tests/web

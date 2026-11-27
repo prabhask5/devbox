@@ -2,9 +2,9 @@ name: CI
 
 # Every job here must pass before a pull request can merge. Branch protection requires only the
 # `required` job at the bottom, which fails unless all the others succeeded, so jobs can be added
-# or removed without changing repository settings (same pattern as prabhask5/stellar and prabhask5/moi).
+# or removed without changing repository settings.
 #
-# M0 adds the go, rust, web, integration, e2e, build and budgets jobs (docs/spec/15-testing.md).
+# Each job runs one stage of scripts/ci.sh, so `scripts/ci.sh` locally is the same as CI.
 
 on:
   pull_request:
@@ -23,24 +23,103 @@ permissions:
 jobs:
   static:
     name: static
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v7
-      - name: Tests live in tests/
-        run: scripts/check-tests-location.sh
-      - name: No secrets committed
-        run: scripts/check-secrets.sh
-      - name: Repo hygiene
-        run: scripts/check-hygiene.sh
-      - name: Links in the docs
-        run: python3 scripts/check-links.py
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+        with: { go: true, rust: true, web: true }
+      - uses: taiki-e/install-action@073e1fd0bc889c9aee68dbaaa927cde1b5653a83 # v2.90.11
+        with:
+          tool: cargo-deny@0.22.1,cargo-machete@0.10.1
+      - run: scripts/ci.sh static
+
+  go:
+    name: go
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+        with: { go: true, rust: false, web: false }
+      - run: scripts/ci.sh go
+
+  rust:
+    name: rust
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+        with: { go: false, rust: true, web: false }
+      - run: scripts/ci.sh rust
+
+  web:
+    name: web
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+        with: { go: false, rust: false, web: true }
+      - run: scripts/ci.sh web
+
+  integration:
+    name: integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+        with: { go: true, rust: true, web: false }
+      - run: scripts/ci.sh integration
+
+  e2e:
+    name: e2e
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+        with: { go: true, rust: true, web: true }
+      - run: scripts/ci.sh e2e
+
+  build:
+    name: build (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: amd64, runner: ubuntu-24.04, target: x86_64-unknown-linux-musl }
+          - { arch: arm64, runner: ubuntu-24.04-arm, target: aarch64-unknown-linux-musl }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+        with: { go: true, rust: true }
+      - run: scripts/ci.sh build
+        env:
+          DEVBOX_RUST_TARGET: ${{ matrix.target }}
+      - name: Binaries are static
+        run: |
+          for f in bin/*; do file "$f"; file "$f" | grep -qE 'statically linked|static-pie linked'; done
+
+  budgets:
+    name: budgets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+        with: { go: true, rust: true, web: true }
+      - run: scripts/ci.sh budgets
 
   required:
     name: required
     if: always()
-    needs: [static]
-    runs-on: ubuntu-latest
+    needs: [static, go, rust, web, integration, e2e, build, budgets]
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Every job succeeded

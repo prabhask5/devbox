@@ -13,7 +13,7 @@
 moi exposes them as `moi devbox up|down|status|doctor` — same flags and output as the `devbox` CLI (the CLI is a thin wrapper over the same functions). Requirements for this to work:
 
 - **`System` adapter**: `devbox_core::system::System` must be implementable on top of moi's `host::Host` (files under a root prefix, commands, clock, Incus socket). The trait mirrors moi's conventions so the adapter is a thin shim; a test in this repo implements `System` for a minimal `Host`-like fixture to prove it.
-- **Publishing**: moi's `cargo deny` allows crates.io sources only, so the crates are published to crates.io (names checked in M0; e.g. `devbox-core` or a prefixed form if taken). Semver: the public API of `devbox-core` follows the `contracts/` versions.
+- **Publishing**: moi's `cargo deny` allows crates.io sources only, so the crates are published to crates.io as `devbox-core`, `devbox-sync` and `devbox-context`. The CLI crate `devbox-cli` (binary `devbox`) is not published; its whole program is the library function `devbox_cli::run(args, stdout, stderr)`, which the tests drive in-process. Semver: the public API of `devbox-core` follows the `contracts/` versions.
 - **Dependencies** stay within moi's license allowlist (MIT/Apache-2.0/BSD/ISC/Zlib/Unicode/MPL-2.0) and avoid duplicating moi's majors where possible (`serde`, `toml`, `thiserror`, `tokio` only if needed).
 
 ## What moi observes (no embedding)

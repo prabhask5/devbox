@@ -48,6 +48,7 @@ The repository contains only:
 - No committed build outputs (`dist/`, `target/`, `node_modules/`, binaries); no executable files except scripts in `scripts/`, `vm/`, `deploy/`; no file over 1 MB.
 - Generated code is up to date (01) and marked as generated.
 - Every skipped/ignored test states why; no commented-out code; no debug output.
+- Every GitHub Action is referenced by commit SHA (`check-hygiene.sh` fails on a tag or branch reference).
 
 ## Repository settings (owner, checked at M12)
 

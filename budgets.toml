@@ -1,4 +1,4 @@
-# Performance budgets (docs/spec/13-performance.md). Checked by scripts/budgets.sh in CI (added in M0).
+# Performance budgets (docs/spec/13-performance.md). Checked by scripts/budgets.sh in CI.
 # Metrics without a measurement yet are reported as "pending".
 [budgets]
 gateway_proxy_p50_ms = 0.3

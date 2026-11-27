@@ -43,6 +43,8 @@ On a GitHub-hosted Ubuntu runner with KVM: install Incus, deploy the gateway wit
 
 ## CI jobs (`.github/workflows/ci.yml`; branch protection requires only `required`)
 
+Each job runs one stage of `scripts/ci.sh` (`scripts/ci.sh static`, `scripts/ci.sh go`, …), and `scripts/ci.sh` without arguments runs them all, so a local run and CI execute the same commands. The Vitest suites in `tests/web` are a member of the pnpm workspace in `web/`, which is how they resolve the apps and their dependencies.
+
 | Job | Runs |
 |---|---|
 | `static` | tests-location, secrets, hygiene, generated contracts up to date, docs links, gofmt/vet/golangci-lint/staticcheck/deadcode/govulncheck/`go mod tidy` diff, rustfmt/clippy/cargo deny/cargo machete, prettier/eslint/tsc/knip/pnpm audit |
@@ -51,7 +53,7 @@ On a GitHub-hosted Ubuntu runner with KVM: install Incus, deploy the gateway wit
 | `web` | Vitest + builds + bundle budgets |
 | `integration` | real tmux + git + fakes (Go and Rust integration suites) |
 | `e2e` | the harness scenarios with Playwright (WebKit iPhone + Chromium) |
-| `build` | gateway image, hub/devbox static binaries (amd64 + arm64) |
+| `build` | gateway image, hub/devbox static binaries (amd64 + arm64, one native runner per architecture; `devbox` is built for the musl targets) |
 | `budgets` | spec 13 |
 | `required` | fails unless every job above succeeded (pattern from stellar/moi) |
 
