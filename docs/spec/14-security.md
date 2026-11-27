@@ -9,7 +9,7 @@ devbox exposes a machine with the owner's code, credentials and agents to the in
 | Gateway `:8080` | Traefik (Docker network) only; public via Cloudflare/Traefik | `/__devbox/health|status|events|skip`: none (no secrets in them). Waking: wake cookie (argon2id password → HMAC cookie). Proxied traffic: the upstream's own auth |
 | Gateway `:2222` | the owner's tunnel (cloudflared) only | SSH itself; may wake without a cookie |
 | code-server `:code_port` | gateway only (host firewall) | code-server password |
-| Hub `:hub_port` `/api/*` | gateway only | hub app session cookie (argon2id password → HMAC cookie, 180 days); `POST /api/logout` and password rotation (`devbox password app`) invalidate all sessions (cookie secret rotated) |
+| Hub `:hub_port` `/api/*` | gateway only | hub app session cookie (argon2id password → HMAC cookie, 180 days); `POST /api/logout` invalidates all sessions (the cookie signs a session generation, which logout raises); password rotation (`devbox password app`) does too, by rotating the cookie secret |
 | Hub `:hub_port` `/devbox/*` | gateway only | `Authorization: Bearer <hub token>` (32 random bytes, in host and hub secrets; constant-time compare) |
 | Hub unix socket | VM user only | socket mode 0600 + `SO_PEERCRED` uid check |
 | Incus socket (mounted into the gateway) | gateway container | root-equivalent: the gateway uses only `GET /1.0/instances/<instance>[/state]`, `PUT …/state` and `GET /1.0/operations/*`; an allowlist in the Incus client refuses anything else, tested |
@@ -45,7 +45,6 @@ Each dependency and why (keep current when adding one):
 | Go | `modernc.org/sqlite` | hub database without cgo |
 | Go | `golang.org/x/sys` | peer credentials of the hub's unix socket |
 | Go | `github.com/BurntSushi/toml` | config files |
-| Go | (decided in M4) a vt100 emulator, e.g. `github.com/hinshun/vt10x` or own minimal one | screen frames from tmux output |
 | Rust | `clap`, `serde`, `serde_json`, `toml`, `thiserror` | CLI, config, contracts (same as moi) |
 | Rust | `argon2`, `getrandom` | password hashing, salts |
 | Rust | `ureq` or a minimal HTTP/1.1 client over the Incus unix socket (decided in M6/M8) | Incus REST, GitHub API |

@@ -136,7 +136,7 @@ func (h *Hub) serveApp(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"runId": h.startSync("requested")})
 	case "POST sessions":
 		var request NewSession
-		if decode(w, r, requestBodyMax, &request) {
+		if decode(w, r, &request) {
 			created, err := h.Create(r.Context(), request)
 			respond(w, created, err)
 		}
@@ -146,12 +146,12 @@ func (h *Hub) serveApp(w http.ResponseWriter, r *http.Request) {
 		respond(w, ok, h.Kill(r.Context(), parts[2]))
 	case "POST sessions/:id/input":
 		var input Input
-		if decode(w, r, requestBodyMax, &input) {
+		if decode(w, r, &input) {
 			respond(w, ok, h.Send(r.Context(), parts[2], input))
 		}
 	case "POST sessions/:id/rename":
 		var request struct{ Name string }
-		if decode(w, r, requestBodyMax, &request) {
+		if decode(w, r, &request) {
 			renamed, err := h.Rename(r.Context(), parts[2], request.Name)
 			respond(w, renamed, err)
 		}
@@ -163,7 +163,7 @@ func (h *Hub) serveApp(w http.ResponseWriter, r *http.Request) {
 		var request struct {
 			FinishedNotifyAfterSec *int `json:"finishedNotifyAfterSec"`
 		}
-		if !decode(w, r, requestBodyMax, &request) {
+		if !decode(w, r, &request) {
 			return
 		}
 		if request.FinishedNotifyAfterSec != nil {
@@ -178,7 +178,7 @@ func (h *Hub) serveApp(w http.ResponseWriter, r *http.Request) {
 			Subscription webpush.Subscription `json:"subscription"`
 			Device       string               `json:"device"`
 		}
-		if !decode(w, r, requestBodyMax, &request) {
+		if !decode(w, r, &request) {
 			return
 		}
 		if !strings.HasPrefix(request.Subscription.Endpoint, "https://") && !strings.HasPrefix(request.Subscription.Endpoint, "http://") ||
@@ -194,7 +194,7 @@ func (h *Hub) serveApp(w http.ResponseWriter, r *http.Request) {
 		respond(w, map[string]any{"ok": true, "devices": h.devices()}, err)
 	case "POST push/unsubscribe":
 		var request struct{ Endpoint string }
-		if decode(w, r, requestBodyMax, &request) {
+		if decode(w, r, &request) {
 			err := h.store.unsubscribe(r.Context(), request.Endpoint)
 			h.changed()
 			respond(w, ok, err)
@@ -218,7 +218,7 @@ func (h *Hub) devices() int {
 
 func (h *Hub) serveLogin(w http.ResponseWriter, r *http.Request) {
 	var request struct{ Password string }
-	if !decode(w, r, requestBodyMax, &request) {
+	if !decode(w, r, &request) {
 		return
 	}
 	if !h.login.Allow(httpx.ClientAddress(r), h.now()) {

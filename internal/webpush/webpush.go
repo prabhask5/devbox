@@ -108,7 +108,7 @@ func Encrypt(message []byte, browserKey, authSecret []byte, ephemeral *ecdh.Priv
 	var out bytes.Buffer
 	out.Write(salt)
 	_ = binary.Write(&out, binary.BigEndian, uint32(recordSize))
-	out.WriteByte(byte(len(server)))
+	out.WriteByte(byte(len(server))) //nolint:gosec // an uncompressed P-256 point is 65 bytes
 	out.Write(server)
 	out.Write(gcm.Seal(nil, nonce, append(append([]byte{}, message...), 0x02), nil))
 	return out.Bytes(), nil

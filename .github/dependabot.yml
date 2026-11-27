@@ -12,6 +12,10 @@ updates:
   - package-ecosystem: npm
     directory: /web
     schedule: { interval: weekly }
+    ignore:
+      # The Node types follow the Node version in .node-version.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: docker
     directory: /deploy/gateway
     schedule: { interval: weekly }

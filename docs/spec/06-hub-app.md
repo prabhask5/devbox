@@ -14,7 +14,7 @@ The agents app at `agents.<domain>`: an installable PWA, TypeScript + Preact + V
 
 ## Screen streaming
 
-`GET /api/sessions/:id/screen?cols&rows` (SSE of `screen-frame`). The hub keeps a **vt100 emulator per viewed session** fed by tmux control-mode `%output` (so frames are produced on change, not by polling), seeded with `capture-pane -p -e -S -300` on open; frames are coalesced to ≤ 20/s. Frame = styled lines (ANSI SGR) of scrollback + screen. The app renders with its own small SGR→DOM renderer (16/256/truecolor, bold/dim/italic/underline/inverse/strike), monospace, font size from settings; measures a character to compute `cols/rows`. Auto-scrolls when the user is at the bottom. Reconnect with backoff; `visibilitychange` reconnects.
+`GET /api/sessions/:id/screen?cols&rows` (SSE of `screen-frame`). **tmux is the terminal emulator**: a frame is `capture-pane -p -e -S -300`, the styled lines (ANSI SGR) of scrollback and screen exactly as tmux has them, so the app shows what an attached terminal would. Frames are produced on change, not by polling: per viewed session the hub keeps one control-mode client attached to that session (`-f read-only,ignore-size`, shared by all its viewers, not counted as an attached terminal), and captures when it reports `%output`. One frame is sent on open; after a frame the hub waits 50 ms before the next capture (≤ 20/s), and an unchanged capture sends nothing. A session with no screen gets one frame with `reason` (`external`, `gone`) and the stream stays open. A viewer that gives `cols` and `rows` (clamped to 20–400 × 10–200) gets the window resized to them when no terminal is attached; when the last viewer leaves the window is set back to `window-size latest`. The app renders with its own small SGR→DOM renderer (16/256/truecolor, bold/dim/italic/underline/inverse/strike), monospace, font size from settings; measures a character to compute `cols/rows`. Auto-scrolls when the user is at the bottom. Reconnect with backoff; `visibilitychange` reconnects.
 
 ## Offline shell and updates
 
@@ -22,8 +22,9 @@ Service worker: precache the shell (versioned by build hash), navigation network
 
 ## Web push
 
-- VAPID keys generated on first run (hub secrets). Payload encryption RFC 8291 (aes128gcm) and VAPID RFC 8292, implemented in `internal/webpush` (stdlib crypto; no third-party crypto).
-- Subscriptions in `hub.db`; 404/410 from the push service removes a subscription. TTL 1 h, urgency `high` for needs_input/errors.
+- VAPID keys generated on first run and appended to `hub.secrets.toml`. Payload encryption RFC 8291 (aes128gcm) and VAPID RFC 8292, implemented in `internal/webpush` (stdlib crypto; no third-party crypto) and checked against the example in RFC 8291 appendix A. The VAPID token names `https://<agents host>` as contact and is valid 12 h. A message is at most 3993 bytes (one 4096-byte record); notification bodies are cut to 180 characters.
+- Subscriptions in `hub.db` (`POST /api/push/subscribe {subscription, device}`, `…/unsubscribe {endpoint}`, `…/test`); 404/410 from the push service removes a subscription. TTL 1 h, urgency `high` for needs_input/errors. Sending never blocks the hub: it happens in the background, one device after the other.
+- `GET/POST /api/settings {finishedNotifyAfterSec}` (0–3600, default 30), kept in `hub.db`.
 - The service worker shows the notification (iOS requires a visible notification for every push), sets the app badge (`setAppBadge`), and on click focuses the app and navigates to `url` (`/#/s/<id>`).
 - iOS rules: push only from the Home Screen app and only from a user gesture; no action buttons (WebKit doesn't support them) — a tap opens the session where answers are one tap away.
 

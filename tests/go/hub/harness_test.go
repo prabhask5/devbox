@@ -18,13 +18,14 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/crypto/argon2"
+
 	"github.com/prabhask5/devbox/internal/config"
 	"github.com/prabhask5/devbox/internal/hub"
 	"github.com/prabhask5/devbox/internal/proto"
 	"github.com/prabhask5/devbox/internal/sys"
 	"github.com/prabhask5/devbox/internal/tmux"
 	"github.com/prabhask5/devbox/internal/webpush"
-	"golang.org/x/crypto/argon2"
 )
 
 const (

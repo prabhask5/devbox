@@ -23,7 +23,7 @@ const (
 // setUpPush makes the hub able to send notifications: with the keys in its secrets, or with
 // new ones on its first run.
 func (h *Hub) setUpPush() error {
-	keys := webpush.Keys{}
+	var keys webpush.Keys
 	if h.opt.Secrets.VapidPublicKey != nil && h.opt.Secrets.VapidPrivateKey != nil {
 		keys = webpush.Keys{Public: *h.opt.Secrets.VapidPublicKey, Private: h.opt.Secrets.VapidPrivateKey.Expose()}
 	} else {

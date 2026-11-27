@@ -204,9 +204,12 @@ func verifyVAPID(header, audience string) (string, error) {
 	case len(signature) != 64:
 		return "", errors.New("signature is not 64 bytes")
 	}
-	key := ecdsa.PublicKey{Curve: elliptic.P256(), X: new(big.Int).SetBytes(public[1:33]), Y: new(big.Int).SetBytes(public[33:])}
+	key, err := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), public)
+	if err != nil {
+		return "", err
+	}
 	digest := sha256.Sum256([]byte(parts[0] + "." + parts[1]))
-	if !ecdsa.Verify(&key, digest[:], new(big.Int).SetBytes(signature[:32]), new(big.Int).SetBytes(signature[32:])) {
+	if !ecdsa.Verify(key, digest[:], new(big.Int).SetBytes(signature[:32]), new(big.Int).SetBytes(signature[32:])) {
 		return "", errors.New("signature does not verify")
 	}
 	return claims.Sub, nil

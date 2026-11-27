@@ -65,5 +65,5 @@ Never while a screen stream for that session is open; at most one per session pe
 - [x] Relay: p50/p99 timing test against a real socket; prints nothing; exits 0 when the hub is down / socket missing / payload invalid; 8 MB cap. (`tests/go/relay`; the budget by `tests/perf/hub`)
 - [x] Hook config installers: Claude settings merge preserves unrelated keys and hooks (golden JSON), idempotent; Codex/opencode files golden. (`tests/go/hooks`, `tests/fixtures/hooks/settings/`)
 - [ ] Fake agents (scripts emitting each agent's real hook payload shapes, captured as fixtures) drive the full state machine for claude, codex and opencode. Done with payloads written from each agent's hook documentation (`tests/fakes/agents`, `tests/fixtures/hooks/payloads/`, `tests/go/hub`); capturing them from the running agents is still open.
-- [ ] Notification rules: delay cancelled by an answer, attached-client delay, viewer suppression, throttle, finished threshold, badge count.
+- [x] Notification rules: delay cancelled by an answer, attached-client delay, viewer suppression, throttle, finished threshold, badge count. (`tests/go/hub/app_test.go`: `TestNotificationRules`, `TestAQuestionWithATerminalAttachedWaitsLonger`, `TestSyncProblemsAreAnnounced`)
 - [ ] Answer keys verified against recorded prompt screens of the current agent versions (fixtures + doc of how to re-record).

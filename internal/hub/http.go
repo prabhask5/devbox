@@ -47,8 +47,8 @@ func respond(w http.ResponseWriter, value any, err error) {
 	}
 }
 
-func decode(w http.ResponseWriter, r *http.Request, limit int64, into any) bool {
-	data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, limit))
+func decode(w http.ResponseWriter, r *http.Request, into any) bool {
+	data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, requestBodyMax))
 	if err != nil {
 		fail(w, http.StatusRequestEntityTooLarge, "the request is too large")
 		return false
@@ -141,7 +141,7 @@ func (h *Hub) serveInternal(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"runId": h.startSync("requested")})
 	case route == "POST sessions" && len(parts) == 2:
 		var request NewSession
-		if decode(w, r, requestBodyMax, &request) {
+		if decode(w, r, &request) {
 			created, err := h.Create(r.Context(), request)
 			respond(w, created, err)
 		}
@@ -149,12 +149,12 @@ func (h *Hub) serveInternal(w http.ResponseWriter, r *http.Request) {
 		respond(w, map[string]bool{"ok": true}, h.Kill(r.Context(), parts[2]))
 	case route == "POST sessions input":
 		var input Input
-		if decode(w, r, requestBodyMax, &input) {
+		if decode(w, r, &input) {
 			respond(w, map[string]bool{"ok": true}, h.Send(r.Context(), parts[2], input))
 		}
 	case route == "POST sessions rename":
 		var request struct{ Name string }
-		if decode(w, r, requestBodyMax, &request) {
+		if decode(w, r, &request) {
 			renamed, err := h.Rename(r.Context(), parts[2], request.Name)
 			respond(w, renamed, err)
 		}

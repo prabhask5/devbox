@@ -340,9 +340,12 @@ func TestSettings(t *testing.T) {
 	if resp := a.do("GET", "/api/settings", nil); resp.body != "{\"finishedNotifyAfterSec\":30}\n" {
 		t.Errorf("defaults: %s", resp.body)
 	}
-	for sent, want := range map[int]string{120: "120", -5: "0", 99999: "3600"} {
-		if resp := a.do("POST", "/api/settings", map[string]int{"finishedNotifyAfterSec": sent}); resp.body != "{\"finishedNotifyAfterSec\":"+want+"}\n" {
-			t.Errorf("set %d: %s", sent, resp.body)
+	for _, c := range []struct {
+		sent int
+		want string
+	}{{120, "120"}, {-5, "0"}, {99999, "3600"}} {
+		if resp := a.do("POST", "/api/settings", map[string]int{"finishedNotifyAfterSec": c.sent}); resp.body != "{\"finishedNotifyAfterSec\":"+c.want+"}\n" {
+			t.Errorf("set %d: %s", c.sent, resp.body)
 		}
 	}
 	// Settings survive a restart of the hub.
