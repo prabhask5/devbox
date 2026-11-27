@@ -13,6 +13,7 @@
     "isolatedModules": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": []
+    "types": [],
+    "allowImportingTsExtensions": true
   }
 }

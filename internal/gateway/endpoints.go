@@ -8,7 +8,7 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
-	"strings"
+	"regexp"
 	"time"
 
 	"github.com/prabhask5/devbox/internal/proto"
@@ -30,14 +30,14 @@ type bootData struct {
 //go:embed boot.gen.html
 var bootPage string
 
-const bootSlot = `<script id="devbox-boot" type="application/json">{}</script>`
-
+// bootBefore and bootAfter are the page around the JSON of its devbox-boot element.
 var bootBefore, bootAfter = func() (string, string) {
-	before, after, found := strings.Cut(bootPage, bootSlot)
-	if !found {
-		panic("boot.gen.html has no devbox-boot element; run scripts/gen.sh")
+	const open = `<script id="devbox-boot" type="application/json">`
+	slot := regexp.MustCompile(open + `\s*\{\}\s*</script>`).FindStringIndex(bootPage)
+	if slot == nil {
+		panic("boot.gen.html has no empty devbox-boot element; run scripts/gen.sh")
 	}
-	return before + bootSlot[:len(bootSlot)-len("{}</script>")], "</script>" + after
+	return bootPage[:slot[0]] + open, "</script>" + bootPage[slot[1]:]
 }()
 
 // serveBoot answers a page load with the boot screen.

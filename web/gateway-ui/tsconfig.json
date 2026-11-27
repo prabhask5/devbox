@@ -3,8 +3,7 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "jsxImportSource": "preact",
-    "types": ["node", "vite/client"],
-    "allowImportingTsExtensions": true
+    "types": ["node", "vite/client"]
   },
   "include": ["src", "vite.config.ts"]
 }
