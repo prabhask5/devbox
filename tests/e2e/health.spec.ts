@@ -40,7 +40,16 @@ test("health follows Incus, a failed wake and the VM's services", async ({ reque
   await set(request, { start: "ok", startMs: "0" });
   expect((await request.post(`${CODE}/__devbox/wake`, { data: {} })).status()).toBe(202);
   await expect.poll(problems(request)).toEqual([]);
-  expect((await health(request)).body.vm).toBe("running");
+  // The wake has to be over before the next faults: during one, a silent hub is waited for.
+  await expect
+    .poll(async () => {
+      const now = (await (await request.get(`${CODE}/__devbox/status`)).json()) as {
+        vm: string;
+        phase: string;
+      };
+      return `${now.vm} ${now.phase}`;
+    })
+    .toBe("running idle");
 
   // The VM is up but its services stop answering, one after the other.
   await set(request, { hub: "down" });

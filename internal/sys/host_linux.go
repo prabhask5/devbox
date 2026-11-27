@@ -9,7 +9,7 @@ import (
 
 func (machine) HasChildren(pid int) bool {
 	id := strconv.Itoa(pid)
-	data, err := os.ReadFile("/proc/" + id + "/task/" + id + "/children")
+	data, err := os.ReadFile("/proc/" + id + "/task/" + id + "/children") //nolint:gosec // a path made of a process id
 	if err != nil {
 		return true
 	}
