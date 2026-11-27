@@ -36,13 +36,6 @@ func run(t *testing.T, bin string, args ...string) (code int, stdout, stderr str
 	return cmd.ProcessState.ExitCode(), o.String(), e.String()
 }
 
-func TestGatewayIsNotImplementedYet(t *testing.T) {
-	code, stdout, stderr := run(t, build(t, "devbox-gateway"))
-	if code != 3 || stdout != "" || stderr != "devbox-gateway: not implemented yet\n" {
-		t.Fatalf("exit %d, stdout %q, stderr %q", code, stdout, stderr)
-	}
-}
-
 func TestHubSubcommandsAreNotImplementedYet(t *testing.T) {
 	bin := build(t, "devbox-hub")
 	for _, sub := range []string{"serve", "event", "agent", "update", "selftest", "healthcheck"} {

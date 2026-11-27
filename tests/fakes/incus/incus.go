@@ -74,7 +74,6 @@ func Start(socketPath string) (*Server, error) {
 		operations: map[string]*operation{},
 		failures:   map[Failure]string{},
 	}
-	s.http = &http.Server{Handler: http.HandlerFunc(s.serve), ReadHeaderTimeout: 10 * time.Second}
 	return s, s.Resume()
 }
 
@@ -86,11 +85,11 @@ func (s *Server) Close() {
 // Pause stops serving and removes the socket, as when the Incus daemon is down.
 func (s *Server) Pause() {
 	s.mu.Lock()
-	wasListening := s.listening
+	wasListening, server := s.listening, s.http
 	s.listening = false
 	s.mu.Unlock()
 	if wasListening {
-		_ = s.http.Close()
+		_ = server.Close()
 		_ = os.Remove(s.socket)
 	}
 }
@@ -257,6 +256,7 @@ func (s *Server) putState(w http.ResponseWriter, name string, body map[string]an
 	if action == "stop" {
 		delay = s.stopDelay
 	}
+	created := op.metadata()
 	s.mu.Unlock()
 
 	go func() {
@@ -269,7 +269,7 @@ func (s *Server) putState(w http.ResponseWriter, name string, body map[string]an
 	w.Header().Set("Location", "/1.0/operations/"+op.id)
 	respond(w, http.StatusAccepted, map[string]any{
 		"type": "async", "status": "Operation created", "status_code": 100, "operation": "/1.0/operations/" + op.id,
-		"error_code": 0, "error": "", "metadata": op.metadata(),
+		"error_code": 0, "error": "", "metadata": created,
 	})
 }
 
