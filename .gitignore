@@ -1,0 +1,11 @@
+/target/
+/bin/
+/dist/
+node_modules/
+web/*/dist/
+coverage/
+test-results/
+playwright-report/
+*.local.toml
+.env
+.DS_Store
