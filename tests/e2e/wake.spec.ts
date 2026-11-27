@@ -90,12 +90,13 @@ test("Open now during the repo sync opens the editor at once", async ({ page, re
     .toBe("idle");
 });
 
-test("the agents host gets its own boot screen and its own app", async ({ page }) => {
+test("the agents host gets its own boot screen and is routed to the hub", async ({ page }) => {
   await page.goto(`${AGENTS}/`);
   await expect(page).toHaveTitle("Agents · devbox");
   await expect(page.locator(".brand")).toHaveText("agents.example.com");
   await signIn(page, WAKE_PASSWORD);
-  await expect(page.getByRole("heading")).toHaveText("agents app", { timeout: 20_000 });
+  // The page reloads into what the hub serves at "/": nothing yet, which it says in JSON.
+  await expect(page.locator("body")).toContainText('{"error":"not found"}', { timeout: 20_000 });
 });
 
 test("a failed wake says why and Try again retries", async ({ page, request }) => {

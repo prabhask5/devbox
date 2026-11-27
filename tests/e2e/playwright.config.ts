@@ -22,8 +22,12 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   projects: [
-    // The primary device: iPhone Safari. The stack-level health scenario needs no browser twice.
-    { name: "webkit-iphone", use: { ...devices["iPhone 14"] }, testIgnore: /health\.spec\.ts/ },
+    // The primary device: iPhone Safari. The stack-level scenarios need no browser, so they run once.
+    {
+      name: "webkit-iphone",
+      use: { ...devices["iPhone 14"] },
+      testIgnore: /(health|idle)\.spec\.ts/,
+    },
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
   ],
   webServer: {
