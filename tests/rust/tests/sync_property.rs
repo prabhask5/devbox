@@ -136,7 +136,8 @@ fn check(local_ops: &[Local], upstream_ops: &[Upstream]) -> Result<(), TestCaseE
     s.git(&seed, &["push", "--quiet", "origin", "main"]);
 
     let before = s.snapshot(&dir);
-    let unpushed = s.git(&dir, &["rev-list", "--count", &format!("{base}..HEAD")]);
+    let unpushed: u32 =
+        s.git(&dir, &["rev-list", "--count", &format!("{base}..HEAD")]).parse().unwrap();
     let result = s.sync_one("app");
     let after = s.snapshot(&dir);
 
@@ -150,7 +151,11 @@ fn check(local_ops: &[Local], upstream_ops: &[Upstream]) -> Result<(), TestCaseE
             prop_assert!(
                 s.try_git(&dir, &["merge-base", "--is-ancestor", "origin/main", "HEAD"]).0
             );
-            prop_assert_eq!(s.git(&dir, &["rev-list", "--count", "origin/main..HEAD"]), unpushed);
+            // A local commit that upstream already has, change for change, is dropped by the
+            // rebase; none appears.
+            let ahead: u32 =
+                s.git(&dir, &["rev-list", "--count", "origin/main..HEAD"]).parse().unwrap();
+            prop_assert!(ahead <= unpushed, "{} unpushed commits became {}", unpushed, ahead);
             prop_assert_eq!(&after.stashes, &before.stashes);
             let (ours, theirs) = (tree(&s, &dir, &base), tree(&s, &dir, "origin/main"));
             let paths = before.files.keys().chain(ours.keys()).chain(theirs.keys());
