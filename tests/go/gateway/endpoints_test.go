@@ -3,6 +3,7 @@ package gateway_test
 import (
 	"bufio"
 	"encoding/json"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -348,11 +349,10 @@ func TestBinary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body := make([]byte, 4096)
-	n, _ := resp.Body.Read(body)
+	body, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
-	if resp.StatusCode != 503 || !strings.Contains(string(body[:n]), "devbox is not set up yet") || !strings.Contains(string(body[:n]), "devbox up") {
-		t.Errorf("page: HTTP %d %s", resp.StatusCode, body[:n])
+	if resp.StatusCode != 503 || !strings.Contains(string(body), `"unconfigured":true`) || !strings.Contains(string(body), "devbox is not set up yet") {
+		t.Errorf("page: HTTP %d %.300s", resp.StatusCode, body)
 	}
 	var status proto.GatewayStatus
 	resp, _ = http.Get("http://" + address + "/__devbox/status")

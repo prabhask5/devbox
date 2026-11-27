@@ -1,7 +1,10 @@
 {
   "extends": "../../web/tsconfig.base.json",
   "compilerOptions": {
-    "types": ["node"]
+    "types": ["node"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact",
+    "allowImportingTsExtensions": true
   },
   "include": ["."]
 }

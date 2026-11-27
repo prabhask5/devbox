@@ -1,0 +1,7 @@
+{
+  "boot": {
+    "host": "code.example.com",
+    "app": "code",
+    "needsAuth": true
+  }
+}

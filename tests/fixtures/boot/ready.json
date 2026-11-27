@@ -1,0 +1,84 @@
+{
+  "boot": {
+    "host": "code.example.com",
+    "app": "code",
+    "needsAuth": false
+  },
+  "now": 1760000009000,
+  "status": {
+    "v": 1,
+    "version": "0f3c2d1",
+    "configured": true,
+    "typical": {
+      "restore": {
+        "phases": {
+          "start": 2400,
+          "code": 300,
+          "hub": 200,
+          "sync": 300
+        },
+        "samples": 7
+      },
+      "cold": {
+        "phases": {
+          "start": 4000,
+          "code": 6000,
+          "hub": 2000,
+          "sync": 10000
+        },
+        "samples": 0
+      }
+    },
+    "lastStop": {
+      "at": 1759996344000,
+      "reason": "idle 15m",
+      "mode": "stateful",
+      "ms": 8200
+    },
+    "serverNow": 1760000009000,
+    "vm": "running",
+    "phase": "idle",
+    "wake": {
+      "id": "3f9a1c2b7d4e5f60",
+      "kind": "restore",
+      "reason": "login",
+      "requestedAt": 1760000000000,
+      "phases": {
+        "start": {
+          "start": 1760000000000,
+          "end": 1760000002500
+        },
+        "code": {
+          "start": 1760000002500,
+          "end": 1760000003000
+        },
+        "hub": {
+          "start": 1760000003000,
+          "end": 1760000003200
+        },
+        "sync": {
+          "start": 1760000003200,
+          "end": 1760000003500
+        }
+      },
+      "done": true,
+      "eta": {
+        "phases": {
+          "start": 2400,
+          "code": 300,
+          "hub": 200,
+          "sync": 300
+        },
+        "samples": 7
+      },
+      "log": [
+        "Restoring the VM from its saved memory",
+        "VM is running",
+        "code-server is up",
+        "Syncing repos",
+        "Repos synced",
+        "Ready in 3.5s"
+      ]
+    }
+  }
+}

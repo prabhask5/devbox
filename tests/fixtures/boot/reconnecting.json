@@ -1,0 +1,43 @@
+{
+  "boot": {
+    "host": "code.example.com",
+    "app": "code",
+    "needsAuth": false,
+    "upstreamDown": true
+  },
+  "now": 1760000000000,
+  "status": {
+    "v": 1,
+    "version": "0f3c2d1",
+    "configured": true,
+    "typical": {
+      "restore": {
+        "phases": {
+          "start": 2400,
+          "code": 300,
+          "hub": 200,
+          "sync": 300
+        },
+        "samples": 7
+      },
+      "cold": {
+        "phases": {
+          "start": 4000,
+          "code": 6000,
+          "hub": 2000,
+          "sync": 10000
+        },
+        "samples": 0
+      }
+    },
+    "lastStop": {
+      "at": 1759996344000,
+      "reason": "idle 15m",
+      "mode": "stateful",
+      "ms": 8200
+    },
+    "serverNow": 1760000000000,
+    "vm": "running",
+    "phase": "idle"
+  }
+}

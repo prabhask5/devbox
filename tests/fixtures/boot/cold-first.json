@@ -1,0 +1,66 @@
+{
+  "boot": {
+    "host": "agents.example.com",
+    "app": "agents",
+    "needsAuth": false
+  },
+  "now": 1760000005000,
+  "status": {
+    "v": 1,
+    "version": "0f3c2d1",
+    "configured": true,
+    "typical": {
+      "restore": {
+        "phases": {
+          "start": 2400,
+          "code": 300,
+          "hub": 200,
+          "sync": 300
+        },
+        "samples": 7
+      },
+      "cold": {
+        "phases": {
+          "start": 4000,
+          "code": 6000,
+          "hub": 2000,
+          "sync": 10000
+        },
+        "samples": 0
+      }
+    },
+    "serverNow": 1760000005000,
+    "vm": "running",
+    "phase": "waking",
+    "wake": {
+      "id": "3f9a1c2b7d4e5f60",
+      "kind": "cold",
+      "reason": "login",
+      "requestedAt": 1760000000000,
+      "phases": {
+        "start": {
+          "start": 1760000000000,
+          "end": 1760000004100
+        },
+        "code": {
+          "start": 1760000004100
+        }
+      },
+      "done": false,
+      "eta": {
+        "phases": {
+          "start": 4000,
+          "code": 6000,
+          "hub": 2000,
+          "sync": 10000
+        },
+        "samples": 0
+      },
+      "log": [
+        "Booting the VM",
+        "VM is running"
+      ],
+      "current": "code"
+    }
+  }
+}
