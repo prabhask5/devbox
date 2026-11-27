@@ -1,0 +1,139 @@
+{
+  "env": {
+    "FOO": "<bar> & baz"
+  },
+  "hooks": {
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "command": "/home/dev/.local/lib/devbox/current/devbox-hub event claude Notification",
+            "timeout": 5,
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "command": "/home/dev/.local/lib/devbox/current/devbox-hub event claude PermissionRequest",
+            "timeout": 5,
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "/home/dev/.local/lib/devbox/current/devbox-hub event claude PostToolUse",
+            "timeout": 5,
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "command": "echo compacting",
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "~/bin/audit-bash.sh",
+            "type": "command"
+          }
+        ],
+        "matcher": "Bash"
+      },
+      {
+        "hooks": [
+          {
+            "command": "/home/dev/.local/lib/devbox/current/devbox-hub event claude PreToolUse",
+            "timeout": 5,
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "command": "/home/dev/.local/lib/devbox/current/devbox-hub event claude SessionEnd",
+            "timeout": 5,
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "/home/dev/.local/lib/devbox/current/devbox-hub event claude SessionStart",
+            "timeout": 5,
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "command": "say done",
+            "type": "command"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "/home/dev/.local/lib/devbox/current/devbox-hub event claude Stop",
+            "timeout": 5,
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "command": "/home/dev/.local/lib/devbox/current/devbox-hub event claude UserPromptSubmit",
+            "timeout": 5,
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ]
+  },
+  "model": "opus",
+  "permissions": {
+    "allow": [
+      "Bash(go test:*)"
+    ],
+    "deny": [
+      "Bash(sudo:*)"
+    ]
+  }
+}

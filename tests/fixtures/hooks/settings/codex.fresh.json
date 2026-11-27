@@ -1,0 +1,88 @@
+{
+  "hooks": {
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "command": "/home/dev/.local/lib/devbox/current/devbox-hub event codex PermissionRequest",
+            "timeout": 5,
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "/home/dev/.local/lib/devbox/current/devbox-hub event codex PostToolUse",
+            "timeout": 5,
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "/home/dev/.local/lib/devbox/current/devbox-hub event codex PreToolUse",
+            "timeout": 5,
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "command": "/home/dev/.local/lib/devbox/current/devbox-hub event codex SessionEnd",
+            "timeout": 5,
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "/home/dev/.local/lib/devbox/current/devbox-hub event codex SessionStart",
+            "timeout": 5,
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "command": "/home/dev/.local/lib/devbox/current/devbox-hub event codex Stop",
+            "timeout": 5,
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "command": "/home/dev/.local/lib/devbox/current/devbox-hub event codex UserPromptSubmit",
+            "timeout": 5,
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ]
+  }
+}
