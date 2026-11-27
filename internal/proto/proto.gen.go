@@ -353,8 +353,7 @@ type DotfilesManifestContext struct {
 	// Commit the context directory after each run.
 	Commit bool `json:"commit"`
 
-	// Directory `devbox context` writes to. Absent: ~/.local/share/devbox/context in
-	// the VM.
+	// Directory of the dotfiles `devbox context` writes to. Absent: `context`.
 	Dir *string `json:"dir,omitempty,omitzero"`
 }
 

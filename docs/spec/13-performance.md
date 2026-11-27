@@ -19,7 +19,7 @@ The budgets are for Linux, where devbox runs, and are enforced there (CI). On an
 | Hub event → SSE state update | 20 ms | event posted → frame received by a test client |
 | Screen frame latency (pane output → SSE frame) | 60 ms | real tmux, output burst |
 | `devbox sync`, 11 repos, nothing to pull, local remotes | 600 ms | `tests/perf/sync`: the release binary, median of 9 runs |
-| `devbox context`, 11 repos, no network, no AI | 1.5 s | fixture |
+| `devbox context`, 11 repos, no network, no AI | 1.5 s | `tests/perf/context`: the release binary, median of 5 runs |
 | `devbox --version` | 10 ms | |
 | `devbox status` (fakes) | 150 ms | |
 | Boot screen bundle (HTML+JS+CSS) | 15 KB gzip | build output |

@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows [Kee
 ## Unreleased
 
 - Specification, milestones and agent workflow (spec-first start of the project).
+- Developer context: `devbox context` writes a factual, current description of how you work — environment, languages, git and agent habits, each repository, the last two weeks — into your dotfiles for every agent to read, with secrets redacted, optionally summarized by your own Claude Code, and committed.
 - Repo sync: `devbox sync` clones the repositories you own on GitHub and brings every repository in `~/code` up to date — fast-forwarding or rebasing with uncommitted changes carried over, or leaving a repository exactly as it was when anything conflicts.
 - Agents app: an installable PWA to watch, answer and start agent sessions from a phone — live session list and terminal screen, one-tap answers, push notifications, wake from sleep, offline shell.
 - Agents hub: the app API with sign-in, live state and screen streams, and web push notifications when an agent needs you, finishes a long turn or fails.

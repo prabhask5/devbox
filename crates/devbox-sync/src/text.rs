@@ -1,29 +1,8 @@
-//! Small text helpers: counts with their noun, timestamps, name globs.
+//! Small text helpers: counts with their noun, name globs.
 
 /// `1 commit`, `3 commits`.
 pub(crate) fn count(n: u64, noun: &str) -> String {
     if n == 1 { format!("1 {noun}") } else { format!("{n} {noun}s") }
-}
-
-/// Seconds since the Unix epoch as an RFC 3339 timestamp in UTC.
-pub(crate) fn rfc3339(secs: u64) -> String {
-    let (days, rest) = (secs / 86400, secs % 86400);
-    // Civil date from a day count (Howard Hinnant's algorithm), with the era starting 0000-03-01.
-    let z = days + 719_468;
-    let (era, day_of_era) = (z / 146_097, z % 146_097);
-    let year_of_era =
-        (day_of_era - day_of_era / 1460 + day_of_era / 36524 - day_of_era / 146_096) / 365;
-    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
-    let shifted_month = (5 * day_of_year + 2) / 153;
-    let day = day_of_year - (153 * shifted_month + 2) / 5 + 1;
-    let month = if shifted_month < 10 { shifted_month + 3 } else { shifted_month - 9 };
-    let year = year_of_era + era * 400 + u64::from(month <= 2);
-    format!(
-        "{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}Z",
-        rest / 3600,
-        rest % 3600 / 60,
-        rest % 60
-    )
 }
 
 /// Whether `name` matches `pattern`, in which `*` stands for any run of characters and `?` for
@@ -49,22 +28,13 @@ pub(crate) fn one_line(text: &str, limit: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{count, glob, one_line, rfc3339};
+    use super::{count, glob, one_line};
 
     #[test]
     fn counts_agree_with_their_noun() {
         assert_eq!(count(1, "commit"), "1 commit");
         assert_eq!(count(0, "commit"), "0 commits");
         assert_eq!(count(12, "repo"), "12 repos");
-    }
-
-    #[test]
-    fn timestamps_are_utc() {
-        assert_eq!(rfc3339(0), "1970-01-01T00:00:00Z");
-        assert_eq!(rfc3339(951_782_399), "2000-02-28T23:59:59Z");
-        assert_eq!(rfc3339(951_782_400), "2000-02-29T00:00:00Z");
-        assert_eq!(rfc3339(1_790_000_000), "2026-09-21T14:13:20Z");
-        assert_eq!(rfc3339(4_102_444_799), "2099-12-31T23:59:59Z");
     }
 
     #[test]

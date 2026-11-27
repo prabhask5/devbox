@@ -107,6 +107,8 @@ budgets() {
   step "measure the repo sync"
   cargo build --release --locked -p devbox-cli
   go run ./tests/perf/sync -devbox target/release/devbox
+  step "measure the developer context"
+  go run ./tests/perf/context -devbox target/release/devbox
   if [[ ${DEVBOX_DOCKER:-} == 1 ]]; then step "measure the gateway image"; scripts/check-image.sh --measure; fi
   # Process start-up and scheduling differ too much elsewhere for the numbers to mean the same.
   step "budgets"; BUDGETS_REPORT_ONLY=$([[ $(uname -s) == Linux ]] || echo 1) scripts/budgets.sh

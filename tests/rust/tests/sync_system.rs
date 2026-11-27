@@ -63,6 +63,10 @@ impl System for Machine {
         let files = self.files.lock().unwrap();
         files.get(path).cloned().ok_or_else(|| io::Error::from(io::ErrorKind::NotFound))
     }
+    fn write(&self, path: &Path, data: &[u8]) -> io::Result<()> {
+        self.files.lock().unwrap().insert(path.to_owned(), data.to_vec());
+        Ok(())
+    }
     fn append(&self, path: &Path, data: &[u8]) -> io::Result<()> {
         self.files.lock().unwrap().entry(path.to_owned()).or_default().extend_from_slice(data);
         Ok(())

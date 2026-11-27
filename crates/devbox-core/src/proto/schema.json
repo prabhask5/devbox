@@ -249,7 +249,7 @@
      "required": [],
      "properties": {
       "dir": {
-       "description": "Directory `devbox context` writes to. Absent: ~/.local/share/devbox/context in the VM.",
+       "description": "Directory of the dotfiles `devbox context` writes to. Absent: `context`.",
        "type": "string",
        "format": "devbox-relpath"
       },

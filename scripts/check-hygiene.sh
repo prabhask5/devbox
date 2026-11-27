@@ -10,7 +10,8 @@ release=0; [[ ${1:-} == --release ]] && release=1
 fail=0
 problem() { echo "✗ $*"; fail=1; }
 files=$(git ls-files)
-self='^(scripts/check-hygiene\.sh|docs/spec/17-public-readiness\.md|tests/go/scripts/hygiene_test\.go)$'   # these describe the rules
+# these describe the rules, or (devbox-context) find and list such markers in the owner's repositories
+self='^(scripts/check-hygiene\.sh|docs/spec/17-public-readiness\.md|tests/go/scripts/hygiene_test\.go|crates/devbox-context/src/(gather|render)\.rs)$'
 src=$(echo "$files" | grep -E '\.(go|rs|ts|tsx|js|mjs|sh|py|toml|yml|yaml)$' | grep -vE "$self" | grep -v '^reference/' || true)
 
 # 1. debug and placeholder code

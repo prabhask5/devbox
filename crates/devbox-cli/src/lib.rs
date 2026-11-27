@@ -48,7 +48,17 @@ enum Command {
         repo: Option<String>,
     },
     /// Refresh the developer context for AI agents
-    Context,
+    Context {
+        /// Commit the context to the dotfiles repository and push it
+        #[arg(long)]
+        commit: bool,
+        /// Do not have Claude Code write the summary
+        #[arg(long)]
+        no_ai: bool,
+        /// Print the files instead of writing them
+        #[arg(long)]
+        print: bool,
+    },
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -70,7 +80,7 @@ impl Command {
             Self::Password { which: PasswordKind::Wake } => "password wake",
             Self::Password { which: PasswordKind::App } => "password app",
             Self::Sync { .. } => "sync",
-            Self::Context => "context",
+            Self::Context { .. } => "context",
         }
     }
 }
@@ -159,6 +169,47 @@ fn sync(
     }
 }
 
+/// `devbox context`: the facts about how the owner works, written where agents read them.
+fn context(
+    system: &dyn System,
+    (commit, no_ai, print): (bool, bool, bool),
+    stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
+) -> ExitCode {
+    use devbox_context::Committed;
+    let mut options = devbox_context::Options::from_env(system);
+    (options.commit, options.ai, options.print) = (commit, !no_ai, print);
+    let outcome = match devbox_context::run(system, &options) {
+        Ok(outcome) => outcome,
+        Err(error) => {
+            let _ = writeln!(stderr, "devbox context: {error}");
+            return ExitCode::from(EXIT_FAILED);
+        }
+    };
+    for warning in &outcome.warnings {
+        let _ = writeln!(stderr, "devbox context: {warning}");
+    }
+    if let Some(files) = &outcome.printed {
+        for (name, content) in files {
+            let _ = write!(stdout, "\n===== {name}\n{content}");
+        }
+        return ExitCode::SUCCESS;
+    }
+    let dir = outcome.dir.display();
+    let changed = outcome.changed || outcome.summarized;
+    let _ = match &outcome.committed {
+        Committed::Pushed => writeln!(stdout, "context updated and pushed"),
+        Committed::Kept(why) => writeln!(stdout, "context committed in {dir}, not pushed: {why}"),
+        Committed::NotAsked | Committed::NoRepository | Committed::Unchanged if changed => {
+            writeln!(stdout, "context written to {dir}")
+        }
+        Committed::NotAsked | Committed::NoRepository | Committed::Unchanged => {
+            writeln!(stdout, "context unchanged")
+        }
+    };
+    ExitCode::SUCCESS
+}
+
 /// Runs `devbox` with `args` (the first is the program name) on this machine, writing to
 /// `stdout` and `stderr`.
 pub fn run<I, T>(args: I, stdout: &mut dyn Write, stderr: &mut dyn Write) -> ExitCode
@@ -195,8 +246,12 @@ where
             return ExitCode::from(u8::try_from(err.exit_code()).unwrap_or(1));
         }
     };
-    if let Command::Sync { json, repo } = cli.command {
-        return sync(system, json, repo, stdout, stderr);
+    match cli.command {
+        Command::Sync { json, repo } => return sync(system, json, repo, stdout, stderr),
+        Command::Context { commit, no_ai, print } => {
+            return context(system, (commit, no_ai, print), stdout, stderr);
+        }
+        _ => {}
     }
     let _ = writeln!(stderr, "devbox {}: not implemented yet", cli.command.name());
     ExitCode::from(EXIT_NOT_IMPLEMENTED)

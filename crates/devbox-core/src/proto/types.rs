@@ -281,7 +281,7 @@ pub struct DotfilesManifestContext {
     pub ai: bool,
     #[doc = "Commit the context directory after each run."]
     pub commit: bool,
-    #[doc = "Directory `devbox context` writes to. Absent: ~/.local/share/devbox/context in the VM."]
+    #[doc = "Directory of the dotfiles `devbox context` writes to. Absent: `context`."]
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub dir: ::std::option::Option<::std::string::String>,
 }

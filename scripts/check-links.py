@@ -8,6 +8,8 @@ def slug(h):
     return h.replace(" ", "-")
 
 files = subprocess.run(["git", "ls-files", "*.md"], capture_output=True, text=True, check=True).stdout.split()
+# Golden output of the tests is data, not documentation: its links lead into the home it was made from.
+files = [f for f in files if not f.startswith("tests/fixtures/")]
 bad = []
 for f in files:
     text = open(f, encoding="utf-8").read()

@@ -11,7 +11,7 @@ fn devbox(args: &[&str]) -> (ExitCode, String, String) {
 
 #[test]
 fn commands_without_behaviour_say_so() {
-    let commands: [&[&str]; 8] = [
+    let commands: [&[&str]; 7] = [
         &["up"],
         &["down"],
         &["status"],
@@ -19,7 +19,6 @@ fn commands_without_behaviour_say_so() {
         &["connect"],
         &["password", "wake"],
         &["password", "app"],
-        &["context"],
     ];
     for args in commands {
         let (code, out, err) = devbox(args);
