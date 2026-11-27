@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -155,7 +156,28 @@ func (g *Gateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Upgrade") != "" {
 		w = &upgradeWriter{ResponseWriter: w, g: g, websocket: strings.EqualFold(r.Header.Get("Upgrade"), "websocket")}
 	}
-	forward.ServeHTTP(w, r)
+	ctx, cancel := context.WithCancel(r.Context())
+	g.connMu.Lock()
+	g.nextFlight++
+	flight := g.nextFlight
+	g.flights[flight] = cancel
+	g.connMu.Unlock()
+	defer func() {
+		g.connMu.Lock()
+		delete(g.flights, flight)
+		g.connMu.Unlock()
+		cancel()
+	}()
+	forward.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// endFlights ends every proxied request that is still being answered.
+func (g *Gateway) endFlights() {
+	g.connMu.Lock()
+	defer g.connMu.Unlock()
+	for _, cancel := range g.flights {
+		cancel()
+	}
 }
 
 func (g *Gateway) skips(r *http.Request, wakeID string) bool {

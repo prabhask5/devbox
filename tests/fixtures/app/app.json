@@ -1,0 +1,418 @@
+{
+  "now": 1790000000000,
+  "state": {
+    "v": 1,
+    "serverNow": 1790000000000,
+    "sessions": [
+      {
+        "v": 1,
+        "id": "aaaa1111",
+        "name": "claude-commits",
+        "tmux": "claude-commits",
+        "agent": "claude",
+        "kind": "tmux",
+        "cwd": "/home/dev/code/commits",
+        "createdAt": 1789996400000,
+        "state": "needs_input",
+        "stateSince": 1789999995000,
+        "title": "refactor the order book matching engine",
+        "unread": true,
+        "adopted": false,
+        "attached": false,
+        "viewers": 0,
+        "repo": "commits",
+        "waitingFor": "Permission to use Bash: rm -rf target && cargo build --release",
+        "lastPrompt": "refactor the order book matching engine",
+        "lastTool": "Bash"
+      },
+      {
+        "v": 1,
+        "id": "bbbb2222",
+        "name": "shell-clean",
+        "tmux": "shell-clean",
+        "agent": "shell",
+        "kind": "tmux",
+        "cwd": "/home/dev/code/clean",
+        "createdAt": 1789996400000,
+        "state": "idle",
+        "stateSince": 1789999980000,
+        "title": "",
+        "unread": false,
+        "adopted": false,
+        "attached": false,
+        "viewers": 0,
+        "repo": "clean",
+        "lastReply": "for i in 1 2 3; do echo line $i; done; printf '\\033[32mgreen\\033[0m \\033[1;35mbold magenta\\033[0m\\n'"
+      },
+      {
+        "v": 1,
+        "id": "cccc3333",
+        "name": "codex-devbox",
+        "tmux": "codex-devbox",
+        "agent": "codex",
+        "kind": "tmux",
+        "cwd": "/home/dev/code/devbox",
+        "createdAt": 1789996400000,
+        "state": "working",
+        "stateSince": 1789999930000,
+        "title": "",
+        "unread": false,
+        "adopted": false,
+        "attached": false,
+        "viewers": 0,
+        "repo": "devbox",
+        "lastTool": "apply_patch",
+        "lastPrompt": "add the retry"
+      },
+      {
+        "v": 1,
+        "id": "dddd4444",
+        "name": "handmade",
+        "tmux": "handmade",
+        "agent": "shell",
+        "kind": "tmux",
+        "cwd": "/home/dev/code/dirty",
+        "createdAt": 1789996400000,
+        "state": "idle",
+        "stateSince": 1789999880000,
+        "title": "",
+        "unread": false,
+        "adopted": true,
+        "attached": true,
+        "viewers": 0,
+        "repo": "dirty"
+      },
+      {
+        "v": 1,
+        "id": "eeee5555",
+        "name": "claude · notes",
+        "tmux": "claude · notes",
+        "agent": "claude",
+        "kind": "external",
+        "cwd": "/home/dev/code/notes",
+        "createdAt": 1789996400000,
+        "state": "idle",
+        "stateSince": 1789999400000,
+        "title": "",
+        "unread": false,
+        "adopted": false,
+        "attached": false,
+        "viewers": 0,
+        "repo": "notes",
+        "lastReply": "Summarised the meeting notes into three action items."
+      },
+      {
+        "v": 1,
+        "id": "ffff6666",
+        "name": "fake-claude",
+        "tmux": "fake-claude",
+        "agent": "claude",
+        "kind": "tmux",
+        "cwd": "/home/dev/code/commits",
+        "createdAt": 1789996400000,
+        "state": "exited",
+        "stateSince": 1789999940000,
+        "title": "",
+        "unread": false,
+        "adopted": false,
+        "attached": false,
+        "viewers": 0,
+        "repo": "commits"
+      }
+    ],
+    "devbox": {
+      "v": 1,
+      "version": "3f9c2d1",
+      "uptime": 1380,
+      "idle": {
+        "busy": false,
+        "reasons": [],
+        "idleSeconds": 6
+      },
+      "sync": {
+        "runId": "s-1",
+        "state": "done",
+        "startedAt": 1789999400000,
+        "finishedAt": 1789999410000,
+        "total": 4,
+        "done": 4,
+        "results": [
+          {
+            "name": "devbox",
+            "status": "updated",
+            "detail": "pulled 3"
+          },
+          {
+            "name": "notes",
+            "status": "current",
+            "detail": "up to date"
+          },
+          {
+            "name": "dirty",
+            "status": "conflict",
+            "detail": "local changes and new commits upstream; left exactly as it was"
+          },
+          {
+            "name": "clean",
+            "status": "current",
+            "detail": "up to date"
+          }
+        ]
+      }
+    },
+    "adapters": [
+      {
+        "id": "claude",
+        "label": "Claude Code",
+        "short": "Claude Code",
+        "kind": "tmux",
+        "available": true,
+        "hooks": true,
+        "answerKeys": [
+          {
+            "label": "Yes",
+            "key": "1"
+          },
+          {
+            "label": "Always",
+            "key": "2"
+          },
+          {
+            "label": "No",
+            "key": "Escape"
+          }
+        ]
+      },
+      {
+        "id": "codex",
+        "label": "Codex",
+        "short": "Codex",
+        "kind": "tmux",
+        "available": false,
+        "hooks": true,
+        "answerKeys": [
+          {
+            "label": "Yes",
+            "key": "y"
+          },
+          {
+            "label": "Always",
+            "key": "a"
+          },
+          {
+            "label": "No",
+            "key": "Escape"
+          }
+        ]
+      },
+      {
+        "id": "opencode",
+        "label": "opencode",
+        "short": "opencode",
+        "kind": "tmux",
+        "available": false,
+        "hooks": true,
+        "answerKeys": [
+          {
+            "label": "Allow",
+            "key": "Enter"
+          },
+          {
+            "label": "Reject",
+            "key": "Escape"
+          }
+        ]
+      },
+      {
+        "id": "shell",
+        "label": "Shell",
+        "short": "Shell",
+        "kind": "tmux",
+        "available": true,
+        "hooks": false,
+        "answerKeys": []
+      },
+      {
+        "id": "assistant",
+        "label": "Assistant",
+        "short": "Assistant",
+        "kind": "chat",
+        "available": false,
+        "hooks": false,
+        "answerKeys": []
+      }
+    ],
+    "commonKeys": [
+      {
+        "label": "Enter",
+        "key": "Enter"
+      },
+      {
+        "label": "Esc",
+        "key": "Escape"
+      },
+      {
+        "label": "↑",
+        "key": "Up"
+      },
+      {
+        "label": "↓",
+        "key": "Down"
+      },
+      {
+        "label": "Tab",
+        "key": "Tab"
+      },
+      {
+        "label": "^C",
+        "key": "C-c"
+      }
+    ],
+    "vapidPublicKey": "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U",
+    "pushDevices": 1
+  },
+  "gateway": {
+    "v": 1,
+    "version": "3f9c2d1",
+    "serverNow": 1790000000000,
+    "configured": true,
+    "authed": true,
+    "vm": "running",
+    "phase": "idle",
+    "idle": {
+      "idleMs": 300000,
+      "gatewayIdleMs": 300000,
+      "hubIdleMs": 310000,
+      "limitMs": 900000,
+      "hubReasons": []
+    },
+    "lastStop": {
+      "at": 1789992800000,
+      "reason": "idle",
+      "mode": "stateful",
+      "ms": 4200
+    },
+    "typical": {
+      "restore": {
+        "phases": {
+          "start": 2600,
+          "code": 400,
+          "hub": 300,
+          "sync": 1900
+        },
+        "samples": 5
+      },
+      "cold": {
+        "phases": {
+          "start": 0,
+          "code": 0,
+          "hub": 0,
+          "sync": 0
+        },
+        "samples": 0
+      }
+    }
+  },
+  "asleep": {
+    "v": 1,
+    "version": "3f9c2d1",
+    "serverNow": 1790000000000,
+    "configured": true,
+    "authed": false,
+    "vm": "stopped",
+    "phase": "idle",
+    "lastStop": {
+      "at": 1789992800000,
+      "reason": "idle",
+      "mode": "stateful",
+      "ms": 4200
+    },
+    "typical": {
+      "restore": {
+        "phases": {
+          "start": 2600,
+          "code": 400,
+          "hub": 300,
+          "sync": 1900
+        },
+        "samples": 5
+      },
+      "cold": {
+        "phases": {
+          "start": 0,
+          "code": 0,
+          "hub": 0,
+          "sync": 0
+        },
+        "samples": 0
+      }
+    }
+  },
+  "repos": [
+    {
+      "name": "detached",
+      "git": true,
+      "branch": "HEAD (no branch)"
+    },
+    {
+      "name": "current",
+      "git": true,
+      "branch": "main"
+    },
+    {
+      "name": "commitsconf",
+      "git": true,
+      "branch": "main",
+      "dirty": 1,
+      "ahead": 1
+    },
+    {
+      "name": "commits",
+      "git": true,
+      "branch": "main",
+      "ahead": 1
+    },
+    {
+      "name": "dirtyconf",
+      "git": true,
+      "branch": "main",
+      "dirty": 2
+    },
+    {
+      "name": "dirty",
+      "git": true,
+      "branch": "main",
+      "dirty": 2
+    },
+    {
+      "name": "clean",
+      "git": true,
+      "branch": "main"
+    },
+    {
+      "name": "scratch",
+      "git": false
+    }
+  ],
+  "settings": {
+    "finishedNotifyAfterSec": 30
+  },
+  "frames": {
+    "aaaa1111": {
+      "v": 1,
+      "text": "\u001b[38;5;209m╭───────────────────────────────────────╮\u001b[0m\n\u001b[38;5;209m│\u001b[0m ✻ Welcome to Claude Code              \u001b[38;5;209m│\u001b[0m\n\u001b[38;5;209m╰───────────────────────────────────────╯\u001b[0m\n\n> refactor the order book matching engine\n\n\u001b[31m●\u001b[0m I'll restructure the matcher into price levels. First let me run the tests.\n\n\u001b[31m●\u001b[0m \u001b[1mBash\u001b[0m(cargo test)\n  ⎿  \u001b[32mtest result: ok. 42 passed\u001b[0m\n\n\u001b[33m╭─ Bash command ─────────────────────────╮\u001b[0m\n  rm -rf target && cargo build --release\n\n  Do you want to proceed?\n  \u001b[36m❯ 1. Yes\u001b[0m\n    2. Yes, and don't ask again for this command\n    3. No, and tell Claude what to do differently (esc)\n\n\n",
+      "cols": 44,
+      "rows": 40
+    },
+    "bbbb2222": {
+      "v": 1,
+      "text": "\u001b[1;32mdev@devbox\u001b[0m:\u001b[1;34m~/code/clean\u001b[0m$ for i in 1 2 3; do echo line $i; done\nline 1\nline 2\nline 3\n\u001b[1;32mdev@devbox\u001b[0m:\u001b[1;34m~/code/clean\u001b[0m$ printf '\\033[32mgreen\\033[0m \\033[1;35mbold magenta\\033[0m\\n'\n\u001b[32mgreen\u001b[0m \u001b[1;35mbold magenta\u001b[0m\n\u001b[1;32mdev@devbox\u001b[0m:\u001b[1;34m~/code/clean\u001b[0m$ git status --short\n\u001b[31m M\u001b[0m src/lib.rs\n\u001b[38;2;124;196;255m??\u001b[0m notes.md \u001b[2m(untracked)\u001b[0m\n\u001b[1;32mdev@devbox\u001b[0m:\u001b[1;34m~/code/clean\u001b[0m$ \u001b[7m \u001b[0m\n",
+      "cols": 44,
+      "rows": 40
+    },
+    "eeee5555": {
+      "v": 1,
+      "reason": "external"
+    }
+  }
+}

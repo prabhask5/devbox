@@ -3,7 +3,7 @@
 # (the index, so staged changes count as current).
 set -euo pipefail
 cd "$(dirname "$0")/.."
-generated=(internal/proto crates/devbox-core/src/proto web/shared/src/proto internal/gateway/boot.gen.html)
+generated=(internal/proto crates/devbox-core/src/proto web/shared/src/proto internal/gateway/boot.gen.html internal/hub/webapp)
 scripts/gen.sh
 stale=$(git diff --name-only -- "${generated[@]}"; git ls-files --others --exclude-standard -- "${generated[@]}")
 if [[ -n $stale ]]; then

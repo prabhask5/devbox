@@ -8,6 +8,7 @@
   },
   "devDependencies": {
     "@devbox/gateway-ui": "workspace:*",
+    "@devbox/hub-app": "workspace:*",
     "@devbox/shared": "workspace:*",
     "@testing-library/preact": "^3.2.6",
     "@types/node": "^24.19.4",

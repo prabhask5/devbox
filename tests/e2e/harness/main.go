@@ -1,11 +1,12 @@
 // Command harness runs the devbox stack for end-to-end tests (docs/spec/15-testing.md): a fake
-// Incus, the real gateway, and a fake VM (code-server, the hub, sshd), behind a TLS front that
-// plays Traefik. Browser tests reach the editor and the agents app on two HTTPS ports and steer
+// Incus, the real gateway, a fake VM (code-server, the hub, sshd) and a fake push service,
+// behind a TLS front that plays Traefik. Browser tests reach the editor and the agents app on two HTTPS ports and steer
 // the fakes through a small control API.
 package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -40,6 +41,7 @@ import (
 	"github.com/prabhask5/devbox/internal/hub"
 	"github.com/prabhask5/devbox/internal/sys"
 	incusfake "github.com/prabhask5/devbox/tests/fakes/incus"
+	pushfake "github.com/prabhask5/devbox/tests/fakes/push"
 	"github.com/prabhask5/devbox/tests/fakes/wsecho"
 )
 
@@ -222,8 +224,26 @@ func selfSigned() (tls.Certificate, error) {
 
 // front plays Traefik for one public host: it terminates TLS and forwards to the gateway with
 // the X-Forwarded-* headers set, as if the browser had asked for that host by name. gatewayAddr is read per request: a reset starts a new gateway.
-func front(gatewayAddr *atomic.Pointer[string], host string) http.Handler {
+//
+// While nextBuild is set, the app's service worker is served as the one of another build, which
+// is all a browser sees of a new deploy of the hub.
+func front(gatewayAddr *atomic.Pointer[string], host string, nextBuild *atomic.Bool) http.Handler {
 	return &httputil.ReverseProxy{
+		ModifyResponse: func(response *http.Response) error {
+			if response.Request.URL.Path != "/sw.js" || !nextBuild.Load() || response.StatusCode != http.StatusOK {
+				return nil
+			}
+			worker, err := io.ReadAll(response.Body)
+			if err != nil {
+				return err
+			}
+			worker = append(worker, "\n// the next build\n"...)
+			response.Body = io.NopCloser(bytes.NewReader(worker))
+			response.ContentLength = int64(len(worker))
+			response.Header.Set("Content-Length", strconv.Itoa(len(worker)))
+			response.Header.Del("ETag")
+			return nil
+		},
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.SetURL(&url.URL{Scheme: "http", Host: *gatewayAddr.Load()})
 			pr.Out.Host = host
@@ -312,11 +332,17 @@ func run(ctx context.Context, controlAddr, codeAddr, agentsAddr string) error {
 	hubTimings := hub.DefaultTimings()
 	hubTimings.Tick = 100 * time.Millisecond
 	hubTimings.ExitGrace = time.Second
+	hubTimings.NeedsInputDelay = time.Second
+	hubTimings.NotifyThrottle = time.Second
+	// The push service, and the devices tests subscribe: a new one with every reset.
+	var push atomic.Pointer[pushfake.Service]
+	push.Store(pushfake.Start())
 	var theHub atomic.Pointer[hub.Hub]
 	startHub := func() (stop func(), err error) {
 		_ = agents.tmux.KillServer(ctx)
 		_ = os.RemoveAll(filepath.Join(dir, "hub-state"))
 		_ = os.Remove(agents.socket)
+		push.Swap(pushfake.Start()).Close()
 		tcp, err := listen("127.0.0.1:0")
 		if err != nil {
 			return nil, err
@@ -400,7 +426,9 @@ func run(ctx context.Context, controlAddr, codeAddr, agentsAddr string) error {
 	// reset puts everything back to "asleep with saved memory, all services fine" behind a
 	// gateway that remembers nothing.
 	var stopGateway, stopHub func()
+	var nextBuild atomic.Bool
 	reset := func() error {
+		nextBuild.Store(false)
 		if stopGateway != nil {
 			stopGateway()
 			stopHub()
@@ -438,7 +466,7 @@ func run(ctx context.Context, controlAddr, codeAddr, agentsAddr string) error {
 		if err != nil {
 			return err
 		}
-		server := &http.Server{Handler: front(&gatewayAddr, host), ReadHeaderTimeout: time.Minute}
+		server := &http.Server{Handler: front(&gatewayAddr, host, &nextBuild), ReadHeaderTimeout: time.Minute}
 		go server.Serve(tls.NewListener(listener, &tls.Config{Certificates: []tls.Certificate{certificate}, MinVersion: tls.VersionTLS12}))
 	}
 
@@ -454,7 +482,7 @@ func run(ctx context.Context, controlAddr, codeAddr, agentsAddr string) error {
 		}
 		_, _ = io.WriteString(w, "ok")
 	})
-	// POST /set?incus=down|up&code=down|up&hub=down|up&sync=hold|release&start=fail|ok&startMs=<n>&idle=<duration>
+	// POST /set?incus=down|up&code=down|up&hub=down|up&sync=hold|release&start=fail|ok&startMs=<n>&idle=<duration>&app=next
 	control.HandleFunc("POST /set", func(w http.ResponseWriter, r *http.Request) {
 		query := r.URL.Query()
 		machine.mu.Lock()
@@ -462,6 +490,9 @@ func run(ctx context.Context, controlAddr, codeAddr, agentsAddr string) error {
 			if value := query.Get(name); value != "" {
 				*target = value == "up"
 			}
+		}
+		if value := query.Get("app"); value != "" {
+			nextBuild.Store(value == "next")
 		}
 		if value := query.Get("sync"); value != "" {
 			machine.syncHeld = value == "hold"
@@ -517,6 +548,23 @@ func run(ctx context.Context, controlAddr, codeAddr, agentsAddr string) error {
 	})
 	control.HandleFunc("GET /sessions", func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(theHub.Load().State())
+	})
+	// The push service: POST /push/devices?name=<device> → a subscription for the app to register,
+	// GET /push → what the service delivered, decrypted.
+	control.HandleFunc("POST /push/devices", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(push.Load().Subscribe(r.URL.Query().Get("name")))
+	})
+	control.HandleFunc("GET /push", func(w http.ResponseWriter, _ *http.Request) {
+		type delivery struct {
+			Device  string          `json:"device"`
+			Urgency string          `json:"urgency"`
+			Payload json.RawMessage `json:"payload"`
+		}
+		delivered := []delivery{}
+		for _, d := range push.Load().Deliveries() {
+			delivered = append(delivered, delivery{d.Device, d.Urgency, d.Payload})
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"deliveries": delivered, "rejected": push.Load().Rejected()})
 	})
 	controlListener, err := listen(controlAddr)
 	if err != nil {

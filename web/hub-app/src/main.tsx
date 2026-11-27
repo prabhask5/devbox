@@ -1,3 +1,8 @@
 import { render } from "preact";
+import { App } from "./App.tsx";
+import { start } from "./store.ts";
+import "./styles.css";
 
-render(<p>not implemented yet</p>, document.body);
+const root = document.getElementById("app");
+if (root) render(<App />, root);
+start();

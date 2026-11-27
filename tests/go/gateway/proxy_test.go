@@ -2,6 +2,7 @@ package gateway_test
 
 import (
 	"bufio"
+	"io"
 	"net/http"
 	"reflect"
 	"strings"
@@ -273,4 +274,40 @@ func TestPagesAreRefusedWhileStopping(t *testing.T) {
 		t.Errorf("page while stopping: %s", resp.body)
 	}
 	<-stopped
+}
+
+func TestOpenStreamsEndWhenTheVMIsPutToSleep(t *testing.T) {
+	h := start(t)
+	h.awake()
+	req, _ := http.NewRequest("GET", h.base+"/forever", nil)
+	req.Host = codeHost
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	reader := bufio.NewReader(resp.Body)
+	if line, err := reader.ReadString('\n'); err != nil || line != "data: open\n" {
+		t.Fatalf("event: %q, %v", line, err)
+	}
+	ended := make(chan struct{})
+	go func() {
+		_, _ = io.Copy(io.Discard, reader)
+		close(ended)
+	}()
+	never(t, "the stream to end while the VM runs", func() bool {
+		select {
+		case <-ended:
+			return true
+		default:
+			return false
+		}
+	})
+	// A stopped VM says nothing more: a client left waiting would never learn it went to sleep.
+	<-h.gw.Sleep("test")
+	select {
+	case <-ended:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the stream is still open after the VM went to sleep")
+	}
 }

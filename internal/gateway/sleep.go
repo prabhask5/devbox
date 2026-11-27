@@ -50,6 +50,7 @@ func (g *Gateway) Sleep(reason string) <-chan struct{} {
 
 		if err == nil {
 			g.closeConns(false)
+			g.endFlights()
 			g.transport.CloseIdleConnections()
 		}
 		g.mu.Lock()

@@ -28,7 +28,14 @@ export default defineConfig({
       use: { ...devices["iPhone 14"] },
       testIgnore: /(health|idle)\.spec\.ts/,
     },
-    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
+    {
+      name: "chromium",
+      use: {
+        ...devices["Desktop Chrome"],
+        // Chromium registers a service worker only from an origin whose certificate it trusts.
+        launchOptions: { args: ["--ignore-certificate-errors"] },
+      },
+    },
   ],
   webServer: {
     command: "go run ./tests/e2e/harness",

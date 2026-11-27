@@ -1,7 +1,6 @@
 import { expect, test } from "vitest";
 import type { Wake } from "@devbox/shared/proto/types";
-import { seconds } from "@devbox/gateway-ui/format.ts";
-import { progress } from "@devbox/gateway-ui/progress.ts";
+import { progress, seconds } from "@devbox/shared";
 
 const T0 = 1_760_000_000_000;
 

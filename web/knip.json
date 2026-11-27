@@ -6,7 +6,7 @@
       "entry": ["index.html"]
     },
     "hub-app": {
-      "entry": ["index.html"]
+      "entry": ["index.html", "src/sw.ts"]
     },
     "shared": {
       "entry": ["gen-proto.mjs"],

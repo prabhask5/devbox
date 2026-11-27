@@ -4,6 +4,7 @@
 #   crates/devbox-core/src/proto/      Rust types, contract versions, the bundled schema ├ from contracts/*.schema.json
 #   web/shared/src/proto/              TypeScript types, contract versions               ┘ (docs/spec/01-contracts.md)
 #   internal/gateway/boot.gen.html     the boot screen, from web/gateway-ui (docs/spec/03-gateway-ui.md)
+#   internal/hub/webapp/               the agents app, from web/hub-app (docs/spec/06-hub-app.md)
 # Never edit those files by hand; scripts/check-generated.sh fails when they are stale.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -26,3 +27,7 @@ pnpm -C web --filter @devbox/shared exec node gen-proto.mjs "$tmp/contracts.json
 
 pnpm -C web --filter @devbox/gateway-ui run build
 cp web/gateway-ui/dist/index.html internal/gateway/boot.gen.html
+
+pnpm -C web --filter @devbox/hub-app run build
+rm -rf internal/hub/webapp
+cp -R web/hub-app/dist internal/hub/webapp

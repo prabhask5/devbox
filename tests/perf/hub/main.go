@@ -1,11 +1,13 @@
 // Command hub measures the hub's performance budgets (docs/spec/13-performance.md) and appends
-// the results to the file scripts/budgets.sh reads. For now: how long the hook relay holds up
-// an agent, as the agent experiences it — the whole `devbox-hub event` process, start to exit,
-// against a running hub.
+// the results to the file scripts/budgets.sh reads: how long the hook relay holds up an agent,
+// as the agent experiences it — the whole `devbox-hub event` process, start to exit, against a
+// running hub — and how much a phone downloads to start the app.
 package main
 
 import (
 	"bufio"
+	"bytes"
+	"compress/gzip"
 	"flag"
 	"fmt"
 	"os"
@@ -115,10 +117,24 @@ func measure(out, binary string) error {
 		return err
 	}
 	defer file.Close()
-	for _, line := range []string{
+	lines := []string{
 		"relay_p50_ms = " + strconv.FormatFloat(p50[2], 'f', 3, 64),
 		"relay_p99_ms = " + strconv.FormatFloat(p99[2], 'f', 3, 64),
-	} {
+	}
+	// What a phone downloads to start the app.
+	for metric, name := range map[string]string{"hub_app_js_kb_gzip": "app.js", "hub_app_css_kb_gzip": "app.css"} {
+		data, err := os.ReadFile(filepath.Join("internal/hub/webapp", name))
+		if err != nil {
+			return err
+		}
+		var compressed bytes.Buffer
+		writer, _ := gzip.NewWriterLevel(&compressed, gzip.BestCompression)
+		_, _ = writer.Write(data)
+		_ = writer.Close()
+		lines = append(lines, metric+" = "+strconv.FormatFloat(float64(compressed.Len())/1024, 'f', 3, 64))
+	}
+	slices.Sort(lines)
+	for _, line := range lines {
 		fmt.Println(line)
 		if _, err := file.WriteString(line + "\n"); err != nil {
 			return err

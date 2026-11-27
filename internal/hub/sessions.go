@@ -186,6 +186,7 @@ func (h *Hub) Kill(ctx context.Context, id string) error {
 	h.mu.Lock()
 	delete(h.sessions, id)
 	h.mu.Unlock()
+	h.changed()
 	if err := h.store.remove(ctx, id); err != nil {
 		return err
 	}
@@ -409,6 +410,7 @@ func (h *Hub) reconcile(ctx context.Context) {
 // forget drops a session from the list and the database. The caller holds mu.
 func (h *Hub) forget(id string) {
 	delete(h.sessions, id)
+	h.changed()
 	if err := h.store.remove(context.Background(), id); err != nil {
 		h.log.Warn("session not removed", "session", id, "error", err)
 	}

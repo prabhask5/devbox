@@ -12,7 +12,7 @@ export async function reset(request: APIRequestContext): Promise<void> {
   if (!response.ok()) throw new Error(`reset: ${await response.text()}`);
 }
 
-/** Steers the fakes, e.g. `{ incus: "down" }`, `{ hub: "down" }`, `{ sync: "hold" }`, `{ start: "fail" }`. */
+/** Steers the fakes, e.g. `{ incus: "down" }`, `{ hub: "down" }`, `{ sync: "hold" }`, `{ start: "fail" }`, `{ app: "next" }`. */
 export async function set(
   request: APIRequestContext,
   changes: Record<string, string>,
@@ -37,6 +37,7 @@ export interface AgentSession {
   name: string;
   state: string;
   waitingFor?: string;
+  viewers: number;
 }
 
 /** Starts an agent session in the hub, as the app and the `agent` command do. */
@@ -61,4 +62,25 @@ export async function sessions(request: APIRequestContext): Promise<AgentSession
     sessions: AgentSession[];
   };
   return state.sessions;
+}
+
+export interface Push {
+  device: string;
+  urgency: string;
+  payload: { v: number; title: string; body: string; url: string; tag: string; badge: number };
+}
+
+/** A device at the fake push service: the subscription a browser would hand the app. */
+export async function pushDevice(request: APIRequestContext, name: string): Promise<unknown> {
+  return (await request.post(`${CONTROL}/push/devices`, { params: { name } })).json();
+}
+
+/** What the fake push service delivered (decrypted), and what it refused. */
+export async function pushes(
+  request: APIRequestContext,
+): Promise<{ deliveries: Push[]; rejected: string[] | null }> {
+  return (await (await request.get(`${CONTROL}/push`)).json()) as {
+    deliveries: Push[];
+    rejected: string[] | null;
+  };
 }

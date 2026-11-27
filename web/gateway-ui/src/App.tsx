@@ -1,6 +1,5 @@
 import type { GatewayStatus, SyncState, Wake } from "@devbox/shared/proto/types";
-import { seconds } from "./format.ts";
-import { PHASES, progress } from "./progress.ts";
+import { PHASES, progress, seconds } from "@devbox/shared";
 
 /** What the gateway tells the page about the request it answered with the boot screen. */
 export interface Boot {
