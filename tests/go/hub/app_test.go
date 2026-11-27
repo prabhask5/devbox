@@ -284,6 +284,14 @@ func TestTheStateStreamFollowsChanges(t *testing.T) {
 		t.Errorf("%d states while nothing changed", quiet)
 	}
 
+	// A session that is killed leaves the list at once, with nobody watching its screen.
+	if err := h.hub.Kill(ctx, created.ID); err != nil {
+		t.Fatal(err)
+	}
+	if state := read(); len(state.Sessions) != 0 {
+		t.Errorf("after the kill the stream still lists %d sessions", len(state.Sessions))
+	}
+
 	// The stream ends when the hub stops.
 	h.shutdown()
 	for range lines {
