@@ -1,0 +1,8 @@
+{
+  "v": 1,
+  "title": "🔐 claude-devbox — Fix the flaky sync test",
+  "body": "Bash: cargo test",
+  "url": "/#/s/a1b2c3d4",
+  "tag": "s-a1b2c3d4",
+  "badge": 1
+}

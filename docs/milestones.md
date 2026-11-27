@@ -28,11 +28,11 @@ Specs: CLAUDE.md, 13, 14, 15
 
 ## M1 — Contracts and config
 Specs: 01, 14 (secrets types)
-- [ ] All schemas in `contracts/` with examples; `scripts/gen.sh` (Go, Rust, TS); `check-generated.sh` in CI
-- [ ] Round-trip tests in all three languages; version checks with actionable errors
-- [ ] Config loading + all-errors validation in Go (gateway, hub) and Rust (CLI) with golden error output; `Secret` types
-- [ ] argon2id PHC hashes interoperable between Go and Rust (cross-language test vectors)
-- [ ] Cleanup pass; `scripts/check-hygiene.sh` green
+- [x] All schemas in `contracts/` with examples; `scripts/gen.sh` (Go, Rust, TS); `check-generated.sh` in CI — [`contracts/`](../contracts), [`scripts/gen.sh`](../scripts/gen.sh)
+- [x] Round-trip tests in all three languages; version checks with actionable errors — tests: [`tests/go/proto/proto_test.go`](../tests/go/proto/proto_test.go), [`tests/rust/tests/contracts.rs`](../tests/rust/tests/contracts.rs), [`tests/web/contracts.test.ts`](../tests/web/contracts.test.ts)
+- [x] Config loading + all-errors validation in Go (gateway, hub) and Rust (CLI) with golden error output; `Secret` types — tests: [`tests/go/config/config_test.go`](../tests/go/config/config_test.go), [`tests/rust/tests/config.rs`](../tests/rust/tests/config.rs) over [`tests/fixtures/config/`](../tests/fixtures/config), [`tests/go/schema/formats_test.go`](../tests/go/schema/formats_test.go), [`tests/rust/tests/schema_formats.rs`](../tests/rust/tests/schema_formats.rs), [`tests/go/secret/secret_test.go`](../tests/go/secret/secret_test.go), [`tests/rust/tests/secret.rs`](../tests/rust/tests/secret.rs)
+- [x] argon2id PHC hashes interoperable between Go and Rust (cross-language test vectors) — tests: [`tests/go/password/password_test.go`](../tests/go/password/password_test.go), [`tests/rust/tests/password.rs`](../tests/rust/tests/password.rs) over [`tests/fixtures/password/vectors.json`](../tests/fixtures/password/vectors.json)
+- [x] Cleanup pass; `scripts/check-hygiene.sh` green
 
 ## M2 — Gateway core
 Specs: 02, 14, 15 (fake Incus)

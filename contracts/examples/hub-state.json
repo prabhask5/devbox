@@ -1,0 +1,118 @@
+{
+  "v": 1,
+  "serverNow": 1760000100500,
+  "sessions": [
+    {
+      "v": 1,
+      "id": "a1b2c3d4",
+      "name": "claude-devbox",
+      "tmux": "claude-devbox",
+      "agent": "claude",
+      "kind": "tmux",
+      "cwd": "/home/dev/code/devbox",
+      "repo": "devbox",
+      "createdAt": 1760000000000,
+      "state": "needs_input",
+      "stateSince": 1760000100000,
+      "title": "Fix the flaky sync test",
+      "lastPrompt": "Fix the flaky sync test",
+      "lastTool": "Bash",
+      "waitingFor": "Bash: cargo test",
+      "agentSessionId": "5f0c",
+      "transcriptPath": "/home/dev/.claude/projects/devbox/5f0c.jsonl",
+      "turnStartedAt": 1760000050000,
+      "lastEventAt": 1760000100000,
+      "unread": true,
+      "adopted": false,
+      "attached": false,
+      "size": {
+        "cols": 120,
+        "rows": 40
+      },
+      "viewers": 0
+    }
+  ],
+  "devbox": {
+    "v": 1,
+    "version": "0f3c2d1",
+    "uptime": 5400,
+    "idle": {
+      "busy": true,
+      "reasons": [
+        "claude-devbox is working"
+      ],
+      "idleSeconds": 0
+    },
+    "sync": {
+      "runId": "s-17",
+      "state": "done",
+      "startedAt": 1760000066900,
+      "finishedAt": 1760000074300,
+      "total": 2,
+      "done": 2,
+      "results": [
+        {
+          "name": "dotfiles",
+          "status": "current",
+          "detail": "up to date"
+        },
+        {
+          "name": "moi",
+          "status": "conflict",
+          "detail": "your 2 unpushed commits conflict with 3 upstream commits; left exactly as it was"
+        }
+      ],
+      "reason": "wake (restore)"
+    },
+    "deploy": {
+      "status": "success",
+      "version": "0f3c2d1",
+      "at": 1759900000000
+    }
+  },
+  "adapters": [
+    {
+      "id": "claude",
+      "label": "Claude Code",
+      "short": "Claude",
+      "kind": "tmux",
+      "available": true,
+      "hooks": true,
+      "answerKeys": [
+        {
+          "label": "Yes",
+          "key": "1"
+        },
+        {
+          "label": "Always",
+          "key": "2"
+        },
+        {
+          "label": "No",
+          "key": "Escape"
+        }
+      ]
+    },
+    {
+      "id": "shell",
+      "label": "Shell",
+      "short": "Shell",
+      "kind": "tmux",
+      "available": true,
+      "hooks": false,
+      "answerKeys": []
+    }
+  ],
+  "commonKeys": [
+    {
+      "label": "Enter",
+      "key": "Enter"
+    },
+    {
+      "label": "Esc",
+      "key": "Escape"
+    }
+  ],
+  "vapidPublicKey": "FAKE-vapid-public-key",
+  "pushDevices": 1
+}

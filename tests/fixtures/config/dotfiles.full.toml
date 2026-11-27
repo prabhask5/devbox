@@ -1,0 +1,28 @@
+version = 1
+
+[vm]
+packages = ["ripgrep", "fd-find", "htop"]     # apt packages on top of devbox's base set
+install = "install.sh"                        # run as the VM user after devbox's provisioning; must be idempotent
+
+[shell]
+bashrc = "bashrc"                             # sourced from ~/.bashrc
+gitconfig = "gitconfig"                       # included from ~/.gitconfig
+
+[code_server]
+settings = "code-server/settings.json"        # linked into code-server's User dir
+keybindings = "code-server/keybindings.json"
+extensions = "code-server/extensions.txt"     # one Open VSX id per line
+
+[agents]
+instructions = "agents/AGENTS.md"
+
+[context]
+dir = "context"                               # devbox context writes here and commits it
+ai = true                                     # AI-written summary.md
+commit = true
+
+[sync]
+owner = "you"                                  # whose repos to clone (default: the authenticated gh user)
+include_orgs = []                             # extra owners/orgs
+exclude = ["old-*"]                           # glob on repo names
+archived = false

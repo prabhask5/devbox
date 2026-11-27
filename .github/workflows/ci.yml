@@ -33,6 +33,8 @@ jobs:
         with:
           tool: cargo-deny@0.22.1,cargo-machete@0.10.1
       - run: scripts/ci.sh static
+        env:
+          CARGO_TOOLS_ROOT: /home/runner/.cargo # cached by the setup action, so cargo-typify is built once
 
   go:
     name: go

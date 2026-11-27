@@ -1,0 +1,29 @@
+version = 1
+instance = "devbox"                 # Incus instance name
+domain = "example.com"
+[hosts]
+code = "code.example.com"           # defaults: code.<domain>, agents.<domain>
+agents = "agents.example.com"
+[vm]
+address = "10.77.0.10"              # static address on the Incus bridge
+code_port = 8080
+hub_port = 8090
+ssh_port = 22
+[sleep]
+idle = "15m"
+min_up = "5m"
+mode = "stateful"                   # stateful | shutdown | off
+activity_bytes_per_min = 4096
+[gateway]
+listen = ":8080"
+ssh_listen = ":2222"                # "" disables SSH proxying
+sync_wait = "90s"
+[routing]
+provider = "traefik-file"           # traefik-file | none
+file = "/etc/dokploy/traefik/dynamic/devbox.yml"
+entrypoint = "websecure"
+service_url = "http://devbox-gateway:8080"
+[deploy]
+repo = "you/devbox"                  # where GitHub Deployments for the hub are read from
+hub_environment = "agents-hub"
+wake_to_deploy = false

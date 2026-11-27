@@ -1,0 +1,16 @@
+{
+  "v": 1,
+  "version": "0f3c2d1",
+  "uptime": 3,
+  "idle": {
+    "busy": false,
+    "reasons": [],
+    "idleSeconds": 3
+  },
+  "sync": {
+    "state": "idle",
+    "total": 0,
+    "done": 0,
+    "results": []
+  }
+}

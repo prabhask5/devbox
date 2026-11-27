@@ -1,0 +1,6 @@
+version = 1
+domain = "example.com"
+created = 2026-01-02
+[vm]
+address = "10.77.0.10"
+seen = [1979-05-27T07:32:00Z]

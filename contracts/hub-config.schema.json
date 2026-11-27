@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "hub-config.schema.json",
+  "title": "HubConfig",
+  "x-version": 1,
+  "description": "Hub configuration, ~/.config/devbox/hub.toml in the VM.",
+  "type": "object",
+  "required": [
+    "version",
+    "hosts"
+  ],
+  "properties": {
+    "version": {
+      "description": "Version of this file's format.",
+      "type": "integer"
+    },
+    "listen": {
+      "description": "Listen address for the app and the gateway API.",
+      "type": "string",
+      "format": "devbox-listen",
+      "default": ":8090"
+    },
+    "hosts": {
+      "description": "Public hostnames, for links the hub hands out.",
+      "type": "object",
+      "required": [
+        "code",
+        "agents"
+      ],
+      "properties": {
+        "code": {
+          "description": "Editor hostname.",
+          "type": "string",
+          "format": "hostname"
+        },
+        "agents": {
+          "description": "Agents app hostname.",
+          "type": "string",
+          "format": "hostname"
+        }
+      }
+    },
+    "tmux": {
+      "description": "The tmux server that holds agent sessions.",
+      "type": "object",
+      "required": [],
+      "properties": {
+        "socket": {
+          "description": "tmux socket name (`tmux -L`).",
+          "type": "string",
+          "format": "devbox-name",
+          "default": "devbox"
+        }
+      },
+      "default": {}
+    },
+    "deploy": {
+      "description": "Self-update from GitHub Deployments.",
+      "type": "object",
+      "required": [],
+      "properties": {
+        "repo": {
+          "description": "GitHub repository whose deployments the VM installs. Absent: the hub does not update itself.",
+          "type": "string",
+          "format": "devbox-repo"
+        },
+        "environment": {
+          "description": "GitHub environment of the hub's deployments.",
+          "type": "string",
+          "format": "devbox-nonempty",
+          "default": "agents-hub"
+        }
+      },
+      "default": {}
+    }
+  }
+}

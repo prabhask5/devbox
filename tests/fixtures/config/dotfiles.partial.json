@@ -1,0 +1,20 @@
+{
+  "agents": {},
+  "code_server": {},
+  "context": {
+    "ai": false,
+    "commit": true
+  },
+  "shell": {},
+  "sync": {
+    "archived": true,
+    "exclude": [],
+    "include_orgs": [
+      "some-org"
+    ]
+  },
+  "version": 1,
+  "vm": {
+    "packages": []
+  }
+}

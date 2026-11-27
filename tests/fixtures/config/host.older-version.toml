@@ -1,0 +1,4 @@
+version = 0
+domain = "example.com"
+[vm]
+address = "10.77.0.10"

@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "gateway-event.schema.json",
+  "title": "GatewayEvent",
+  "x-version": 1,
+  "description": "One frame of the /__devbox/events stream: the gateway status, pushed on every change.",
+  "$ref": "gateway-status.schema.json"
+}

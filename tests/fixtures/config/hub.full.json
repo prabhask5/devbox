@@ -1,0 +1,15 @@
+{
+  "deploy": {
+    "environment": "agents-hub-staging",
+    "repo": "you/devbox"
+  },
+  "hosts": {
+    "agents": "agents.example.com",
+    "code": "code.example.com"
+  },
+  "listen": "127.0.0.1:8090",
+  "tmux": {
+    "socket": "devbox-test"
+  },
+  "version": 1
+}

@@ -1,0 +1,87 @@
+{
+  "derive": [
+    {
+      "password": "FAKE-password",
+      "salt": "RkFLRXNhbHRGQUtFc2FsdA",
+      "hash": "$argon2id$v=19$m=65536,t=3,p=1$RkFLRXNhbHRGQUtFc2FsdA$3EAUCCo+RakCQ7M7p3acejpvMl8lo9x8s10tjISQDgI"
+    },
+    {
+      "password": "",
+      "salt": "MDEyMzQ1Njc4OWFiY2RlZg",
+      "hash": "$argon2id$v=19$m=65536,t=3,p=1$MDEyMzQ1Njc4OWFiY2RlZg$R8v41sJQ7BaW6TvRrd0T+nKJI7rIhsTlXBNX0V2dZLk"
+    },
+    {
+      "password": "pässwörd ☃ with spaces",
+      "salt": "AAECAwQFBgcICQoLDA0O/w",
+      "hash": "$argon2id$v=19$m=65536,t=3,p=1$AAECAwQFBgcICQoLDA0O/w$yqGh5WtuUkM2kqbqSGkNBKz61cLGabGVSG1P7RWxU8A"
+    }
+  ],
+  "malformed": [
+    "",
+    "FAKE-password",
+    "$argon2i$v=19$m=65536,t=3,p=1$RkFLRXNhbHRGQUtFc2FsdA$3EAUCCo+RakCQ7M7p3acejpvMl8lo9x8s10tjISQDgI",
+    "$argon2id$v=16$m=65536,t=3,p=1$RkFLRXNhbHRGQUtFc2FsdA$3EAUCCo+RakCQ7M7p3acejpvMl8lo9x8s10tjISQDgI",
+    "$argon2id$m=65536,t=3,p=1$RkFLRXNhbHRGQUtFc2FsdA$3EAUCCo+RakCQ7M7p3acejpvMl8lo9x8s10tjISQDgI",
+    "$argon2id$v=19$m=65536,t=3,p=1$RkFLRXNhbHRGQUtFc2FsdA",
+    "$argon2id$v=19$m=65536,t=3,p=1$RkFLRXNhbHRGQUtFc2FsdA$3EAUCCo+RakCQ7M7p3acejpvMl8lo9x8s10tjISQDgI$",
+    "$argon2id$v=19$m=65536,t=3$RkFLRXNhbHRGQUtFc2FsdA$3EAUCCo+RakCQ7M7p3acejpvMl8lo9x8s10tjISQDgI",
+    "$argon2id$v=19$t=3,m=65536,p=1$RkFLRXNhbHRGQUtFc2FsdA$3EAUCCo+RakCQ7M7p3acejpvMl8lo9x8s10tjISQDgI",
+    "$argon2id$v=19$m=065536,t=3,p=1$RkFLRXNhbHRGQUtFc2FsdA$3EAUCCo+RakCQ7M7p3acejpvMl8lo9x8s10tjISQDgI",
+    "$argon2id$v=19$m=+65536,t=3,p=1$RkFLRXNhbHRGQUtFc2FsdA$3EAUCCo+RakCQ7M7p3acejpvMl8lo9x8s10tjISQDgI",
+    "$argon2id$v=19$m=65536,t=3,p=1,x=1$RkFLRXNhbHRGQUtFc2FsdA$3EAUCCo+RakCQ7M7p3acejpvMl8lo9x8s10tjISQDgI",
+    "$argon2id$v=19$m=65536,t=0,p=1$RkFLRXNhbHRGQUtFc2FsdA$3EAUCCo+RakCQ7M7p3acejpvMl8lo9x8s10tjISQDgI",
+    "$argon2id$v=19$m=65536,t=3,p=0$RkFLRXNhbHRGQUtFc2FsdA$3EAUCCo+RakCQ7M7p3acejpvMl8lo9x8s10tjISQDgI",
+    "$argon2id$v=19$m=4,t=3,p=1$RkFLRXNhbHRGQUtFc2FsdA$3EAUCCo+RakCQ7M7p3acejpvMl8lo9x8s10tjISQDgI",
+    "$argon2id$v=19$m=4294967295,t=3,p=1$RkFLRXNhbHRGQUtFc2FsdA$3EAUCCo+RakCQ7M7p3acejpvMl8lo9x8s10tjISQDgI",
+    "$argon2id$v=19$m=65536,t=99,p=1$RkFLRXNhbHRGQUtFc2FsdA$3EAUCCo+RakCQ7M7p3acejpvMl8lo9x8s10tjISQDgI",
+    "$argon2id$v=19$m=65536,t=3,p=99$RkFLRXNhbHRGQUtFc2FsdA$3EAUCCo+RakCQ7M7p3acejpvMl8lo9x8s10tjISQDgI",
+    "$argon2id$v=19$m=65536,t=3,p=1$c2hvcnQ$3EAUCCo+RakCQ7M7p3acejpvMl8lo9x8s10tjISQDgI",
+    "$argon2id$v=19$m=65536,t=3,p=1$RkFLRXNhbHRGQUtFc2FsdA$c2hvcnQ",
+    "$argon2id$v=19$m=65536,t=3,p=1$RkFLRXNhbHRGQUtFc2FsdA=$3EAUCCo+RakCQ7M7p3acejpvMl8lo9x8s10tjISQDgI",
+    "$argon2id$v=19$m=65536,t=3,p=1$RkFLRXNhbHRGQUtFc2FsdA$3EAUCCo+RakCQ7M7p3acejpvMl8lo9x8s10tjISQDgI=",
+    "$argon2id$v=19$m=65536,t=3,p=1$RkFLRXNhbHR$3EAUCCo+RakCQ7M7p3acejpvMl8lo9x8s10tjISQDgI",
+    "$argon2id$v=19$m=65536,t=3,p=1$RkFLRXNhbHRGQUtFc2FsdA$not base64!"
+  ],
+  "verify": [
+    {
+      "hash": "$argon2id$v=19$m=65536,t=3,p=1$RkFLRXNhbHRGQUtFc2FsdA$3EAUCCo+RakCQ7M7p3acejpvMl8lo9x8s10tjISQDgI",
+      "password": "FAKE-password",
+      "matches": true
+    },
+    {
+      "hash": "$argon2id$v=19$m=65536,t=3,p=1$RkFLRXNhbHRGQUtFc2FsdA$3EAUCCo+RakCQ7M7p3acejpvMl8lo9x8s10tjISQDgI",
+      "password": "FAKE-passwore",
+      "matches": false
+    },
+    {
+      "hash": "$argon2id$v=19$m=65536,t=3,p=1$RkFLRXNhbHRGQUtFc2FsdA$3EAUCCo+RakCQ7M7p3acejpvMl8lo9x8s10tjISQDgI",
+      "password": "",
+      "matches": false
+    },
+    {
+      "hash": "$argon2id$v=19$m=65536,t=3,p=1$MDEyMzQ1Njc4OWFiY2RlZg$R8v41sJQ7BaW6TvRrd0T+nKJI7rIhsTlXBNX0V2dZLk",
+      "password": "",
+      "matches": true
+    },
+    {
+      "hash": "$argon2id$v=19$m=16,t=2,p=2$RkFLRXNhbHQ$pnEXoRGBg8Mo+4ZuF+za7/otVl6NfRbn",
+      "password": "FAKE-password",
+      "matches": true
+    },
+    {
+      "hash": "$argon2id$v=19$m=16,t=2,p=2$RkFLRXNhbHQ$pnEXoRGBg8Mo+4ZuF+za7/otVl6NfRbn",
+      "password": "fake-password",
+      "matches": false
+    },
+    {
+      "hash": "$argon2id$v=19$m=4096,t=1,p=4$YS1sb25nZXItRkFLRS1zYWx0LW9mLTI3LWJ5$C5NtOQufiY0Tr7C1gExuzI6/+eQ+SJ+3cN0EFWWd3Kq2DkYFJf51rAGCuwPTm0/0FIpvGsUnI3b1QAymybBkMw",
+      "password": "FAKE-password",
+      "matches": true
+    },
+    {
+      "hash": "$argon2id$v=19$m=4096,t=1,p=4$YS1sb25nZXItRkFLRS1zYWx0LW9mLTI3LWJ5$C5NtOQufiY0Tr7C1gExuzI6/+eQ+SJ+3cN0EFWWd3Kq2DkYFJf51rAGCuwPTm0/0FIpvGsUnI3b1QAymybBkMw",
+      "password": "FAKE-password ",
+      "matches": false
+    }
+  ]
+}

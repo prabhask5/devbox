@@ -1,0 +1,38 @@
+{
+  "v": 1,
+  "version": "0f3c2d1",
+  "uptime": 5400,
+  "idle": {
+    "busy": true,
+    "reasons": [
+      "claude-devbox is working"
+    ],
+    "idleSeconds": 0
+  },
+  "sync": {
+    "runId": "s-17",
+    "state": "done",
+    "startedAt": 1760000066900,
+    "finishedAt": 1760000074300,
+    "total": 2,
+    "done": 2,
+    "results": [
+      {
+        "name": "dotfiles",
+        "status": "current",
+        "detail": "up to date"
+      },
+      {
+        "name": "moi",
+        "status": "conflict",
+        "detail": "your 2 unpushed commits conflict with 3 upstream commits; left exactly as it was"
+      }
+    ],
+    "reason": "wake (restore)"
+  },
+  "deploy": {
+    "status": "success",
+    "version": "0f3c2d1",
+    "at": 1759900000000
+  }
+}

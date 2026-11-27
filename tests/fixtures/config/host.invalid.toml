@@ -1,0 +1,26 @@
+version = 1
+instance = "Dev Box"
+domain = "Example.com"
+hosts = "code.example.com"
+[vm]
+code_port = 0
+hub_port = 70000
+ssh_port = "22"
+[sleep]
+idle = "15 minutes"
+min_up = 5
+mode = "hibernate"
+activity_bytes_per_min = -1
+[gateway]
+listen = "8080"
+ssh_listen = "off"
+sync_wait = "90"
+[routing]
+provider = "nginx"
+file = "traefik/devbox.yml"
+entrypoint = ""
+service_url = "devbox-gateway:8080"
+[deploy]
+repo = "devbox"
+hub_environment = ""
+wake_to_deploy = "yes"

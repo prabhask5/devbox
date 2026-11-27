@@ -1,0 +1,11 @@
+devbox.toml: agents.instructions: expected a path inside the repository, like dir/file
+devbox.toml: code_server.extensions: expected a string
+devbox.toml: context.ai: expected true or false
+devbox.toml: context.dir: expected a path inside the repository, like dir/file
+devbox.toml: shell.bashrc: expected a path inside the repository, like dir/file
+devbox.toml: sync.archived: expected true or false
+devbox.toml: sync.exclude: expected a list
+devbox.toml: sync.owner: must not be empty
+devbox.toml: vm.install: expected a path inside the repository, like dir/file
+devbox.toml: vm.packages[1]: must not be empty
+devbox.toml: vm.packages[2]: expected a string

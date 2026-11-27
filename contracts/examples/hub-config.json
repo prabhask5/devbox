@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "listen": ":8090",
+  "hosts": {
+    "code": "code.example.com",
+    "agents": "agents.example.com"
+  },
+  "tmux": {
+    "socket": "devbox"
+  },
+  "deploy": {
+    "repo": "you/devbox",
+    "environment": "agents-hub"
+  }
+}

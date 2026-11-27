@@ -1,0 +1,34 @@
+{
+  "v": 1,
+  "version": "0f3c2d1",
+  "serverNow": 1760000012000,
+  "configured": true,
+  "vm": "stopped",
+  "phase": "idle",
+  "lastStop": {
+    "at": 1759990000000,
+    "reason": "idle 15m",
+    "mode": "stateful",
+    "ms": 8200
+  },
+  "typical": {
+    "restore": {
+      "phases": {
+        "start": 5800,
+        "code": 700,
+        "hub": 400,
+        "sync": 7400
+      },
+      "samples": 10
+    },
+    "cold": {
+      "phases": {
+        "start": 4000,
+        "code": 6000,
+        "hub": 2000,
+        "sync": 10000
+      },
+      "samples": 0
+    }
+  }
+}

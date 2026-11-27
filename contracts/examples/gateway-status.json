@@ -1,0 +1,102 @@
+{
+  "v": 1,
+  "version": "0f3c2d1",
+  "serverNow": 1760000012000,
+  "configured": true,
+  "authed": true,
+  "vm": "running",
+  "phase": "waking",
+  "idle": {
+    "idleMs": 0,
+    "gatewayIdleMs": 0,
+    "hubIdleMs": 42000,
+    "limitMs": 900000,
+    "hubReasons": []
+  },
+  "lastStop": {
+    "at": 1759990000000,
+    "reason": "idle 15m",
+    "mode": "stateful",
+    "ms": 8200
+  },
+  "wake": {
+    "id": "w-1760000000000",
+    "kind": "restore",
+    "reason": "page load code.example.com",
+    "requestedAt": 1760000000000,
+    "current": "sync",
+    "phases": {
+      "start": {
+        "start": 1760000000000,
+        "end": 1760000005800
+      },
+      "code": {
+        "start": 1760000005800,
+        "end": 1760000006500
+      },
+      "hub": {
+        "start": 1760000006500,
+        "end": 1760000066500,
+        "skipped": true
+      },
+      "sync": {
+        "start": 1760000066500
+      }
+    },
+    "done": false,
+    "eta": {
+      "phases": {
+        "start": 6000,
+        "code": 1000,
+        "hub": 1000,
+        "sync": 8000
+      },
+      "samples": 0
+    },
+    "log": [
+      "restore requested",
+      "VM running",
+      "code-server ready"
+    ],
+    "sync": {
+      "runId": "s-17",
+      "state": "running",
+      "startedAt": 1760000066900,
+      "total": 11,
+      "done": 2,
+      "current": "devbox",
+      "results": [
+        {
+          "name": "dotfiles",
+          "status": "current",
+          "detail": "up to date"
+        },
+        {
+          "name": "moi",
+          "status": "updated",
+          "detail": "pulled 3"
+        }
+      ]
+    }
+  },
+  "typical": {
+    "restore": {
+      "phases": {
+        "start": 5800,
+        "code": 700,
+        "hub": 400,
+        "sync": 7400
+      },
+      "samples": 10
+    },
+    "cold": {
+      "phases": {
+        "start": 4000,
+        "code": 6000,
+        "hub": 2000,
+        "sync": 10000
+      },
+      "samples": 0
+    }
+  }
+}

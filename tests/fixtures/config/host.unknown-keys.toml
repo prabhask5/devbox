@@ -1,0 +1,12 @@
+version = 1
+domain = "example.com"
+colour = "blue"
+[vm]
+address = "10.77.0.10"
+cpus = 4
+[sleap]
+idle = "15m"
+[sleep]
+idle = "20m"
+[sleep.schedule]
+night = true

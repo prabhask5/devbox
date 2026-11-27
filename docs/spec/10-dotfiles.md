@@ -48,7 +48,7 @@ exclude = ["old-*"]                           # glob on repo names
 archived = false
 ```
 
-Every key is optional; without a manifest devbox uses its defaults and writes context to `~/.local/share/devbox/context/`. Paths are relative to the dotfiles root; links are symlinks so edits in either place are the same file (except Claude's `settings.json`, which is merged, spec 05).
+Every key except `version` is optional; without a manifest devbox uses its defaults and writes context to `~/.local/share/devbox/context/`. Paths are relative to the dotfiles root; links are symlinks so edits in either place are the same file (except Claude's `settings.json`, which is merged, spec 05).
 
 ## Rules
 

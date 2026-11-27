@@ -2,7 +2,15 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "includeEntryExports": true,
   "workspaces": {
-    "gateway-ui": { "entry": ["index.html"] },
-    "hub-app": { "entry": ["index.html"] }
+    "gateway-ui": {
+      "entry": ["index.html"]
+    },
+    "hub-app": {
+      "entry": ["index.html"]
+    },
+    "shared": {
+      "entry": ["gen-proto.mjs"],
+      "ignore": ["src/proto/**"]
+    }
   }
 }

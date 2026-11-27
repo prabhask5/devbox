@@ -1,0 +1,4 @@
+devbox.toml: domain: required
+devbox.toml: sleep: expected a table
+devbox.toml: version: required
+devbox.toml: vm.address: required

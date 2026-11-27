@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "vm": {
+    "packages": [
+      "ripgrep",
+      "fd-find",
+      "htop"
+    ],
+    "install": "install.sh"
+  },
+  "shell": {
+    "bashrc": "bashrc",
+    "gitconfig": "gitconfig"
+  },
+  "code_server": {
+    "settings": "code-server/settings.json",
+    "keybindings": "code-server/keybindings.json",
+    "extensions": "code-server/extensions.txt"
+  },
+  "agents": {
+    "instructions": "agents/AGENTS.md"
+  },
+  "context": {
+    "dir": "context",
+    "ai": true,
+    "commit": true
+  },
+  "sync": {
+    "owner": "you",
+    "include_orgs": [],
+    "exclude": [
+      "old-*"
+    ],
+    "archived": false
+  }
+}

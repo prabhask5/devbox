@@ -1,0 +1,5 @@
+hub.toml: deploy.repo: expected a GitHub repository like owner/name
+hub.toml: hosts.agents: required
+hub.toml: hosts.code: expected a lowercase hostname like code.example.com
+hub.toml: listen: expected a listen address like :8080
+hub.toml: tmux.socket: expected a name of lowercase letters, digits and dashes

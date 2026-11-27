@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "hub-wake.schema.json",
+  "title": "HubWake",
+  "x-version": 1,
+  "description": "What the gateway posts to the hub (POST /devbox/wake) once the VM is up.",
+  "type": "object",
+  "required": [
+    "v",
+    "now",
+    "kind"
+  ],
+  "properties": {
+    "v": {
+      "description": "Contract version of this message.",
+      "type": "integer"
+    },
+    "now": {
+      "description": "The host's clock, to correct the guest clock after a restore (Unix time, ms).",
+      "type": "integer"
+    },
+    "kind": {
+      "description": "How the VM came up.",
+      "$ref": "gateway-status.schema.json#/$defs/WakeKind"
+    }
+  }
+}

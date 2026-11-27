@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "gateway-health.schema.json",
+  "title": "GatewayHealth",
+  "x-version": 1,
+  "description": "Health of the devbox for monitors, served at /__devbox/health (200 when ok, 503 otherwise).",
+  "type": "object",
+  "required": [
+    "v",
+    "status",
+    "problems",
+    "vm",
+    "phase",
+    "checkedAt"
+  ],
+  "properties": {
+    "v": {
+      "description": "Contract version of this message.",
+      "type": "integer"
+    },
+    "status": {
+      "description": "`ok`, or `problem` when `problems` is not empty.",
+      "type": "string",
+      "enum": [
+        "ok",
+        "problem"
+      ]
+    },
+    "problems": {
+      "description": "One stable sentence per problem.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "vm": {
+      "description": "State of the VM.",
+      "$ref": "gateway-status.schema.json#/$defs/VmState"
+    },
+    "phase": {
+      "description": "What the gateway is doing with the VM.",
+      "$ref": "gateway-status.schema.json#/$defs/GatewayPhase"
+    },
+    "checkedAt": {
+      "description": "When this was computed (Unix time, ms).",
+      "type": "integer"
+    }
+  }
+}

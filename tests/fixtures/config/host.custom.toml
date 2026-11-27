@@ -1,0 +1,24 @@
+# Every default overridden with a value that is "zero" in some language: nothing may be lost.
+version = 1
+instance = "dev-2"
+domain = "devbox.test"
+[hosts]
+agents = "a.devbox.test"
+[vm]
+address = "192.0.2.7"
+code_port = 1
+hub_port = 65535
+ssh_port = 2222
+[sleep]
+idle = "0s"
+min_up = "1h30m"
+mode = "off"
+activity_bytes_per_min = 0
+[gateway]
+listen = "127.0.0.1:9000"
+ssh_listen = ""
+sync_wait = "250ms"
+[routing]
+provider = "none"
+[deploy]
+wake_to_deploy = true
