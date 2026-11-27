@@ -19,7 +19,8 @@ Small pure-function unit tests may live next to the code (`*_test.go` in the sam
 
 ## Fakes (faithful, shared, versioned)
 
-- **Fake Incus** (`tests/fakes/incus`): speaks the subset of the Incus REST API devbox uses over a unix socket — instances, state, operations with configurable delays and failures (start fails, restore fails, stop stateful fails, socket down), exec/file endpoints for provisioning. Request log for assertions. Recorded responses from a real Incus 6.0 are the reference (fixtures).
+- **Fake Incus** (`tests/fakes/incus`): speaks the subset of the Incus REST API devbox uses over a unix socket — instances, state, operations with configurable delays and failures (start fails, restore fails, stop fails, stop stateful fails, socket down), exec/file endpoints for provisioning. Request log for assertions. `tests/fixtures/incus/` holds the reference responses, written from the Incus 6.0 API definition; the fake is tested to answer with the same shapes, and the nightly real-VM run checks the client against a real Incus.
+- **WebSocket echo** (`tests/fakes/wsecho`): a minimal RFC 6455 endpoint and frame codec, so tests push real frames through the gateway without a WebSocket library.
 - **Fake VM**: lightweight servers standing in for code-server (`/healthz`, pages, WebSocket echo), sshd (banner after a delay), and either a fake hub or the **real hub** binary.
 - **Fake GitHub**: repos list, deployments + statuses, releases + assets, attestations (or a stub verifier), rate-limit headers.
 - **Fake push service**: accepts RFC 8291 messages, decrypts with the subscription's private key, validates VAPID JWT, can answer 410.

@@ -1,0 +1,30 @@
+{
+  "type": "sync",
+  "status": "Success",
+  "status_code": 200,
+  "operation": "",
+  "error_code": 0,
+  "error": "",
+  "metadata": {
+    "cpu": { "usage": 81250000000, "allocated_time": 0 },
+    "disk": { "root": { "total": 0, "usage": 12884901888 } },
+    "memory": { "swap_usage": 0, "swap_usage_peak": 0, "total": 8589934592, "usage": 2147483648, "usage_peak": 0 },
+    "network": {
+      "eth0": {
+        "addresses": [{ "address": "10.77.0.10", "family": "inet", "netmask": "24", "scope": "global" }],
+        "counters": { "bytes_received": 1024, "bytes_sent": 2048, "packets_received": 10, "packets_sent": 12 },
+        "host_name": "tap1a2b3c4d",
+        "hwaddr": "00:16:3e:00:00:01",
+        "mtu": 1500,
+        "state": "up",
+        "type": "broadcast"
+      }
+    },
+    "os_info": null,
+    "pid": 4242,
+    "processes": 37,
+    "started_at": "2026-02-03T04:05:06.123456789Z",
+    "status": "Running",
+    "status_code": 103
+  }
+}

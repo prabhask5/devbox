@@ -45,7 +45,7 @@ Why this split: the long-running network services (gateway, hub) are Go — fast
 contracts/            JSON Schemas for every cross-component message and config file (+ generated-code check)
 cmd/devbox-gateway/   Go main for the gateway
 cmd/devbox-hub/       Go main for the hub (subcommands: serve, event, agent, update)
-internal/             Go packages: gateway/, hub/, incus/, proto/ (generated), webpush/, tmux/, httpx/ ...
+internal/             Go packages: gateway/, hub/, incus/, proto/ (generated), config/, schema/, secret/, password/, sys/, webpush/, tmux/ ...
 crates/               Rust workspace members: devbox-cli (bin `devbox`), devbox-core, devbox-sync, devbox-context
 web/                  pnpm workspace: gateway-ui/, hub-app/, shared/ (generated types, design tokens)
 deploy/gateway/       Dockerfile + compose.yml for Dokploy (no domain, no previews)
@@ -96,7 +96,7 @@ pnpm -C web test              # TS unit tests; pnpm -C web e2e for Playwright
 Rules:
 
 - **Tests live in `tests/`** (`tests/go/...` as external test packages, `tests/rust` as the `devbox-tests` workspace crate, `tests/web`, `tests/e2e`). Small in-package unit tests for pure functions are allowed (`*_test.go` with `package x`, `#[cfg(test)]`), nothing that touches I/O. CI fails on test files elsewhere.
-- **Never touch the real system in tests.** All OS access goes through an interface with a real and a fake implementation: Go `internal/sys` (commands, files, clock) and Rust `devbox_core::system::System`. Incus is faked by an in-process HTTP server speaking the Incus REST API (`tests/fakes/incus`); GitHub by a fake API server; web push by a fake push service that decrypts and verifies messages. Real tmux and real git are allowed in tests (they are local and deterministic) inside temp dirs.
+- **Never touch the real system in tests.** All OS access goes through an interface with a real and a fake implementation: Go `internal/sys` (files, clock, commands) and Rust `devbox_core::system::System`. Incus is faked by an in-process HTTP server speaking the Incus REST API (`tests/fakes/incus`); GitHub by a fake API server; web push by a fake push service that decrypts and verifies messages. Real tmux and real git are allowed in tests (they are local and deterministic) inside temp dirs.
 - **Contracts are code-generated.** Edit `contracts/*.schema.json`, run `scripts/gen.sh`; CI fails if generated code is stale.
 - **Go**: `gofmt`, `go vet`, `golangci-lint` (config in `.golangci.yml`), `govulncheck`. Standard library first; each dependency justified in spec 14. No cgo (static binaries): SQLite via `modernc.org/sqlite`.
 - **Rust**: stable, edition 2024, `rustfmt`, `clippy -D warnings`, `cargo deny` (permissive licenses, crates.io only). Same error and host-access conventions as moi (`thiserror` in libraries, a `System` trait for every OS interaction, `#![forbid(unsafe_code)]`).
