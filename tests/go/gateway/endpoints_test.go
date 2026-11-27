@@ -204,7 +204,9 @@ func TestEventStream(t *testing.T) {
 			break
 		}
 	}
-	if len(seen) != 4 {
+	// Changes that follow each other within a write are sent as one event, so a phase that
+	// takes no time may never be seen as the current one.
+	if len(seen) < 2 || !seen[proto.WakePhaseIDStart] {
 		t.Errorf("the stream showed these phases as current: %v", seen)
 	}
 

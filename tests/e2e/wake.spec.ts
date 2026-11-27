@@ -114,7 +114,8 @@ test("a failed wake says why and Try again retries", async ({ page, request }) =
 
 test("the sign-in form works from the keyboard alone", async ({ page }) => {
   await page.goto(`${CODE}/`);
-  await page.keyboard.type(WAKE_PASSWORD); // the password field has the focus
+  await expect(page.getByLabel("Wake password")).toBeFocused();
+  await page.keyboard.type(WAKE_PASSWORD);
   await page.keyboard.press("Enter");
   await expect(page.getByRole("heading")).toHaveText("Waking your devbox");
   const live = page.locator("[aria-live=polite]");
