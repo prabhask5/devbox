@@ -27,7 +27,7 @@ It runs as a **plan → confirm → apply** sequence of idempotent steps. Each s
 | 5 | Dotfiles | if given: clone into `~/dotfiles` as the VM user, apply its `devbox.toml` (spec 10): extra packages, code-server config, agent instructions, context dir, sync filters, then run its `install` hook |
 | 6 | Host config | write `/etc/devbox/devbox.toml`; the gateway picks it up (hot reload, 02) |
 | 7 | Routing | `traefik-file`: write the dynamic file routing both hosts to `service_url` on `entrypoint` with the existing TLS settings (copied from any existing router for the same host); `none`: print what to route |
-| 8 | Firewall | allow gateway → VM on `code_port`, `hub_port`, `ssh_port` and nothing else: edit the detected manager in its own format (an iptables-restore rules file such as `/etc/host-firewall/rules4.txt`, a ufw rule, an nft set, or moi's firewall config when moi manages it), then apply through that manager |
+| 8 | Firewall | allow gateway → VM on `code_port`, `hub_port`, `ssh_port` and nothing else, through a `firewall::Manager` (spec 12): the built-in managers edit their own format (an iptables-restore rules file such as `/etc/host-firewall/rules4.txt`, a ufw rule, an nft set) and apply it; with `--firewall moi` (chosen automatically when moi is installed) devbox asks moi to add the rule to its managed chains (`moi firewall` files + apply) and never edits them itself; under `moi devbox up`, moi passes its own manager |
 | 9 | Monitor | `--kuma-monitor`: print (or, with Kuma credentials, update) the monitor URL `https://<code host>/__devbox/health`; moi users: moi adopts it (spec 12) |
 | 10 | Verify | `GET https://<code host>/__devbox/health` = ok (through the real public path); hub status reachable from the gateway; one sleep → wake cycle with `--verify-sleep` (optional, ~30 s) |
 
@@ -43,7 +43,8 @@ Incus reachable, instance exists and is stateful-capable, `size.state ≥ memory
 
 ## Implementation rules
 
-- All system access through `devbox_core::system::System` (commands, files under a root prefix, Incus REST client, clock, prompts) with `RealSystem` and `FakeSystem` (canned command outputs + fake Incus server + overlay filesystem), mirroring moi's `Host`.
+- All system access through `devbox_core::system::System` (spec 12: methods map 1:1 onto moi's `host::Host`) with the real `Host` and a `FakeSystem` (canned command outputs + fake Incus server + overlay filesystem). Prompts and confirmation are the CLI's job: the library takes passwords in `UpOptions` and a `Confirm` implementation, so `moi devbox` and moi's restore can drive it without a terminal.
+- Every command is a library function returning a report; `render::human` / `render::json` format it (spec 12). The `devbox` binary only parses arguments, prompts, renders and exits.
 - Incus via its REST API over the unix socket (no `incus` CLI dependency for the host side; `incus exec`/`file push` equivalents via the API's exec and file endpoints).
 - Errors say what to do next. `--json` output for `status` and `doctor` is a contract (golden).
 

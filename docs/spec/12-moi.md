@@ -1,34 +1,78 @@
 # 12 — moi
 
-[moi](https://github.com/prabhask5/moi) is a Rust daemon that runs a Linux server (snapshots, context, checks, Uptime Kuma, backups, rebuilds). devbox is a separate product that works without moi; when moi is present, moi **embeds** devbox's Rust crates and **observes** its Go services.
+[moi](https://github.com/prabhask5/moi) is a Rust daemon that runs a Linux server (snapshots, context, checks, Uptime Kuma, backups, rebuilds). devbox and moi stay **separate repositories and separate products**: devbox works on any server without moi, and moi works without devbox. When both are on a server, **moi embeds devbox's Rust libraries** and exposes them as `moi devbox …`, and **observes devbox's Go services** through their stable HTTP surfaces. moi's side of this is moi's spec "devbox" (`docs/spec/15-devbox.md` in the moi repository).
 
-## What moi embeds (Rust)
+Why not one repository: devbox is Go + Rust + TypeScript with its own continuous deployment (the gateway and hub redeploy on every push); moi is a single Rust crate with a deliberate release process and strict budgets. Merging would make devbox unusable without moi and put Go, pnpm and Playwright in moi's CI. Embedding gives the same single command on a moi server with none of that.
 
-| Crate | Used by moi for |
-|---|---|
-| `devbox-core` | config/secrets types (generated from `contracts/`), Incus client, plan/apply engine, `status`/`doctor` |
-| `devbox-sync` | (optional) syncing repos from moi, e.g. before a backup |
-| `devbox-context` | (optional) including devbox's developer context in moi's own CONTEXT.md pointer |
+## The two CLIs
 
-moi exposes them as `moi devbox up|down|status|doctor` — same flags and output as the `devbox` CLI (the CLI is a thin wrapper over the same functions). Requirements for this to work:
+| | `devbox` (this repo) | `moi devbox` (moi repo) |
+|---|---|---|
+| Who uses it | anyone with Incus + Docker | servers managed by moi |
+| Commands | `up`, `down`, `status`, `doctor`, `connect`, `password` (host); `sync`, `context` (VM) | `up`, `down`, `status`, `doctor`, `connect`, `password` — the host commands only |
+| Implementation | `devbox-cli` over `devbox-core` | moi's `devbox` module over the same `devbox-core` |
+| Output | human + `--json` | **byte-identical** to `devbox` for the same inputs (both call the same renderers) |
+| System access | `devbox_core::system::Host` (the real machine) | moi's `host::Host` through an adapter in moi |
+| Firewall | the detected manager (spec 09) | always moi's managed chains |
+| After changes | — | moi takes a snapshot and updates CONTEXT.md |
 
-- **`System` adapter**: `devbox_core::system::System` must be implementable on top of moi's `host::Host` (files under a root prefix, commands, clock, Incus socket). The trait mirrors moi's conventions so the adapter is a thin shim; a test in this repo implements `System` for a minimal `Host`-like fixture to prove it.
-- **Publishing**: moi's `cargo deny` allows crates.io sources only, so the crates are published to crates.io as `devbox-core`, `devbox-sync` and `devbox-context`. The CLI crate `devbox-cli` (binary `devbox`) is not published; its whole program is the library function `devbox_cli::run(args, stdout, stderr)`, which the tests drive in-process. Semver: the public API of `devbox-core` follows the `contracts/` versions.
-- **Dependencies** stay within moi's license allowlist (MIT/Apache-2.0/BSD/ISC/Zlib/Unicode/MPL-2.0) and avoid duplicating moi's majors where possible (`serde`, `toml`, `thiserror`, `tokio` only if needed).
+On a host where moi is installed (`/etc/moi/moi.toml` exists), `devbox up/down` print once: "moi manages this server; `moi devbox up` does the same and keeps moi's records current", select `--firewall moi`, and continue.
+
+## What `devbox-core` must provide (the embedding contract)
+
+These rules hold from M8 on and are checked in CI by the `compat` job (below).
+
+1. **Library first, no I/O at the edges.** Every command is a function: `up(sys, &UpOptions, &mut dyn Confirm) -> Result<UpReport>`, `down(…)`, `status(sys, &StatusOptions) -> Result<StatusReport>`, `doctor(…)`, `connect(…)`, `password(…)`. Reports are plain data (`serde::Serialize`); `render::human(&report)` and `render::json(&report)` produce the text. Neither the library nor the renderers print, read stdin, parse arguments or exit; the CLI does that.
+2. **Non-interactive by construction.** Prompts (wake/app passwords, "apply this plan?") go through the caller: passwords are fields of `UpOptions` (`Option<SecretString>`; `None` means keep the existing hash, or fail with "needs a password" when there is none), confirmation through a small `Confirm` trait (`fn confirm(&mut self, plan: &Plan) -> bool`). When `/etc/devbox` already holds config and secrets, `up` needs no input at all — this is how moi re-runs it during a restore.
+3. **One system interface whose methods map 1:1 onto moi's `host::Host`.** `devbox_core::system::System` (all methods take `&self`, `Send + Sync`):
+
+   | `System` | moi `host::Host` |
+   |---|---|
+   | `run(&Command) -> io::Result<Output>` | `run(&Cmd) -> io::Result<CmdOutput>` (moi's `Cmd` has no working directory: the adapter runs `env -C <dir> <program>` when `cwd` is set) |
+   | `read`, `read_dir`, `exists`, `metadata`, `read_link` | same names |
+   | `write(path, data, mode)`, `append(path, data, mode)`, `create_dir_all(path, mode)` | same names and modes |
+   | `remove_file`, `symlink`, `set_mode`, `set_owner` | same names |
+   | `connect_unix(path) -> io::Result<Box<dyn Conn>>` (blocking `Read + Write`) | `connect_unix` |
+   | `env`, `now`, `monotonic`, `sleep`, `random_bytes` | same names |
+
+   No other OS access exists in the library crates (no `std::fs`, `std::process`, `std::net`, `std::env` outside `system::Host`) — enforced by a clippy `disallowed-methods` list in the library crates.
+4. **Incus over a connection the caller provides.** The Incus REST client is a small blocking HTTP/1.1 client on `System::connect_unix("/var/lib/incus/unix.socket")`, payloads as `serde_json` values (moi's Docker client works the same way). No HTTP crate, no async runtime, no threads the caller didn't ask for (git fetch parallelism in `devbox-sync` uses `std::thread::scope` and is not used by `devbox-core`).
+5. **Firewall through a trait.** `devbox_core::firewall::Manager` (`fn ensure(&self, sys, &Rule) -> Result<Change>`, `fn remove(&self, sys, &Rule) -> Result<Change>`, `fn describe(&self) -> &str`) with the built-in managers (host-firewall rules file, ufw, nftables). moi passes its own implementation, which edits moi's rules files and applies them with moi's atomic, rollback-protected apply. devbox never edits moi's chains or files itself.
+6. **Errors**: `thiserror` enums, `Send + Sync + 'static`, every user-facing message says what to do next. No `anyhow`, no panics on bad input.
+7. **Toolchain and dependencies that moi can take**:
+   - `rust-version` of the library crates (`devbox-core`, `devbox-sync`, `devbox-context`) is **at most moi's `rust-version`** (1.88 today). The CLI and test crates may use the newer pinned toolchain; the libraries may not use features newer than their `rust-version`.
+   - Shared dependencies use the same major versions as moi (`serde 1`, `serde_json 1`, `thiserror 2`, `toml 1`; `gix` only at moi's version if ever used); licenses within moi's allowlist; crates.io only; minimal features.
+   - Nothing that pulls in an async runtime or a second TLS stack.
+8. **Versioning and publishing.** The library crates are published to crates.io (moi's `cargo deny` allows only crates.io sources). Semver: while `0.x`, a minor bump may break; moi pins `devbox-core = "0.<minor>"`. After 1.0, contract (`contracts/`) major versions and `devbox-core` majors move together. `0.1.0` is published right after M8 merges (workflow `publish-crates.yml`, triggered by tags `crates-v*`, publishing the three library crates in dependency order); later versions with each devbox release. CHANGELOG lists breaking library changes under "Library".
+
+## The `compat` CI job
+
+Builds `tests/compat/moi-consumer/` — a small crate outside the workspace that depends on the three library crates by path, implements `System` over a fixture host whose trait is a copy of moi's `host::Host` signature (refreshed from moi when it changes), and runs `status`, an `up` plan with dry-run, `doctor` and a `down` plan through it — with:
+
+- the toolchain at the libraries' `rust-version` (moi's MSRV),
+- moi's `deny.toml` (copied into `tests/compat/moi-deny.toml`): `cargo deny check` for licenses, sources, bans and duplicate majors against moi's dependency set (the consumer's `Cargo.toml` lists moi's direct dependencies at moi's versions so duplicates show up),
+- `cargo publish --dry-run` for each library crate.
+
+`compat` is part of `required`.
 
 ## What moi observes (no embedding)
 
-- **Health**: the gateway's `/__devbox/health` (stable JSON + strings) is a moi check / Kuma HTTP monitor. moi's monitor adoption ("adopt, never recreate") adopts the existing **Devbox** Uptime Kuma monitor by name and sets its URL to the health endpoint.
-- **Snapshot**: `/etc/devbox/` (config; secrets file is redacted by moi), the Traefik dynamic file, the Dokploy compose app, and the Incus instance config are captured like any other server state. The VM's disk stays **fungible** (rebuilt by `devbox up --dotfiles …`); `/var/lib/devbox/gateway/` (wake history) is small identity data and is backed up.
-- **Firewall**: when moi manages the firewall, `devbox up --firewall moi` writes devbox's rule into moi's firewall config and asks moi to apply it (moi owns the chains; devbox never edits them directly).
-- **Context**: moi's CONTEXT.md mentions the devbox instance, its URLs and where its developer context lives.
+- **Health**: `/__devbox/health` (stable JSON and strings). moi adopts the existing **Devbox** Uptime Kuma HTTP monitor by name and points it at the health URL (moi's adoption rules: the URL change is drift, applied by `moi devbox up` after confirmation or by `moi monitors sync --update`).
+- **Snapshot and backup**: `/etc/devbox/` is identity (config captured; `secrets.toml` redacted in snapshots, included in encrypted backups); `/var/lib/devbox/gateway/` is identity (wake history, small); the Traefik dynamic file and the Dokploy app are captured with the rest of `/etc` and Dokploy; the Incus instance config is captured; **the VM disk and saved memory state are fungible** (`/var/lib/incus`, rebuilt by `moi devbox up` from the restored config and the `[provision]` section, spec 01).
+- **Restore**: after moi's Incus phase, moi runs `devbox_core::up` non-interactively from the restored `/etc/devbox` (no prompts: hashes and secrets are restored), which recreates and provisions the VM and re-applies routing and the firewall rule.
+- **Context**: moi's CONTEXT.md gets a devbox section built from `status` (instance, URLs, VM state, last wake/sleep, deployed versions, health) and a pointer to where the developer context lives.
 
-## Stable surfaces moi may depend on
+## Stable surfaces moi depends on
 
-`/__devbox/health`, `/__devbox/status`, hub `GET /devbox/status`, `devbox status --json`, `devbox doctor --json`, `/etc/devbox/devbox.toml` schema. Changing them is a breaking change for moi (CHANGELOG + major contract version).
+The `devbox-core` public API (semver, above), `/__devbox/health`, `/__devbox/status`, hub `GET /devbox/status`, `status`/`doctor` JSON, the `/etc/devbox/devbox.toml` and `secrets.toml` schemas. Changing them is a breaking change for moi (CHANGELOG + version bump).
 
 ## Acceptance
 
-- [ ] A test implements `System` over a moi-style fixture host and runs `status` and an `up --dry-run` plan through it.
-- [ ] Crates publish (dry-run in CI: `cargo publish --dry-run` for each library crate) with licenses within moi's allowlist (`cargo deny` with moi's policy file copied into `tests/fixtures/moi-deny.toml`).
-- [ ] `status --json` / `doctor --json` golden files.
+- [ ] Every command is a library function returning a report; the CLI only parses, prompts, renders and exits (`run()` is tested driving the library with a fake `Confirm` and a fake `System`).
+- [ ] `System` covers exactly the methods in the mapping table; clippy `disallowed-methods` forbids direct `std::fs`/`process`/`net`/`env` use in the library crates.
+- [ ] Incus client works over `connect_unix` against the fake Incus; no HTTP crate and no async runtime in the library dependency tree (`cargo tree` check).
+- [ ] `firewall::Manager` with host-firewall, ufw and nftables implementations; a recording test manager stands in for moi's.
+- [ ] `up` with existing config + secrets runs with no input; without a password and no stored hash it fails with an actionable error (no prompt from the library).
+- [ ] `compat` job green: MSRV build, moi's deny policy, dry-run publish, the moi-consumer scenarios.
+- [ ] `devbox status/doctor --json` golden files; `render::json` output equals the CLI's `--json` byte for byte.
+- [ ] `publish-crates.yml` publishes the three library crates on a `crates-v*` tag (dry-run tested in CI); `0.1.0` published after M8.
