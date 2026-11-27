@@ -284,6 +284,10 @@ pub(crate) struct Desired {
 pub struct Plan {
     /// The steps, in order.
     pub steps: Vec<Step>,
+    /// Whether applying needs the wake password, which was not given.
+    pub needs_wake_password: bool,
+    /// Whether applying needs the app password, which was not given.
+    pub needs_app_password: bool,
     pub(crate) desired: Desired,
 }
 
@@ -315,10 +319,10 @@ impl Plan {
         out
     }
 
-    /// The editor's and the agents app's hosts.
+    /// How to reach what was set up: the URLs, SSH, the phone app.
     #[must_use]
-    pub fn hosts(&self) -> (&str, &str) {
-        (&self.desired.code_host, &self.desired.agents_host)
+    pub fn connect(&self) -> String {
+        connect(&self.desired.code_host, &self.desired.agents_host, &self.desired.user)
     }
 }
 
@@ -561,4 +565,12 @@ pub(crate) fn secrets_file(
 /// The time as a name for a backup directory: `20260921T141320Z`.
 pub(crate) fn stamp(now: i64) -> String {
     time::rfc3339(now).replace(['-', ':'], "")
+}
+
+/// How to reach a devbox: the URLs, an SSH config snippet, and how to install the phone app.
+#[must_use]
+pub fn connect(code_host: &str, agents_host: &str, user: &str) -> String {
+    format!(
+        "Your devbox\n\n  Editor       https://{code_host}\n  Agents app   https://{agents_host}\n\nOn your phone: open https://{agents_host} in Safari, Share → Add to Home Screen, open it from\nthere, then Settings → Enable notifications.\n\nSSH goes through the gateway, which wakes the VM: it listens on port 2222 of this server's\nloopback. In ~/.ssh/config on your own machine:\n\n  Host devbox\n    HostName 127.0.0.1\n    Port 2222\n    User {user}\n    ProxyJump <this server>\n"
+    )
 }

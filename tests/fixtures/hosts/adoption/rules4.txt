@@ -1,0 +1,13 @@
+*filter
+:INPUT DROP [0:0]
+:FORWARD DROP [0:0]
+:OUTPUT ACCEPT [0:0]
+:DOCKER-USER - [0:0]
+-A INPUT -i lo -j ACCEPT
+-A INPUT -i incusbr0 -p udp -m udp --dport 67 -j ACCEPT
+-A DOCKER-USER -s 172.16.0.0/12 -d 10.77.0.10/32 -p tcp -m multiport --dports 22,8080 -m comment --comment "devbox: proxies to VM" -j ACCEPT
+-A DOCKER-USER -i incusbr0 -d 10.0.0.0/8 -j DROP
+-A DOCKER-USER -i incusbr0 -d 172.16.0.0/12 -j DROP
+-A DOCKER-USER -i incusbr0 -d 192.168.0.0/16 -j DROP
+-A DOCKER-USER -i incusbr0 -j ACCEPT
+COMMIT

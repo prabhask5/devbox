@@ -816,5 +816,14 @@ pub(crate) fn plan(c: &Context) -> Result<Plan, SetupError> {
         preflight, secrets, instance, provision, dotfiles, config, routing, firewall, monitor,
         verify,
     ];
-    Ok(Plan { steps, desired })
+    let planned = |step: &Step, wanted: fn(&Action) -> bool| step.actions.iter().any(wanted);
+    let writes_secrets = steps[1].lines.iter().any(|line| line.starts_with("+ write"));
+    let first_install = planned(&steps[3], |action| matches!(action, Action::Provision(_)))
+        && host.remembered["stamp"].is_null();
+    Ok(Plan {
+        needs_wake_password: writes_secrets && c.passwords.wake.is_none(),
+        needs_app_password: first_install && c.passwords.app.is_none(),
+        steps,
+        desired,
+    })
 }

@@ -1,0 +1,6 @@
+devbox up cannot start:
+  ✗ the gateway is not deployed: there is no running container named devbox-gateway.
+    Deploy it first (docs/deploy-gateway.md): in Dokploy, create a Compose application from the
+    devbox repository with compose path deploy/gateway/compose.yml, Auto Deploy on and no domains;
+    without Dokploy: docker compose -f deploy/gateway/compose.yml up -d --build
+    Then run devbox up again.

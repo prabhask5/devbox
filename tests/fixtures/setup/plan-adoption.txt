@@ -1,0 +1,26 @@
+ 1. Preflight
+    ok: root, Incus 6.0.5, the gateway container runs, routes in /etc/dokploy/traefik/dynamic/devbox.yml, firewall: host-firewall
+ 2. Secrets
+    + write /etc/devbox/secrets.toml: wake password hash, cookie secret, gateway↔hub token (mode 0600, owner 65532:65532)
+ 3. Incus instance
+    devbox is kept, with its disk and everything on it; it is shut down for the change and started again:
+    ~ migration.stateful: (unset) → true
+    ~ boot.autostart: true → false
+    ~ root disk size.state: (unset) → 6GiB (room for 5GiB of memory)
+ 4. Provision the VM
+    + install as dev in devbox: base packages, code-server on :8080, claude, codex, opencode, devbox-hub and devbox (the latest release of prabhask5/devbox), their services, agent hooks, the hub's config and secrets
+ 5. Dotfiles
+    + clone git@github.com:dev/dotfiles into ~/dotfiles (a checkout that is there is kept) and apply its devbox.toml: packages, shell, git, editor, agent instructions, install hook
+ 6. Host config
+    + write /etc/devbox/devbox.toml: code.example.com → devbox (10.77.0.10)
+ 7. Routing
+    ~ replace /etc/dokploy/traefik/dynamic/devbox.yml: code.example.com and agents.example.com → http://devbox-gateway:8080 (what is there is saved for `devbox down`)
+ 8. Firewall
+    ~ replace /etc/host-firewall/rules4.txt: containers → 10.77.0.10 tcp 22,8080,8090 (what is there is saved for `devbox down`)
+      and apply it: systemctl restart host-firewall
+ 9. Monitor
+    left to you: point the Uptime Kuma monitor "Devbox" at https://code.example.com/__devbox/health (HTTP, accepted status 200-299, every 60 s) and resume it. A sleeping devbox is healthy.
+10. Verify
+    ask https://code.example.com/__devbox/health through the public path, as a browser would
+
+7 changes.

@@ -11,15 +11,8 @@ fn devbox(args: &[&str]) -> (ExitCode, String, String) {
 
 #[test]
 fn commands_without_behaviour_say_so() {
-    let commands: [&[&str]; 7] = [
-        &["up"],
-        &["down"],
-        &["status"],
-        &["doctor"],
-        &["connect"],
-        &["password", "wake"],
-        &["password", "app"],
-    ];
+    let commands: [&[&str]; 5] =
+        [&["status"], &["doctor"], &["connect"], &["password", "wake"], &["password", "app"]];
     for args in commands {
         let (code, out, err) = devbox(args);
         assert_eq!(code, ExitCode::from(3), "{args:?}");
