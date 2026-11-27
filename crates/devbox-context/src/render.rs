@@ -8,7 +8,7 @@ use devbox_core::time;
 use crate::gather::{Commit, DAY, Facts, Prompt, Repo};
 use crate::text::{bar, clip};
 
-const LANGUAGES: [(&str, &str); 37] = [
+const LANGUAGES: [(&str, &str); 32] = [
     ("ts", "TypeScript"),
     ("tsx", "TypeScript"),
     ("js", "JavaScript"),
@@ -41,11 +41,6 @@ const LANGUAGES: [(&str, &str); 37] = [
     ("wgsl", "WGSL"),
     ("zig", "Zig"),
     ("lua", "Lua"),
-    ("toml", "TOML"),
-    ("yml", "YAML"),
-    ("yaml", "YAML"),
-    ("json", "JSON"),
-    ("nix", "Nix"),
 ]; // prettier-ignore
 
 const WEEKDAYS: [&str; 7] =
@@ -242,7 +237,11 @@ fn project(facts: &Facts, repo: &Repo) -> (String, i64) {
     } else {
         format!(" · live: {}", remote.homepage)
     };
-    let _ = writeln!(md, "- GitHub: {url}{private}{live}");
+    if url.is_empty() {
+        md.push_str("- GitHub: none (local only)\n");
+    } else {
+        let _ = writeln!(md, "- GitHub: {url}{private}{live}");
+    }
     let active = if touched > 0 { date(touched) } else { "unknown".to_owned() };
     let _ = writeln!(md, "- Local: `~/code/{}` · last activity {active}", repo.name);
     if !languages.is_empty() {

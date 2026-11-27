@@ -85,7 +85,8 @@ fn assignment(text: &str) -> Option<(usize, usize)> {
     let value = &text[at..];
     let length = match value.chars().next()? {
         quote @ ('"' | '\'') => value[1..].find(quote).map(|end| end + 2)?,
-        _ => run(value, |c| !c.is_whitespace()),
+        // To the next blank; a backtick ends it too, so that code spans stay closed.
+        _ => run(value, |c| !c.is_whitespace() && c != '`'),
     };
     (length > 0).then_some((at, at + length))
 }
@@ -200,6 +201,7 @@ mod tests {
                 "DB_PASSWORD=<redacted> GITHUB_TOKEN=<redacted>",
             ),
             ("clientSecret: \"FAKE\"", "clientSecret: <redacted>"),
+            ("- `x.ts:3 // password=FAKE`", "- `x.ts:3 // password=<redacted>`"),
         ];
         for (text, expected) in cases {
             assert_eq!(redact(text), expected, "{text}");

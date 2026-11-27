@@ -1,5 +1,5 @@
-//! A GitHub API for tests: the two calls `devbox sync` makes, answered from a list of
-//! repositories, with everything asked of it remembered.
+//! A GitHub API for tests: the calls `devbox sync` and `devbox context` make, answered from a
+//! list of repositories and their open issues, with everything asked of it remembered.
 
 // Test helpers: one that cannot do its job panics, which fails the test that called it.
 #![allow(clippy::missing_panics_doc)]
@@ -41,7 +41,7 @@ pub struct FakeGitHub {
     address: std::net::SocketAddr,
 }
 
-fn answer(login: &str, repos: &[Value], request: &Request) -> (u16, Value) {
+fn answer(login: &str, repos: &[Value], issues: &Value, request: &Request) -> (u16, Value) {
     if request.authorization != format!("Bearer {TOKEN}") {
         return (401, json!({"message": "Bad credentials"}));
     }
@@ -61,11 +61,21 @@ fn answer(login: &str, repos: &[Value], request: &Request) -> (u16, Value) {
                 visible.into_iter().skip(per_page * (page.max(1) - 1)).take(per_page).collect();
             (200, json!(listed))
         }
-        _ => (404, json!({"message": "Not Found"})),
+        // GET /repos/<owner>/<name>/issues: open issues and pull requests in one list.
+        _ => match path.strip_prefix("/repos/").and_then(|rest| rest.strip_suffix("/issues")) {
+            Some(full_name) => (200, issues.get(full_name).cloned().unwrap_or_else(|| json!([]))),
+            None => (404, json!({"message": "Not Found"})),
+        },
     }
 }
 
-fn serve(mut stream: TcpStream, login: &str, repos: &[Value], requests: &Mutex<Vec<Request>>) {
+fn serve(
+    mut stream: TcpStream,
+    login: &str,
+    repos: &[Value],
+    issues: &Value,
+    requests: &Mutex<Vec<Request>>,
+) {
     let Ok(read_half) = stream.try_clone() else { return };
     let mut lines = BufReader::new(read_half).lines();
     let Some(Ok(first)) = lines.next() else { return };
@@ -82,7 +92,7 @@ fn serve(mut stream: TcpStream, login: &str, repos: &[Value], requests: &Mutex<V
         }
     }
     let request = Request { target, authorization };
-    let (status, body) = answer(login, repos, &request);
+    let (status, body) = answer(login, repos, issues, &request);
     if let Ok(mut seen) = requests.lock() {
         seen.push(request);
     }
@@ -98,6 +108,13 @@ impl FakeGitHub {
     /// Starts a GitHub on which `login` is signed in and `repos` exist.
     #[must_use]
     pub fn start(login: &str, repos: Vec<Value>) -> Self {
+        Self::with_issues(login, repos, json!({}))
+    }
+
+    /// Starts a GitHub on which `login` is signed in, `repos` exist and `issues` maps a
+    /// repository's full name to its open issues and pull requests.
+    #[must_use]
+    pub fn with_issues(login: &str, repos: Vec<Value>, issues: Value) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|err| panic!("{err}"));
         let address = listener.local_addr().unwrap_or_else(|err| panic!("{err}"));
         let requests = Arc::new(Mutex::new(Vec::new()));
@@ -108,7 +125,7 @@ impl FakeGitHub {
                 if stopping.load(Ordering::Relaxed) {
                     break;
                 }
-                serve(stream, &login, &repos, &seen);
+                serve(stream, &login, &repos, &issues, &seen);
             }
         });
         Self { url: format!("http://{address}"), requests, stop, address }

@@ -256,10 +256,9 @@ impl Sandbox {
                 .map(|dir| dir.join(tool))
                 .find(|candidate| candidate.is_file())
                 .unwrap_or_else(|| panic!("{tool} is not on PATH"));
-            let link = bin.join(tool);
-            let _ = std::fs::remove_file(&link);
-            std::os::unix::fs::symlink(&found, &link)
-                .unwrap_or_else(|err| panic!("{}: {err}", link.display()));
+            // A script that runs the real one, not a link to it: some programs look for their
+            // own files next to the path they were started by.
+            self.program(tool, &format!("exec '{}' \"$@\"", found.display()));
         }
         self.set_env("PATH", &bin.to_string_lossy());
     }
@@ -402,6 +401,19 @@ impl Sandbox {
     #[must_use]
     pub fn options(&self) -> Options {
         Options::from_env(&self.system)
+    }
+
+    /// Runs git in `dir` as if it were `date` (RFC 3339), for commits with a known time.
+    pub fn git_on(&mut self, date: &str, dir: &Path, args: &[&str]) -> String {
+        let usual = self.system.host.env("GIT_AUTHOR_DATE").unwrap_or_default();
+        for name in ["GIT_AUTHOR_DATE", "GIT_COMMITTER_DATE"] {
+            self.set_env(name, date);
+        }
+        let out = self.git(dir, args);
+        for name in ["GIT_AUTHOR_DATE", "GIT_COMMITTER_DATE"] {
+            self.set_env(name, &usual);
+        }
+        out
     }
 
     /// Runs a sync and returns its results and every event it reported.
