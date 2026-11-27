@@ -1,5 +1,6 @@
 [package]
 name = "devbox-cli"
+publish = false
 description = "The devbox command line: set up, inspect and maintain a devbox host and VM"
 version.workspace = true
 edition.workspace = true

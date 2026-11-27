@@ -4,7 +4,8 @@
 #
 # Next to it: `env` (what to install, written by `devbox up`), `units/`, `code-server/`,
 # `agents/`, `hub.toml`, `hub.secrets.toml`, optionally `bin/` (devbox-hub and devbox, when
-# they come from the host instead of a release) and `github-token`.
+# they come from the host instead of a release) and `github-token`. `DEVBOX_ROOT` is put in
+# front of the one path outside the user's home, for the tests.
 set -euo pipefail
 bundle=$(cd "$(dirname "$0")" && pwd)
 # shellcheck source=/dev/null
@@ -103,10 +104,12 @@ done
 
 step "clock"
 # After a restore the VM's clock is behind; the hub sets it, and may do exactly that as root.
-cat >/etc/sudoers.d/devbox <<SUDO
+sudoers=${DEVBOX_ROOT:-}/etc/sudoers.d/devbox
+rm -f "$sudoers"
+cat >"$sudoers" <<SUDO
 $DEVBOX_USER ALL=(root) NOPASSWD: /usr/bin/date -s @*, /usr/bin/systemctl restart systemd-timesyncd
 SUDO
-chmod 440 /etc/sudoers.d/devbox
+chmod 440 "$sudoers"
 
 if [ -f "$bundle/github-token" ]; then
   step "GitHub"

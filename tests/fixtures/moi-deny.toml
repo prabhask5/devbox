@@ -1,0 +1,20 @@
+# The supply-chain policy of moi, which embeds devbox's library crates (docs/spec/12-moi.md):
+# its license allowlist, and crates.io as the only source. `scripts/ci.sh` checks the crates
+# moi embeds against it, so a dependency moi could not accept never gets in.
+[graph]
+all-features = true
+
+[licenses]
+allow = ["MIT", "Apache-2.0", "Apache-2.0 WITH LLVM-exception", "BSD-2-Clause", "BSD-3-Clause", "ISC", "Zlib", "Unicode-3.0", "MPL-2.0"]
+confidence-threshold = 0.9
+unused-allowed-license = "allow"
+
+[bans]
+multiple-versions = "allow"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

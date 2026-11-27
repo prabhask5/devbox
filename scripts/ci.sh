@@ -37,7 +37,10 @@ static() {
   step "rustfmt";       cargo fmt --all --check
   step "clippy";        cargo clippy --workspace --all-targets --locked -- -D warnings
   step "cargo deny";    cargo_tool deny "$CARGO_DENY" check
+  step "cargo deny (moi's policy)"; cargo_tool deny "$CARGO_DENY" --config tests/fixtures/moi-deny.toml check licenses bans sources
   step "cargo machete"; cargo_tool machete "$CARGO_MACHETE"
+  # The library crates are embedded by moi from crates.io: they must package and build from the package alone.
+  step "cargo publish (dry run)"; cargo publish --workspace --dry-run --locked --quiet
 
   step "prettier";      pnpm -C web run format:check
   step "eslint";        pnpm -C web run lint
