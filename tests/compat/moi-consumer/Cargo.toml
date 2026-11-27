@@ -33,6 +33,10 @@ tar = { version = "0.4", default-features = false, optional = true }
 thiserror = { version = "2", optional = true }
 toml = { version = "1.2", optional = true }
 
+# Resolved for the policy check only, as said above.
+[package.metadata.cargo-machete]
+ignored = ["clap", "flate2", "gix", "md-5", "rusqlite", "rustix", "rustls", "serde", "serde_json", "sha2", "tar", "thiserror", "toml"]
+
 [features]
 moi = ["dep:clap", "dep:flate2", "dep:gix", "dep:md-5", "dep:rusqlite", "dep:rustix", "dep:rustls", "dep:serde", "dep:serde_json", "dep:sha2", "dep:tar", "dep:thiserror", "dep:toml"]
 

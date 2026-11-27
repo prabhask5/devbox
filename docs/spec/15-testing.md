@@ -48,9 +48,10 @@ Each job runs one stage of `scripts/ci.sh` (`scripts/ci.sh static`, `scripts/ci.
 
 | Job | Runs |
 |---|---|
-| `static` | tests-location, secrets, hygiene, generated contracts up to date, docs links, gofmt/vet/golangci-lint/staticcheck/deadcode/govulncheck/`go mod tidy` diff, rustfmt/clippy/cargo deny/cargo machete, prettier/eslint/tsc/knip/pnpm audit |
+| `static` | tests-location, secrets, hygiene, generated contracts up to date, docs links, gofmt/vet/golangci-lint/staticcheck/deadcode/govulncheck/`go mod tidy` diff, rustfmt/clippy (with `disallowed-methods` in the library crates)/cargo deny/cargo machete, prettier/eslint/tsc/knip/pnpm audit |
 | `go` | `go test -race ./...` |
 | `rust` | `cargo test --workspace` |
+| `compat` | what moi needs of the library crates (spec 12): they build with moi's Rust, the `tests/compat/moi-consumer` scenarios, moi's `cargo deny` policy, no async runtime / HTTP crate / TLS stack, `cargo publish --dry-run` |
 | `web` | Vitest + builds + bundle budgets |
 | `integration` | real tmux + git + fakes (Go and Rust integration suites) |
 | `e2e` | the harness scenarios with Playwright (WebKit iPhone + Chromium) |
