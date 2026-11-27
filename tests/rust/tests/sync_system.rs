@@ -99,6 +99,10 @@ impl System for Machine {
     fn now(&self) -> SystemTime {
         SystemTime::UNIX_EPOCH + Duration::from_secs(1_790_000_000)
     }
+    fn sleep(&self, _: Duration) {}
+    fn random(&self, _: &mut [u8]) -> io::Result<()> {
+        Ok(())
+    }
 }
 
 fn machine(ssh_works: bool) -> Machine {

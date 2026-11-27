@@ -219,6 +219,12 @@ impl System for Recorded {
     fn now(&self) -> std::time::SystemTime {
         unreachable!()
     }
+    fn sleep(&self, _: Duration) {
+        unreachable!()
+    }
+    fn random(&self, _: &mut [u8]) -> std::io::Result<()> {
+        unreachable!()
+    }
 }
 
 #[test]

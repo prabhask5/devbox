@@ -122,6 +122,12 @@ impl System for At {
     fn now(&self) -> SystemTime {
         self.now
     }
+    fn sleep(&self, duration: Duration) {
+        self.host.sleep(duration);
+    }
+    fn random(&self, buffer: &mut [u8]) -> io::Result<()> {
+        self.host.random(buffer)
+    }
 }
 
 /// Everything about a repository that a sync must not lose: where HEAD is, what is staged, every

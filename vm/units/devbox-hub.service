@@ -1,0 +1,15 @@
+[Unit]
+Description=devbox: the agents hub
+After=devbox-tmux.service
+Wants=devbox-tmux.service
+
+[Service]
+ExecStart=%h/.local/bin/devbox-hub serve
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+# Restarting the hub must never end an agent: only the hub's own process is stopped.
+KillMode=process
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target

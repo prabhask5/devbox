@@ -394,6 +394,7 @@ struct State {
     programs: Vec<(String, Program)>,
     ran: Vec<Command>,
     incus: FakeIncus,
+    counter: u8,
 }
 
 /// The machine in memory. It starts empty: no files, no programs, 2026-09-21 on the clock, and
@@ -421,6 +422,7 @@ impl FakeSystem {
                 programs: Vec::new(),
                 ran: Vec::new(),
                 incus: FakeIncus::new(),
+                counter: 0,
             }),
         }
     }
@@ -616,5 +618,20 @@ impl System for FakeSystem {
 
     fn now(&self) -> SystemTime {
         self.state().now
+    }
+
+    /// Nobody waits on the fake machine: its clock moves on instead.
+    fn sleep(&self, duration: Duration) {
+        self.state().now += duration;
+    }
+
+    /// Bytes that count up from 1: the same "secrets" on every run.
+    fn random(&self, buffer: &mut [u8]) -> io::Result<()> {
+        let mut state = self.state();
+        for byte in buffer {
+            state.counter = state.counter.wrapping_add(1);
+            *byte = state.counter;
+        }
+        Ok(())
     }
 }

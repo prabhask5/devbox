@@ -210,6 +210,16 @@ pub trait System: Sync {
 
     /// The time.
     fn now(&self) -> SystemTime;
+
+    /// Waits.
+    fn sleep(&self, duration: Duration);
+
+    /// Fills `buffer` with bytes nobody can guess, for secrets.
+    ///
+    /// # Errors
+    ///
+    /// When the machine has no source of randomness.
+    fn random(&self, buffer: &mut [u8]) -> io::Result<()>;
 }
 
 /// The real machine. Variables given to [`Host::with_env`] replace those of the process, for
@@ -378,6 +388,14 @@ impl System for Host {
 
     fn now(&self) -> SystemTime {
         SystemTime::now()
+    }
+
+    fn sleep(&self, duration: Duration) {
+        std::thread::sleep(duration);
+    }
+
+    fn random(&self, buffer: &mut [u8]) -> io::Result<()> {
+        getrandom::fill(buffer).map_err(io::Error::other)
     }
 }
 

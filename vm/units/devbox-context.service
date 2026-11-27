@@ -1,0 +1,7 @@
+[Unit]
+Description=devbox: refresh the developer context
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/devbox context --commit
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin

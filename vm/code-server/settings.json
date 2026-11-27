@@ -1,0 +1,7 @@
+{
+  "workbench.startupEditor": "none",
+  "telemetry.telemetryLevel": "off",
+  "files.autoSave": "onFocusChange",
+  "terminal.integrated.defaultProfile.linux": "bash",
+  "git.autofetch": false
+}

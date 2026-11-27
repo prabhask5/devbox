@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"os/exec"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -51,8 +52,29 @@ func TestHubRejectsUnknownSubcommands(t *testing.T) {
 	bin := build(t, "devbox-hub")
 	for _, args := range [][]string{nil, {"bogus"}} {
 		code, stdout, stderr := run(t, bin, args...)
-		if code != 2 || stdout != "" || !strings.HasPrefix(stderr, "usage: devbox-hub <serve|event|agent|update|selftest|healthcheck>") {
+		if code != 2 || stdout != "" || !strings.HasPrefix(stderr, "usage: devbox-hub <serve|event|agent|hooks|update|selftest|healthcheck>") {
 			t.Errorf("%v: exit %d, stdout %q, stderr %q", args, code, stdout, stderr)
 		}
+	}
+}
+
+func TestHubInstallsTheAgentsHooksIntoTheHome(t *testing.T) {
+	bin := build(t, "devbox-hub")
+	home := t.TempDir()
+	install := exec.Command(bin, "hooks", "install")
+	install.Env = append(os.Environ(), "HOME="+home)
+	out, err := install.CombinedOutput()
+	if err != nil || string(out) != "agent hooks installed for Claude Code, Codex and opencode\n" {
+		t.Fatalf("hooks install: %v\n%s", err, out)
+	}
+	// Every agent reports through this very binary.
+	for _, file := range []string{".claude/settings.json", ".codex/hooks.json", ".config/opencode/plugins/devbox.js"} {
+		data, err := os.ReadFile(filepath.Join(home, file))
+		if err != nil || !strings.Contains(string(data), bin) {
+			t.Errorf("%s does not call %s: %v", file, bin, err)
+		}
+	}
+	if code, _, stderr := run(t, bin, "hooks"); code != 2 || stderr != "usage: devbox-hub hooks install\n" {
+		t.Errorf("hooks without install: exit %d, %q", code, stderr)
 	}
 }
