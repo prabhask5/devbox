@@ -149,6 +149,13 @@ func newFakeVM(t *testing.T, incus *incusfake.Server) *fakeVM {
 			}
 		}
 	})
+	// A stream that never ends by itself, like the hub's.
+	code.HandleFunc("GET /forever", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprint(w, "data: open\n\n")
+		_ = http.NewResponseController(w).Flush()
+		<-r.Context().Done()
+	})
 	code.HandleFunc("GET /slow", func(w http.ResponseWriter, _ *http.Request) {
 		time.Sleep(300 * time.Millisecond)
 		fmt.Fprint(w, "slow answer")

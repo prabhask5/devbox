@@ -95,8 +95,9 @@ test("the agents host gets its own boot screen and is routed to the hub", async 
   await expect(page).toHaveTitle("Agents · devbox");
   await expect(page.locator(".brand")).toHaveText("agents.example.com");
   await signIn(page, WAKE_PASSWORD);
-  // The page reloads into what the hub serves at "/": nothing yet, which it says in JSON.
-  await expect(page.locator("body")).toContainText('{"error":"not found"}', { timeout: 20_000 });
+  // The page reloads into the app the hub serves, which wants its own sign-in.
+  await expect(page.getByText("Sign in to your devbox.")).toBeVisible({ timeout: 20_000 });
+  await expect(page).toHaveTitle("Agents");
 });
 
 test("a failed wake says why and Try again retries", async ({ page, request }) => {

@@ -63,8 +63,8 @@ func decode(w http.ResponseWriter, r *http.Request, into any) bool {
 }
 
 // servePublic answers on the TCP port, which only the gateway can reach: the gateway API under
-// /devbox/, which needs the token the gateway and the hub share, and the app under /api/, which
-// needs the app's session cookie.
+// /devbox/, which needs the token the gateway and the hub share, the app API under /api/, which
+// needs the app's session cookie, and the app itself.
 func (h *Hub) servePublic(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case strings.HasPrefix(r.URL.Path, "/devbox/"):
@@ -77,8 +77,7 @@ func (h *Hub) servePublic(w http.ResponseWriter, r *http.Request) {
 	case strings.HasPrefix(r.URL.Path, "/api/"):
 		h.serveApp(w, r)
 	default:
-		// TODO(M5): the agents app.
-		fail(w, http.StatusNotFound, "not found")
+		serveStatic(w, r)
 	}
 }
 

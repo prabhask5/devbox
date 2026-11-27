@@ -74,7 +74,7 @@ sleep  ⇐  min(gatewayIdle, hubIdle) ≥ sleep.idle  ∧  uptime ≥ sleep.min_
 
 ## SSH
 
-TCP listener on `gateway.ssh_listen`. On connect: leave the client's bytes unread, request a wake if needed, wait (≤ 180 s) until sshd on the VM sends an `SSH-` banner (an accepting port is not proof), then open a fresh connection to sshd and splice both sockets (`io.Copy` both ways, counting client bytes). Either side closing ends the other; putting the VM to sleep and stopping the gateway close every SSH and WebSocket connection.
+TCP listener on `gateway.ssh_listen`. On connect: leave the client's bytes unread, request a wake if needed, wait (≤ 180 s) until sshd on the VM sends an `SSH-` banner (an accepting port is not proof), then open a fresh connection to sshd and splice both sockets (`io.Copy` both ways, counting client bytes). Either side closing ends the other; putting the VM to sleep and stopping the gateway close every SSH and WebSocket connection. Putting the VM to sleep also ends every proxied request still being answered — the hub's event streams above all — so an open app learns at once that the devbox is asleep instead of waiting on a silent connection.
 
 ## Authentication for waking
 

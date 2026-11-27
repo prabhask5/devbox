@@ -1,4 +1,4 @@
-import type { PhaseTiming, Wake, WakePhaseId } from "@devbox/shared/proto/types";
+import type { PhaseTiming, Wake, WakePhaseId } from "./proto/types.ts";
 
 /** The phases of a wake, in order, with what the boot screen calls them. */
 export const PHASES: readonly { id: WakePhaseId; label: string }[] = [
@@ -8,7 +8,7 @@ export const PHASES: readonly { id: WakePhaseId; label: string }[] = [
   { id: "sync", label: "Syncing repos from GitHub" },
 ];
 
-export interface Progress {
+interface Progress {
   /** Width of the progress bar, 0 to 100. */
   percent: number;
   /** Time since the wake was requested; frozen once it is done or failed. */
@@ -47,4 +47,9 @@ export function progress(wake: Wake, now: number): Progress {
     ? 100
     : Math.min(97, (100 * elapsedMs) / Math.max(1, elapsedMs + remainingMs));
   return { percent, elapsedMs, remainingMs: ended ? 0 : remainingMs, overrun: !ended && overrun };
+}
+
+/** A duration for display: one decimal below ten seconds, whole seconds from there. */
+export function seconds(ms: number): string {
+  return ms < 10000 ? `${(ms / 1000).toFixed(1)}s` : `${String(Math.round(ms / 1000))}s`;
 }

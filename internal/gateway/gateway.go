@@ -107,6 +107,10 @@ type Gateway struct {
 
 	connMu sync.Mutex
 	conns  map[*trackedConn]struct{} // hijacked and SSH connections, closed when the VM stops
+	// Proxied requests still being answered, ended when the VM stops: a stopped VM says nothing
+	// more, and an open event stream would otherwise wait for it in silence.
+	flights    map[uint64]context.CancelFunc
+	nextFlight uint64
 
 	// Everything below is guarded by mu.
 	mu        sync.Mutex
@@ -151,6 +155,7 @@ func New(opt Options) *Gateway {
 		pollNow: make(chan struct{}, 1),
 		closing: make(chan struct{}),
 		conns:   map[*trackedConn]struct{}{},
+		flights: map[uint64]context.CancelFunc{},
 		subs:    map[chan struct{}]struct{}{},
 		login:   httpx.NewLoginLimiter(),
 	}

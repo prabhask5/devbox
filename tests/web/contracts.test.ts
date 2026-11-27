@@ -78,3 +78,21 @@ test("the version constants are the schemas' versions", () => {
   }
   expect(Object.keys(constants)).toHaveLength(contracts.length);
 });
+
+test("the app's visual fixtures are messages the hub and the gateway could send", () => {
+  const fixture = json("tests/fixtures/app/app.json") as {
+    state: unknown;
+    gateway: unknown;
+    asleep: unknown;
+    frames: Record<string, unknown>;
+  };
+  const check = (type: string, value: unknown) => {
+    const validate = ajv.getSchema(`contracts#/$defs/${type}`);
+    if (!validate) throw new Error(`${type} is not in the bundle`);
+    expect(validate(value), `${type}: ${JSON.stringify(validate.errors)}`).toBe(true);
+  };
+  check("HubState", fixture.state);
+  check("GatewayStatus", fixture.gateway);
+  check("GatewayStatus", fixture.asleep);
+  for (const frame of Object.values(fixture.frames)) check("ScreenFrame", frame);
+});

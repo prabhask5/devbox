@@ -39,11 +39,13 @@ Large left-aligned page title with a status pill on the right; uppercase section
 
 ## Visual regression
 
-`tests/e2e/visual/` compares screenshots (390×844 @2x, clock stopped, animations off, fixture data from `tests/fixtures/boot/`) with baselines named `<screen>-<project>-<platform>.png`. The baselines **are the prototype**: `baseline.spec.ts` renders the prototype's page with the same data in the same browser and saves that as the baseline, so the comparison is new UI against approved design with nothing else different. More than 2 % differing pixels fails. States the prototype did not have (`unconfigured`) take their baseline from the new UI and need the owner's approval when they change.
+`tests/e2e/visual/` compares screenshots (390×844 @2x, clock stopped, animations off, fixture data from `tests/fixtures/boot/` and `tests/fixtures/app/`) with baselines named `<screen>-<project>-<platform>.png`. The baselines **are the prototype**: `baseline.spec.ts` renders the prototype's page with the same data in the same browser and saves that as the baseline, so the comparison is new UI against approved design with nothing else different. More than 2 % differing pixels fails. States the prototype did not have (`unconfigured`) take their baseline from the new UI and need the owner's approval when they change.
+
+The app's screens (`app.spec.ts`, baselines from `app-baseline.spec.ts`): sign-in, asleep, sessions, new-session sheet, session needing input, shell session screen, external session, settings, assistant. Both implementations get the same hub and gateway answers from `tests/fixtures/app/app.json` (checked against the contracts), converted for the prototype into the shapes its page expected. The prototype's app named its fonts differently from its boot screen; its baseline is drawn with the one stack of the tokens. The app adds nothing visible to these screens: what it has beyond the prototype (the update prompt, the version line under Sign out) is outside them.
 
 Baselines are per platform; the Linux ones are committed and compared in CI. `scripts/e2e.sh --update-baselines` rewrites them for the current platform; the CI workflow run by hand with `update_baselines` does it on Linux and uploads them as an artifact to commit.
 
 ## Acceptance
 
-- [ ] Visual regression: Playwright screenshots of every screen above (same viewport 390×844 @2x, same fixture data) compared against the prototype as baselines in `tests/e2e/visual/` — differences beyond a small threshold fail and need owner approval. (Boot screen: `tests/e2e/visual/boot.spec.ts`; the app screens follow with the hub app.)
+- [x] Visual regression: Playwright screenshots of every screen above (same viewport 390×844 @2x, same fixture data) compared against the prototype as baselines in `tests/e2e/visual/` — differences beyond a small threshold fail and need owner approval. (Boot screen: `tests/e2e/visual/boot.spec.ts`; app: `tests/e2e/visual/app.spec.ts`)
 - [x] Tokens generated from `tokens.json` (unit test that CSS variables match the table: `tests/web/tokens.test.ts`).

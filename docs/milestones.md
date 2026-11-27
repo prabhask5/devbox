@@ -68,12 +68,12 @@ Specs: 04, 05
 
 ## M5 — Hub app and push
 Specs: 06, 16
-- [ ] PWA in Preact matching `reference/design/app-*.png`: sign-in, asleep/wake, sessions, new session, session screen with banner/keys/composer, settings, Assistant placeholder; service worker; update prompt
+- [x] PWA in Preact matching `reference/design/app-*.png`: sign-in, asleep/wake, sessions, new session, session screen with banner/keys/composer, settings, Assistant placeholder; service worker; update prompt — [`web/hub-app`](../web/hub-app), [`tests/web/hub-app`](../tests/web/hub-app), [`tests/go/hub/static_test.go`](../tests/go/hub/static_test.go)
 - [x] Screen streaming from control-mode output (≤ 20 fps, no frames when idle), with tmux as the emulator — [`tests/go/hub/screen_test.go`](../tests/go/hub/screen_test.go)
 - [x] `internal/webpush` (RFC 8291/8292) with test vectors; fake push service; notification rules (delay, viewer suppression, throttle, badge) — [`tests/go/webpush/webpush_test.go`](../tests/go/webpush/webpush_test.go), [`tests/fakes/push`](../tests/fakes/push), [`tests/go/hub/app_test.go`](../tests/go/hub/app_test.go)
-- [ ] Visual regression baselines for every app screen (spec 16)
-- [ ] e2e: scenario 2 (permission → push → answer → finished push) on WebKit iPhone and Chromium
-- [ ] Cleanup pass; `scripts/check-hygiene.sh` green
+- [x] Visual regression baselines for every app screen (spec 16) — [`tests/e2e/visual/app.spec.ts`](../tests/e2e/visual/app.spec.ts)
+- [x] e2e: scenario 2 (permission → push → answer → finished push) on WebKit iPhone and Chromium — [`tests/e2e/app.spec.ts`](../tests/e2e/app.spec.ts)
+- [x] Cleanup pass; `scripts/check-hygiene.sh` green
 
 ## M6 — Repo sync (Rust)
 Specs: 07
