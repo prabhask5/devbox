@@ -11,7 +11,7 @@ tests/web/                    Vitest suites for gateway-ui, hub-app, shared
 tests/e2e/                    Playwright + the full-stack harness
 tests/fakes/                  fake Incus API (Go, also runnable as a binary for Rust/e2e), fake GitHub API,
                               fake push service, fake agents (scripts emitting real hook payloads)
-tests/fixtures/               dotfiles repo, host roots (cestmoi adoption), recorded agent screens, hook payloads
+tests/fixtures/               dotfiles repo, host roots (anonymized adoption host), recorded agent screens, hook payloads
 tests/perf/                   budget measurements (13)
 ```
 
@@ -45,7 +45,7 @@ On a GitHub-hosted Ubuntu runner with KVM: install Incus, deploy the gateway wit
 
 | Job | Runs |
 |---|---|
-| `static` | tests-location, secrets, hygiene, generated contracts up to date, docs links, gofmt/vet/golangci-lint/govulncheck, rustfmt/clippy/cargo deny, prettier/eslint/tsc |
+| `static` | tests-location, secrets, hygiene, generated contracts up to date, docs links, gofmt/vet/golangci-lint/staticcheck/deadcode/govulncheck/`go mod tidy` diff, rustfmt/clippy/cargo deny/cargo machete, prettier/eslint/tsc/knip/pnpm audit |
 | `go` | `go test -race ./...` |
 | `rust` | `cargo test --workspace` |
 | `web` | Vitest + builds + bundle budgets |

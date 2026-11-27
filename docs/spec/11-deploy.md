@@ -48,15 +48,14 @@ A broken gateway deploy cuts access to code./agents.: Dokploy keeps the previous
 On push to `main` touching `cmd/devbox-hub/**`, `internal/hub/**`, `internal/proto/**`, `internal/webpush/**`, `internal/tmux/**`, `web/hub-app/**`, `web/shared/**`, `crates/**`, `vm/**`, `go.mod`, `go.sum`, `Cargo.lock`, `web/pnpm-lock.yaml` — and only after the `CI` workflow succeeded for that commit (`workflow_run`):
 
 1. Build `devbox-hub` (linux amd64/arm64, static) with the embedded app, and `devbox` (musl amd64/arm64).
-2. Publish a prerelease `vm-<shortsha>` with the binaries, `SHA256SUMS`, and build-provenance attestations (`actions/attest-build-provenance`).
-3. Create a GitHub Deployment: `environment: agents-hub`, `ref: <sha>`, `auto_merge: false`, `required_contexts: []`, payload `{release: "vm-<shortsha>", version: <sha>}`; status `queued` with description "waiting for the devbox VM".
-4. Prune prereleases older than the last 10.
+2. Upload them as a **workflow artifact** `vm-<sha>` (binaries + `SHA256SUMS`, retention 30 days) and create build-provenance attestations (`actions/attest-build-provenance`). Hub builds never go to Releases, so the Releases page holds only tagged versions (spec 17).
+3. Create a GitHub Deployment: `environment: agents-hub`, `ref: <sha>`, `auto_merge: false`, `required_contexts: []`, payload `{run_id, artifact: "vm-<sha>", version: <sha>}`; status `queued` with description "waiting for the devbox VM".
 
 ### Updater — `devbox-hub update` (`devbox-update.service`, timer every 2 min while the VM runs; also started by the hub on wake)
 
 1. `GET /repos/<repo>/deployments?environment=agents-hub&per_page=1` (token from hub secrets — the `gh` token or a fine-grained token with `deployments: write` + `contents: read`).
 2. Latest deployment's `ref` = running version → nothing to do. Otherwise set status `in_progress` ("installing on devbox").
-3. Download the release assets for this VM's arch; verify SHA-256 against `SHA256SUMS` and the provenance attestation (`gh attestation verify` when `gh` is present; checksums are always required).
+3. Download the workflow artifact (`GET /repos/<repo>/actions/artifacts?name=vm-<sha>` → zip) and pick this VM's arch; verify SHA-256 against `SHA256SUMS` and the provenance attestation (`gh attestation verify` when `gh` is present; checksums are always required).
 4. Install into `~/.local/lib/devbox/releases/<sha>/`, run `devbox-hub selftest` (config parses, schema versions compatible, can bind a test socket), atomically switch the `current` symlink, `systemctl --user restart devbox-hub`.
 5. Health: within 30 s the new hub must answer `/devbox/status` with the new version and its tmux observer must be running. Success → status `success` with `environment_url = https://<agents host>` and a log URL; failure → switch `current` back, restart, status `failure` with the reason. Keep the last 3 releases.
 6. If the VM is asleep, the deployment stays `queued` ("devbox is asleep — installs on next wake"). With `deploy.wake_to_deploy = true` the gateway (which polls the same endpoint every 5 min) wakes the VM to install.
@@ -70,6 +69,6 @@ Tags `v*` run `release.yml`: all binaries for amd64/arm64 (gateway, hub, devbox)
 ## Acceptance
 
 - [ ] `deploy/gateway/compose.yml` + Dockerfile build in CI; image ≤ 15 MB; container starts unconfigured and reports health `problem: not configured`; `healthcheck` subcommand works in `scratch`.
-- [ ] `deploy-hub.yml`: path filter, waits for CI success, creates release + deployment with the right payload (tested with `act` or a dry-run mode against a fake GitHub API in tests).
-- [ ] Updater against a fake GitHub API + fake systemd (`sys`): no-op when current; checksum mismatch → failure status, nothing switched; selftest failure → failure; unhealthy new hub → rollback + failure; success → status with environment URL; asleep → stays queued; release pruning.
+- [ ] `deploy-hub.yml`: path filter, waits for CI success, uploads the artifact + attestations and creates the deployment with the right payload, never touches Releases (tested with `act` or a dry-run mode against a fake GitHub API in tests).
+- [ ] Updater against a fake GitHub API + fake systemd (`sys`): no-op when current; checksum mismatch → failure status, nothing switched; selftest failure → failure; unhealthy new hub → rollback + failure; success → status with environment URL; asleep → stays queued; expired artifact (> 30 days asleep) → failure status explaining that a newer push or `devbox up` reinstalls.
 - [ ] Settled: Dokploy bind mounts and GitHub Deployments behaviour documented here with evidence (M3).

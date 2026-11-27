@@ -42,7 +42,7 @@ ai = true                                     # AI-written summary.md
 commit = true
 
 [sync]
-owner = "prabhask5"                            # whose repos to clone (default: the authenticated gh user)
+owner = "you"                                  # whose repos to clone (default: the authenticated gh user)
 include_orgs = []                             # extra owners/orgs
 exclude = ["old-*"]                           # glob on repo names
 archived = false
@@ -57,13 +57,9 @@ Every key is optional; without a manifest devbox uses its defaults and writes co
 - Dotfiles must not contain secrets (devbox's context redaction protects generated files; hand-written files are the owner's responsibility — `docs/dotfiles.md` says so).
 - devbox reads only `devbox.toml` and the paths it names; nothing else in the repo has meaning to devbox.
 
-## cestmoi's dotfiles
-
-`github.com/prabhask5/dotfiles` today holds `bootstrap.sh`, `clone-all.sh`, `bashrc`, `gitconfig`, `code-server/`. Milestone M10 restructures it to this contract: `devbox.toml`, `bashrc`, `gitconfig`, `code-server/`, `agents/AGENTS.md`, `install.sh` (whatever `bootstrap.sh` does that devbox doesn't: mise, Node/pnpm, Rust + wasm target), `context/`; `bootstrap.sh`/`clone-all.sh` removed (devbox does both).
-
 ## Acceptance
 
 - [ ] Manifest schema (01) with golden validation errors.
 - [ ] Provisioning with a fixture dotfiles repo: packages, links, Claude settings merge, instructions, install hook run once per provisioning, context dir honoured.
 - [ ] No manifest → defaults; manifest with only some keys → the rest default.
-- [ ] `docs/dotfiles.md` walks through creating a dotfiles repo from scratch and migrating an existing one (tested by the docs link checker and an example repo fixture under `tests/fixtures/dotfiles/`).
+- [ ] `docs/dotfiles.md` (already written; keep it current) walks through creating a dotfiles repo from scratch and migrating an existing one (tested by the docs link checker and an example repo fixture under `tests/fixtures/dotfiles/`).

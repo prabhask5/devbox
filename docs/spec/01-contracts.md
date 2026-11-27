@@ -43,10 +43,10 @@ TOML files are validated against their schema after parsing (TOML → JSON value
 ```toml
 version = 1
 instance = "devbox"                 # Incus instance name
-domain = "prabhas.io"
+domain = "example.com"
 [hosts]
-code = "code.prabhas.io"            # defaults: code.<domain>, agents.<domain>
-agents = "agents.prabhas.io"
+code = "code.example.com"           # defaults: code.<domain>, agents.<domain>
+agents = "agents.example.com"
 [vm]
 address = "10.77.0.10"              # static address on the Incus bridge
 code_port = 8080
@@ -67,7 +67,7 @@ file = "/etc/dokploy/traefik/dynamic/devbox.yml"
 entrypoint = "websecure"
 service_url = "http://devbox-gateway:8080"
 [deploy]
-repo = "prabhask5/devbox"            # where GitHub Deployments for the hub are read from
+repo = "you/devbox"                  # where GitHub Deployments for the hub are read from
 hub_environment = "agents-hub"
 wake_to_deploy = false
 ```

@@ -14,7 +14,7 @@ Context for agents and maintainers. This file, `docs/spec/` and the code are the
 - **One command to set up or rebuild everything**: `devbox up --domain example.com [--dotfiles <repo>]`.
 - **Continuous deployment of itself**: pushes to `main` redeploy the gateway (through Dokploy) and the agents hub (through GitHub Deployments + an updater in the VM), each visible in GitHub's Deployments UI.
 
-The first real user is the homelab **cestmoi** (an Incus VM named `devbox`, Dokploy's Traefik in front, see `reference/`). Every feature must work on any Linux server with systemd, Incus and Docker, configured only through devbox's own config files. Personal configuration lives in a separate, private **dotfiles** repository that devbox consumes through a small contract (spec 10).
+The first real deployment is the author's homelab (an Incus VM behind Dokploy's Traefik, described in `reference/`). Every feature must work on any Linux server with systemd, Incus and Docker, configured only through devbox's own config files. Personal configuration lives in a separate, private **dotfiles** repository that devbox consumes through a small contract (spec 10).
 
 License: MIT. Public repository: `github.com/prabhask5/devbox`.
 
@@ -50,7 +50,7 @@ crates/               Rust workspace members: devbox-cli (bin `devbox`), devbox-
 web/                  pnpm workspace: gateway-ui/, hub-app/, shared/ (generated types, design tokens)
 deploy/gateway/       Dockerfile + compose.yml for Dokploy (no domain, no previews)
 vm/                   What gets installed into the VM: systemd units, cloud-init template, agent hook configs, code-server defaults
-docs/                 spec/, milestones.md, agent-workflow.md, dotfiles.md (user guide for the dotfiles contract)
+docs/                 spec/, guides (dotfiles.md, deploy-gateway.md, …); milestones.md + agent-workflow.md until 1.0
 tests/                every test that is not a small pure-function unit test (spec 15)
 reference/            the working prototype and cestmoi's current setup; read-only input, deleted before 1.0
 scripts/              ci.sh and the checks CI runs
@@ -111,6 +111,8 @@ devbox is built milestone by milestone by an AI coding agent (Claude Code), revi
 2. Write tests from the acceptance criteria first, then implement.
 3. Cleanup pass (`scripts/check-hygiene.sh`); the repo is publishable after every milestone.
 4. `scripts/ci.sh` green; README/spec updated for user-visible changes; tick the milestone boxes.
+
+**The end state is a public, solo-maintained open-source repo with no artifacts of how it was built** ([spec 17](docs/spec/17-public-readiness.md)): no `reference/`, no milestone or agent-workflow files, no scaffolding, no TODOs, no provisional wording in specs, no personal data, no unused code or dependencies. Every milestone moves toward it; M12 finishes it and makes `check-hygiene.sh --release` the CI default. This section itself is rewritten at M12 as "How changes are made".
 
 `reference/prototype/` is a working, tested prototype of most of this (Node + bash) that ran against mocks; it defines behaviour to port and the edge cases already found. Port behaviour, not code.
 

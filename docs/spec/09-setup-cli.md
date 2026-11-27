@@ -3,7 +3,7 @@
 The Rust CLI (`crates/devbox-cli`, logic in `devbox-core`) sets up and maintains everything on the host. **Goal: after deploying the gateway in Dokploy, one command connects and configures everything.** Prototype: `reference/prototype/host/README.md` (the manual steps this automates) and `reference/prototype/bootstrap.sh` (VM provisioning).
 
 ```
-devbox up --domain prabhas.io [--dotfiles git@github.com:prabhask5/dotfiles] [options]
+devbox up --domain example.com [--dotfiles git@github.com:you/dotfiles] [options]
 devbox status            # one screen: VM, gateway, routing, hub, last wake/sleep, health, deployed versions
 devbox doctor            # every check below, with the fix for each failure
 devbox connect           # URLs, SSH config snippet, how to install the phone app
@@ -26,8 +26,8 @@ It runs as a **plan → confirm → apply** sequence of idempotent steps. Each s
 | 4 | Provision the VM | start it; wait for the agent; push and run the installer (`incus file push` + `incus exec`): packages (git, gh, tmux, jq, ripgrep, build-essential…), code-server (bind `0.0.0.0:<code_port>`, password auth, settings/extensions from dotfiles or defaults), agents selected, `devbox-hub` + `devbox` binaries of the deployed release (spec 11), systemd user units + linger, hook configs (05), hub config + secrets (app password hash, gateway token, GitHub token for deployments), `gh` auth if `--github-token-from` |
 | 5 | Dotfiles | if given: clone into `~/dotfiles` as the VM user, apply its `devbox.toml` (spec 10): extra packages, code-server config, agent instructions, context dir, sync filters, then run its `install` hook |
 | 6 | Host config | write `/etc/devbox/devbox.toml`; the gateway picks it up (hot reload, 02) |
-| 7 | Routing | `traefik-file`: write the dynamic file routing both hosts to `service_url` on `entrypoint` with the existing TLS settings (copied from any existing router for the same host, e.g. cestmoi's `devbox.yml`); `none`: print what to route |
-| 8 | Firewall | allow gateway → VM on `code_port`, `hub_port`, `ssh_port` and nothing else: edit the detected manager in its own format (cestmoi's `/etc/host-firewall/rules4.txt` "devbox: proxies to VM" line, ufw rule, nft set, or moi's firewall config when moi manages it), then apply through that manager |
+| 7 | Routing | `traefik-file`: write the dynamic file routing both hosts to `service_url` on `entrypoint` with the existing TLS settings (copied from any existing router for the same host); `none`: print what to route |
+| 8 | Firewall | allow gateway → VM on `code_port`, `hub_port`, `ssh_port` and nothing else: edit the detected manager in its own format (an iptables-restore rules file such as `/etc/host-firewall/rules4.txt`, a ufw rule, an nft set, or moi's firewall config when moi manages it), then apply through that manager |
 | 9 | Monitor | `--kuma-monitor`: print (or, with Kuma credentials, update) the monitor URL `https://<code host>/__devbox/health`; moi users: moi adopts it (spec 12) |
 | 10 | Verify | `GET https://<code host>/__devbox/health` = ok (through the real public path); hub status reachable from the gateway; one sleep → wake cycle with `--verify-sleep` (optional, ~30 s) |
 
@@ -37,9 +37,9 @@ Output ends with `devbox connect`'s summary. Every step has `--dry-run` output a
 
 Incus reachable, instance exists and is stateful-capable, `size.state ≥ memory`, `boot.autostart=false`; gateway container healthy and on the routing network; config valid; routing file present and matching; DNS for both hosts resolves; firewall rule present; health endpoint ok; hub reachable with the token; code-server healthy; agents installed and logged in; Claude/Codex hooks installed (and trusted for Codex); hub version = latest deployment; updater timer active; last sync result; context last run; dotfiles clean/pushed.
 
-## Adoption (cestmoi)
+## Adoption of an existing VM
 
-`devbox up --adopt --instance devbox --domain prabhas.io --dotfiles … --firewall host-firewall` on cestmoi must: keep the VM's disk and user data, convert its config (stateful, size.state, autostart off), replace `/etc/dokploy/traefik/dynamic/devbox.yml` (backed up) with routes to the gateway, extend the existing firewall line with `hub_port`, leave every other container and route untouched. `devbox down` returns cestmoi to its exact previous state (byte-identical files, Incus config restored).
+`devbox up --adopt --instance <name> --domain example.com --dotfiles … --firewall <manager>` on a host that already runs a hand-built dev VM (the author's homelab is described in `reference/cestmoi.md`) must: keep the VM's disk and user data, convert its config (stateful, size.state, autostart off), replace an existing Traefik route for the code host (backed up) with routes to the gateway, extend an existing firewall rule for the VM with `hub_port`, leave every other container and route untouched. `devbox down` returns the host to its exact previous state (byte-identical files, Incus config restored).
 
 ## Implementation rules
 
@@ -49,7 +49,7 @@ Incus reachable, instance exists and is stateful-capable, `size.state ≥ memory
 
 ## Acceptance
 
-- [ ] Golden `--dry-run` plans for: fresh host (Dokploy detected), cestmoi adoption fixture, re-run with no changes, plain Traefik host, `--routing none`, each firewall manager.
+- [ ] Golden `--dry-run` plans for: fresh host (Dokploy detected), adoption fixture (an anonymized Dokploy + Incus host), re-run with no changes, plain Traefik host, `--routing none`, each firewall manager.
 - [ ] Apply against `FakeSystem` + fake Incus: creates/adopts with exact Incus config; files written with modes; backups taken; idempotent second run is a no-op.
 - [ ] `devbox down` after `up` restores every touched file byte-identically and the Incus config (fixture comparison).
 - [ ] Preflight failures each produce an actionable message (golden), notably "gateway not deployed".

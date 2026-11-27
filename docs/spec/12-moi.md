@@ -1,6 +1,6 @@
 # 12 — moi
 
-[moi](https://github.com/prabhask5/moi) is the owner's Rust daemon that runs the server (snapshots, context, checks, Uptime Kuma, backups, rebuilds). devbox is a separate product that works without moi; when moi is present, moi **embeds** devbox's Rust crates and **observes** its Go services.
+[moi](https://github.com/prabhask5/moi) is a Rust daemon that runs a Linux server (snapshots, context, checks, Uptime Kuma, backups, rebuilds). devbox is a separate product that works without moi; when moi is present, moi **embeds** devbox's Rust crates and **observes** its Go services.
 
 ## What moi embeds (Rust)
 

@@ -21,7 +21,8 @@ devbox is built milestone by milestone by an AI coding agent (Claude Code), revi
 - Never add secrets; fixtures use `FAKE…` values.
 - Never add a dependency without a line in spec 14.
 - Keep `README.md` user-facing and current for shipped behaviour only.
-- Leave nothing behind: no commented-out code, scratch dirs, notes files, unexplained skipped tests.
+- Leave nothing behind: no commented-out code, scratch dirs, notes files, unexplained skipped tests, unused code or dependencies.
+- **The repo ends as a public, solo-maintained open-source project with no artifacts of how it was built** (spec 17). Never add personal data or host-specific details outside `reference/` (examples use `example.com`); when you settle a decision, rewrite the spec sentence as fact (no "decided in M<n>"); don't create files that only serve the build process beyond those spec 17 lists (they are all deleted at M12).
 
 ## Kickoff prompt (paste into Claude Code at the repo root)
 

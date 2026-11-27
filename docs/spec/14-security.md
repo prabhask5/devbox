@@ -14,7 +14,7 @@ devbox exposes a machine with the owner's code, credentials and agents to the in
 | Hub unix socket | VM user only | socket mode 0600 + `SO_PEERCRED` uid check |
 | Incus socket (mounted into the gateway) | gateway container | root-equivalent: the gateway uses only `GET /1.0/instances/<instance>[/state]`, `PUT …/state` and `GET /1.0/operations/*`; an allowlist in the Incus client refuses anything else, tested |
 
-The VM can reach the internet but not the host's private networks (existing cestmoi rules; `devbox up` never loosens them).
+The VM should reach the internet but not the host's private networks; `devbox up` never loosens existing rules, and `devbox doctor` warns when the VM can reach private ranges.
 
 ## Passwords and cookies
 

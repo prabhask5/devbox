@@ -2,13 +2,14 @@
 
 Ordered. Each milestone lists the spec sections it implements; the acceptance criteria in those sections are the definition of done. `scripts/create-issues.sh` turns this file into GitHub issues (one per milestone, label `milestone`).
 
-**Every milestone ends clean** — the last box of each is the same cleanup pass, and `scripts/check-hygiene.sh` enforces most of it in CI:
-- remove the "not implemented yet" arm(s) of what it delivers, and any stub, shim or fallback it superseded;
-- no debug output, commented-out code, or untracked TODOs (allowed only as `TODO(M<n>)`/`TODO(#<issue>)`);
-- research spikes: conclusions go into the spec, scratch code is deleted;
-- fixtures and golden files: only what tests use, minimal, redacted;
-- unused dependencies removed; new ones listed in spec 14;
-- docs updated for what shipped (README for users, spec for behaviour).
+**The goal is a public, solo-maintained open-source repo with no artifacts of how it was built** — the end state and the rules are in [spec 17](spec/17-public-readiness.md). **Every milestone ends clean** — the last box of each is the same cleanup pass, and `scripts/check-hygiene.sh` plus the dead-code checks enforce most of it in CI:
+- remove the "not implemented yet" arm(s) of what it delivers, and any stub, shim, fallback or compatibility path it superseded;
+- no debug output, commented-out code, or untracked TODOs (allowed only as `TODO(M<n>)`/`TODO(#<issue>)`, removed by that milestone);
+- spikes and decisions: the conclusion is written into the spec **as fact** (replace "decided in M<n>", "planned", "open question" with what was decided); scratch code and notes deleted;
+- no unused code, exports, files or dependencies (`go mod tidy`, `staticcheck`, `deadcode`, `cargo machete`, `knip`); new dependencies listed in spec 14;
+- fixtures and golden files: only what tests use, minimal, anonymized (spec 17 personal-data rules); examples use `example.com`;
+- nothing personal or cestmoi-specific outside `reference/` (M10's material is generic; specifics go in PR descriptions);
+- docs updated for what shipped (README for users, spec for behaviour), nothing describing behaviour that doesn't exist.
 
 **Order rationale**: contracts first so the three languages agree from day one; then the gateway (it gates all access and is the riskiest), then the hub and app, then the Rust tools, then setup (which needs everything else to exist), then deployment, then cestmoi's cutover. Every milestone after M1 extends the end-to-end harness (spec 15) with its scenarios, so the whole system is tested together continuously, not only at the end.
 
@@ -17,10 +18,12 @@ Specs: CLAUDE.md, 13, 14, 15
 - [ ] Go module (`cmd/devbox-gateway`, `cmd/devbox-hub` with subcommands `serve|event|agent|update|selftest|healthcheck`), Cargo workspace (`devbox-cli` → binary `devbox` with every command; `devbox-core`, `devbox-sync`, `devbox-context`, `devbox-tests`), pnpm workspace (`web/gateway-ui`, `web/hub-app`, `web/shared`); every command prints "not implemented yet" and exits 3
 - [ ] Pinned toolchains; lint configs (`.golangci.yml`, `rustfmt.toml`, clippy lint set, `deny.toml`, eslint/prettier/tsconfig)
 - [ ] `scripts/ci.sh` and the full CI (`static`, `go`, `rust`, `web`, `integration`, `e2e`, `build`, `budgets`, `required`) — jobs with nothing to test yet pass trivially; `budgets.sh` reports everything as pending
+- [ ] Dead-code and dependency hygiene in `static` from day one: `go mod tidy` diff, `staticcheck`, `deadcode`, `govulncheck`, `cargo machete`, `cargo deny`, `knip`, `pnpm audit --prod`; check for committed build outputs and stray executables (spec 17)
+- [ ] `check-hygiene.sh --release` implements every spec-17 rule, tested against a fixture repo that violates each rule once (runs in normal mode until M12)
 - [ ] `tests/` layout, `check-tests-location.sh` covering Go/Rust/TS
 - [ ] Release workflow skeleton, `install.sh` skeleton, Dependabot for gomod/cargo/npm/actions, Actions pinned by SHA
 - [ ] crates.io name check for the library crates (record the chosen names in spec 12)
-- [ ] Branch protection on `main` requires `required` (already configured; verify it gates the M0 PR)
+- [ ] Repo settings per spec 17 (owner): ruleset on `main` requiring `required`, squash merge only, delete branches on merge, private vulnerability reporting; verify the ruleset gates the M0 PR
 - [ ] Cleanup pass; `scripts/check-hygiene.sh` green
 
 ## M1 — Contracts and config
@@ -108,10 +111,10 @@ Specs: 11 (hub part)
 - [ ] App shows deployed version and "Updated — tap to reload"
 - [ ] Cleanup pass; `scripts/check-hygiene.sh` green
 
-## M10 — cestmoi cutover
+## M10 — First real deployment (the author's homelab)
 Specs: 09 (adoption), 10, `reference/cestmoi.md`
-- [ ] Runbook `docs/cutover-cestmoi.md`: deploy the gateway in Dokploy, `devbox up --adopt …`, DNS for agents., Kuma monitor, phone setup, rollback with `devbox down`
-- [ ] PR to `prabhask5/dotfiles` restructuring it to the contract (spec 10): `devbox.toml`, `install.sh`, `agents/AGENTS.md`, `context/`; remove what devbox now does
+- [ ] Generic guide `docs/adopting-an-existing-vm.md` (with `example.com`): deploy the gateway, `devbox up --adopt …`, DNS for the agents host, Uptime Kuma monitor, phone setup, rollback with `devbox down`. Host-specific commands for cestmoi go in the PR description, not the repo
+- [ ] PR to the author's dotfiles repo restructuring it to the contract (spec 10): `devbox.toml`, `install.sh` (mise, Node/pnpm, Rust + wasm target), `bashrc`, `gitconfig`, `code-server/`, `agents/AGENTS.md`, `context/`; remove `bootstrap.sh`/`clone-all.sh` and everything devbox now does
 - [ ] Owner runs the cutover; a week of real use; issues found are fixed with regression tests
 - [ ] Cleanup pass; `scripts/check-hygiene.sh` green
 
@@ -123,9 +126,15 @@ Specs: 13, 14
 - [ ] Cleanup pass; `scripts/check-hygiene.sh` green
 
 ## M12 — Public release readiness (v1.0.0)
-Specs: all
-- [ ] `reference/` deleted: prototype behaviour captured in specs and tests, design screenshots moved to `tests/e2e/visual/` baselines and `docs/`
-- [ ] No scaffolding: "not implemented" paths and exit code 3 removed; no `TODO(M…)` left; `scripts/check-hygiene.sh --release` green and default in CI
-- [ ] Docs for users: README (what/why, screenshots, quickstart, Dokploy guide, dotfiles guide, FAQ), `--help` texts, spec describes shipped behaviour only, milestones replaced by a roadmap
-- [ ] Community files current (CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, templates, CHANGELOG `1.0.0`); repo description, topics
-- [ ] Release `v1.0.0` via `release.yml`: binaries, gateway image on GHCR, `install.sh`; crates published; verified on a clean Ubuntu host with and without Dokploy
+Specs: all, especially [17](spec/17-public-readiness.md) — this milestone removes every development artifact
+- [ ] `reference/` deleted: design screenshots moved to `tests/e2e/visual/` (baselines) and `docs/images/` (README, guides); every prototype behaviour confirmed covered by a spec + test; no link or mention of `reference/` left
+- [ ] Build-process artifacts removed: `docs/milestones.md` → `docs/roadmap.md`; `docs/agent-workflow.md` folded into CONTRIBUTING ("AI-assisted contributions") and deleted; `.claude/` deleted; `scripts/create-issues.sh` deleted; milestone issues closed and the `milestone` label deleted
+- [ ] No scaffolding: "not implemented yet" paths and exit code 3 gone from code, docs and tests; no `TODO`/`FIXME` at all
+- [ ] Specs describe shipped behaviour only: no milestone numbers, "decided in", "planned", "spike", "open question", "TBD"; `CLAUDE.md` §6 rewritten as "How changes are made" and §1 no longer names the author's homelab
+- [ ] Personal-data sweep (spec 17): examples and fixtures anonymized; `HYGIENE_DENYLIST` secret configured; full-history `gitleaks` scan clean
+- [ ] Code hygiene: zero findings from `staticcheck`, `deadcode`, `cargo machete`, `knip`, `cargo deny`, `govulncheck`, `pnpm audit`; minimal crate/package features; MSRV and Go toolchain verified
+- [ ] `scripts/check-hygiene.sh --release` green and made the default in CI and on release tags; top-level layout matches the spec-17 end-state table
+- [ ] Docs for users: README (what/why, screenshots, requirements, quickstart, guides, FAQ; no "in development" banner), `docs/deploy-gateway.md`, `docs/dotfiles.md`, `docs/adopting-an-existing-vm.md`, `--help` texts reviewed
+- [ ] Community files current: CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, issue/PR templates (no milestone wording), CHANGELOG `1.0.0`
+- [ ] Repo settings verified (spec 17): description, topics, website, ruleset, squash-only, branch deletion, Dependabot, security alerts, private vulnerability reporting
+- [ ] Release `v1.0.0` via `release.yml`: binaries, gateway image on GHCR, `install.sh`; crates published; Releases page shows only tagged versions; verified on a clean Ubuntu host with and without Dokploy

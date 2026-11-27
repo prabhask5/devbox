@@ -34,7 +34,7 @@ Every agent's lifecycle maps onto: `SessionStart`, `UserPromptSubmit` (payload `
 
 Invoked by the agent for every event with the hook JSON on stdin. Requirements:
 
-- **Fast**: total wall time ≤ 5 ms p50, ≤ 15 ms p99 on the cestmoi VM (budget 13). Go binary, no runtime init beyond flag parsing; writes one request over the unix socket (`$XDG_RUNTIME_DIR/devbox-hub.sock`), 2 s timeout.
+- **Fast**: total wall time ≤ 5 ms p50, ≤ 15 ms p99 on a 3-vCPU VM (budget 13). Go binary, no runtime init beyond flag parsing; writes one request over the unix socket (`$XDG_RUNTIME_DIR/devbox-hub.sock`), 2 s timeout.
 - **Silent and harmless**: prints nothing on stdout (some agents treat hook stdout as input or decisions), always exits 0, never blocks the agent if the hub is down.
 - Body: `agent-event` (01) with `devboxSession=$DEVBOX_SESSION`, `tmuxPane=$TMUX_PANE`, `cwd=$PWD`, `ts` (ms), `payload` = stdin as raw JSON (invalid JSON is sent as a string). Max 8 MB.
 
