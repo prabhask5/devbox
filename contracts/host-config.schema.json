@@ -176,6 +176,60 @@
       },
       "default": {}
     },
+    "provision": {
+      "description": "How `devbox up` built the VM, so that it can build it again without being asked anything.",
+      "type": "object",
+      "required": [],
+      "properties": {
+        "user": {
+          "description": "The user in the VM that owns the repositories and the agent sessions. Absent until `devbox up` has run.",
+          "type": "string",
+          "format": "devbox-nonempty"
+        },
+        "cpu": {
+          "description": "vCPUs of the VM.",
+          "type": "integer",
+          "default": 3
+        },
+        "memory": {
+          "description": "Memory of the VM, like `5GiB`.",
+          "type": "string",
+          "format": "devbox-nonempty",
+          "default": "5GiB"
+        },
+        "disk": {
+          "description": "Root disk of the VM, like `60GiB`.",
+          "type": "string",
+          "format": "devbox-nonempty",
+          "default": "60GiB"
+        },
+        "image": {
+          "description": "Image the VM is created from, as `remote:alias`.",
+          "type": "string",
+          "format": "devbox-nonempty",
+          "default": "images:ubuntu/26.04/cloud"
+        },
+        "agents": {
+          "description": "Coding agents installed in the VM.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "devbox-nonempty"
+          },
+          "default": [
+            "claude",
+            "codex",
+            "opencode"
+          ]
+        },
+        "dotfiles": {
+          "description": "The owner's dotfiles repository, cloned into the VM and applied.",
+          "type": "string",
+          "format": "devbox-nonempty"
+        }
+      },
+      "default": {}
+    },
     "deploy": {
       "description": "Continuous deployment of the hub.",
       "type": "object",
