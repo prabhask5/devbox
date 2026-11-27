@@ -156,6 +156,7 @@ name = "devbox-cli"
 version = "0.0.0"
 dependencies = [
  "clap",
+ "devbox-context",
  "devbox-core",
  "devbox-sync",
  "serde_json",
@@ -164,6 +165,12 @@ dependencies = [
 [[package]]
 name = "devbox-context"
 version = "0.0.0"
+dependencies = [
+ "devbox-core",
+ "serde_json",
+ "thiserror",
+ "toml",
+]
 
 [[package]]
 name = "devbox-core"
