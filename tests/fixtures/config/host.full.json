@@ -1,0 +1,37 @@
+{
+  "deploy": {
+    "hub_environment": "agents-hub",
+    "repo": "you/devbox",
+    "wake_to_deploy": false
+  },
+  "domain": "example.com",
+  "gateway": {
+    "listen": ":8080",
+    "ssh_listen": ":2222",
+    "sync_wait": "90s"
+  },
+  "hosts": {
+    "agents": "agents.example.com",
+    "code": "code.example.com"
+  },
+  "instance": "devbox",
+  "routing": {
+    "entrypoint": "websecure",
+    "file": "/etc/dokploy/traefik/dynamic/devbox.yml",
+    "provider": "traefik-file",
+    "service_url": "http://devbox-gateway:8080"
+  },
+  "sleep": {
+    "activity_bytes_per_min": 4096,
+    "idle": "15m",
+    "min_up": "5m",
+    "mode": "stateful"
+  },
+  "version": 1,
+  "vm": {
+    "address": "10.77.0.10",
+    "code_port": 8080,
+    "hub_port": 8090,
+    "ssh_port": 22
+  }
+}

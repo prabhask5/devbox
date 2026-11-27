@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "hub-wake-response.schema.json",
+  "title": "HubWakeResponse",
+  "x-version": 1,
+  "description": "The hub's answer to POST /devbox/wake.",
+  "type": "object",
+  "required": [
+    "v",
+    "runId"
+  ],
+  "properties": {
+    "v": {
+      "description": "Contract version of this message.",
+      "type": "integer"
+    },
+    "runId": {
+      "description": "The sync run to wait for.",
+      "type": "string"
+    }
+  }
+}

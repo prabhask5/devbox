@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "session.schema.json",
+  "title": "Session",
+  "x-version": 1,
+  "description": "One agent session: a tmux session (or an agent seen only through its hooks) and what the hub knows about it.",
+  "type": "object",
+  "required": [
+    "v",
+    "id",
+    "name",
+    "agent",
+    "kind",
+    "cwd",
+    "createdAt",
+    "state",
+    "stateSince",
+    "title",
+    "unread",
+    "adopted",
+    "attached",
+    "viewers"
+  ],
+  "properties": {
+    "v": {
+      "description": "Contract version of this message.",
+      "type": "integer"
+    },
+    "id": {
+      "description": "Eight hex characters.",
+      "type": "string"
+    },
+    "name": {
+      "description": "Unique display name, also the tmux session name when created by the hub.",
+      "type": "string"
+    },
+    "tmux": {
+      "description": "tmux session name; absent for external sessions.",
+      "type": "string"
+    },
+    "agent": {
+      "description": "Adapter id.",
+      "type": "string"
+    },
+    "kind": {
+      "description": "`tmux`: a terminal the hub can show and type into. `external`: seen only through hook events. `chat`: reserved.",
+      "type": "string",
+      "enum": [
+        "tmux",
+        "external",
+        "chat"
+      ]
+    },
+    "cwd": {
+      "description": "Working directory.",
+      "type": "string"
+    },
+    "repo": {
+      "description": "Repository name when `cwd` is inside `~/code/<repo>`.",
+      "type": "string"
+    },
+    "createdAt": {
+      "description": "When the session was created or first seen (Unix time, ms).",
+      "type": "integer"
+    },
+    "state": {
+      "description": "Lifecycle state.",
+      "$ref": "#/$defs/SessionState"
+    },
+    "stateSince": {
+      "description": "When `state` last changed (Unix time, ms).",
+      "type": "integer"
+    },
+    "title": {
+      "description": "Short description, from the first prompt; may be empty.",
+      "type": "string"
+    },
+    "lastPrompt": {
+      "description": "The owner's last prompt.",
+      "type": "string"
+    },
+    "lastTool": {
+      "description": "The tool the agent last used.",
+      "type": "string"
+    },
+    "lastReply": {
+      "description": "The agent's last reply.",
+      "type": "string"
+    },
+    "waitingFor": {
+      "description": "What the agent is asking, while `state` is `needs_input`.",
+      "type": "string"
+    },
+    "agentSessionId": {
+      "description": "The agent's own session id.",
+      "type": "string"
+    },
+    "transcriptPath": {
+      "description": "Where the agent keeps its transcript.",
+      "type": "string"
+    },
+    "turnStartedAt": {
+      "description": "When the current turn started (Unix time, ms).",
+      "type": "integer"
+    },
+    "lastEventAt": {
+      "description": "When the last hook event arrived (Unix time, ms).",
+      "type": "integer"
+    },
+    "unread": {
+      "description": "Something happened that the owner has not looked at.",
+      "type": "boolean"
+    },
+    "adopted": {
+      "description": "The tmux session was not created by the hub.",
+      "type": "boolean"
+    },
+    "attached": {
+      "description": "A tmux client is attached.",
+      "type": "boolean"
+    },
+    "size": {
+      "description": "Size of the tmux window.",
+      "type": "object",
+      "required": [
+        "cols",
+        "rows"
+      ],
+      "properties": {
+        "cols": {
+          "description": "Columns.",
+          "type": "integer"
+        },
+        "rows": {
+          "description": "Rows.",
+          "type": "integer"
+        }
+      }
+    },
+    "viewers": {
+      "description": "Open screen streams from the app.",
+      "type": "integer"
+    }
+  },
+  "$defs": {
+    "SessionState": {
+      "description": "Where a session is in its lifecycle.",
+      "type": "string",
+      "enum": [
+        "starting",
+        "working",
+        "needs_input",
+        "idle",
+        "exited",
+        "error",
+        "gone",
+        "ended"
+      ]
+    }
+  }
+}

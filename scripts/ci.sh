@@ -5,12 +5,10 @@
 # The stages are the jobs of .github/workflows/ci.yml, which calls this script, so a local run and CI are the same.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+source scripts/lib.sh
 export GOFLAGS=-mod=readonly
-# The toolchain pinned in go.mod also builds the Go tools below, whatever their own go.mod asks for.
-GOTOOLCHAIN=$(go env GOVERSION); export GOTOOLCHAIN
 
-# Tools that are not toolchain components run at these versions. Go tools need no install (`go run`);
-# cargo tools are used from PATH when present and otherwise installed into target/tools.
+# Tools that are not toolchain components run at these versions (see scripts/lib.sh for how).
 GOLANGCI_LINT=github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
 STATICCHECK=honnef.co/go/tools/cmd/staticcheck@v0.8.2
 DEADCODE=golang.org/x/tools/cmd/deadcode@v0.53.0
@@ -18,13 +16,6 @@ GOVULNCHECK=golang.org/x/vuln/cmd/govulncheck@v1.10.0
 CARGO_DENY=0.22.1
 CARGO_MACHETE=0.10.1
 
-step() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
-cargo_tool() { # cargo_tool <name> <version> <args...>: run cargo-<name>, installing it first if missing
-  local name=$1 version=$2; shift 2
-  PATH="$PWD/target/tools/bin:$PATH"
-  command -v "cargo-$name" >/dev/null || cargo install --locked --root target/tools "cargo-$name@$version"
-  cargo "$name" "$@"
-}
 web_install() { pnpm -C web install --frozen-lockfile; }
 
 static() {
@@ -32,13 +23,15 @@ static() {
   step "no secrets in the repo"; scripts/check-secrets.sh
   step "repo hygiene";           scripts/check-hygiene.sh
   step "docs links";             python3 scripts/check-links.py
+  step "generated contracts";    web_install; scripts/check-generated.sh
 
   step "gofmt";         unformatted=$(gofmt -l .); [[ -z $unformatted ]] || { echo "$unformatted"; return 1; }
   step "go vet";        go vet ./...
   step "go mod tidy";   go mod tidy -diff
   step "golangci-lint"; go run "$GOLANGCI_LINT" run
   step "staticcheck";   go run "$STATICCHECK" ./...
-  step "deadcode";      dead=$(go run "$DEADCODE" -filter 'devbox/(cmd|internal)/' ./...); [[ -z $dead ]] || { echo "$dead"; return 1; }
+  # TODO(M11): drop -test once every package is used by a binary; until then code that only tests reach is allowed.
+  step "deadcode";      dead=$(go run "$DEADCODE" -test -filter 'devbox/(cmd|internal)/' ./...); [[ -z $dead ]] || { echo "$dead"; return 1; }
   step "govulncheck";   go run "$GOVULNCHECK" ./...
 
   step "rustfmt";       cargo fmt --all --check
@@ -46,7 +39,6 @@ static() {
   step "cargo deny";    cargo_tool deny "$CARGO_DENY" check
   step "cargo machete"; cargo_tool machete "$CARGO_MACHETE"
 
-  step "web install";   web_install
   step "prettier";      pnpm -C web run format:check
   step "eslint";        pnpm -C web run lint
   step "tsc";           pnpm -C web run typecheck

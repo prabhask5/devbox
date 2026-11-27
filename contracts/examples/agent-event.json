@@ -1,0 +1,16 @@
+{
+  "v": 1,
+  "agent": "claude",
+  "event": "PermissionRequest",
+  "devboxSession": "a1b2c3d4",
+  "tmuxPane": "%3",
+  "cwd": "/home/dev/code/devbox",
+  "ts": 1760000100000,
+  "payload": {
+    "session_id": "5f0c",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "cargo test"
+    }
+  }
+}

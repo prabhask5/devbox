@@ -2,7 +2,7 @@ import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["**/node_modules/", "**/dist/"] },
+  { ignores: ["**/node_modules/", "**/dist/", "web/shared/src/proto/"] },
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   ...tseslint.configs.stylisticTypeChecked,
@@ -10,5 +10,5 @@ export default tseslint.config(
     languageOptions: { parserOptions: { projectService: true } },
     rules: { "no-console": "error" },
   },
-  { files: ["**/*.js"], ...tseslint.configs.disableTypeChecked },
+  { files: ["**/*.js", "**/*.mjs"], ...tseslint.configs.disableTypeChecked },
 );

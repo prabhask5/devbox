@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "hub-state.schema.json",
+  "title": "HubState",
+  "x-version": 1,
+  "description": "Everything the agents app shows, pushed over /api/stream on every change.",
+  "type": "object",
+  "required": [
+    "v",
+    "serverNow",
+    "sessions",
+    "devbox",
+    "adapters",
+    "commonKeys",
+    "pushDevices"
+  ],
+  "properties": {
+    "v": {
+      "description": "Contract version of this message.",
+      "type": "integer"
+    },
+    "serverNow": {
+      "description": "The hub's clock (Unix time, ms).",
+      "type": "integer"
+    },
+    "sessions": {
+      "description": "Every session, most recently changed first.",
+      "type": "array",
+      "items": {
+        "$ref": "session.schema.json"
+      }
+    },
+    "devbox": {
+      "description": "The hub's own status.",
+      "$ref": "hub-status.schema.json"
+    },
+    "adapters": {
+      "description": "The agents the hub knows.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/AdapterInfo"
+      }
+    },
+    "commonKeys": {
+      "description": "Keys offered for every terminal session.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/AnswerKey"
+      }
+    },
+    "vapidPublicKey": {
+      "description": "Web push application server key, base64url.",
+      "type": "string"
+    },
+    "pushDevices": {
+      "description": "Devices subscribed to notifications.",
+      "type": "integer"
+    }
+  },
+  "$defs": {
+    "AnswerKey": {
+      "description": "A button that sends one key to a session.",
+      "type": "object",
+      "required": [
+        "label",
+        "key"
+      ],
+      "properties": {
+        "label": {
+          "description": "Text on the button.",
+          "type": "string"
+        },
+        "key": {
+          "description": "tmux key name, e.g. `Enter` or `Escape`.",
+          "type": "string"
+        }
+      }
+    },
+    "AdapterInfo": {
+      "description": "One kind of agent.",
+      "type": "object",
+      "required": [
+        "id",
+        "label",
+        "short",
+        "kind",
+        "available",
+        "hooks",
+        "answerKeys"
+      ],
+      "properties": {
+        "id": {
+          "description": "Adapter id, e.g. `claude`.",
+          "type": "string"
+        },
+        "label": {
+          "description": "Full name, e.g. `Claude Code`.",
+          "type": "string"
+        },
+        "short": {
+          "description": "Short name, e.g. `Claude`.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "How the hub talks to it: a terminal in tmux, or a chat API (reserved).",
+          "type": "string",
+          "enum": [
+            "tmux",
+            "chat"
+          ]
+        },
+        "available": {
+          "description": "Its binary is installed.",
+          "type": "boolean"
+        },
+        "hooks": {
+          "description": "It reports lifecycle events.",
+          "type": "boolean"
+        },
+        "answerKeys": {
+          "description": "Buttons shown when a session of this agent needs input.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AnswerKey"
+          }
+        }
+      }
+    }
+  }
+}

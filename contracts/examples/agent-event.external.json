@@ -1,0 +1,8 @@
+{
+  "v": 1,
+  "agent": "codex",
+  "event": "Stop",
+  "cwd": "/home/dev",
+  "ts": 1760000100000,
+  "payload": "not json"
+}

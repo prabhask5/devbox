@@ -1,0 +1,11 @@
+{
+  "v": 1,
+  "status": "problem",
+  "problems": [
+    "Incus API unreachable: connection refused",
+    "last wake failed: timed out"
+  ],
+  "vm": "unknown",
+  "phase": "idle",
+  "checkedAt": 1760000012000
+}

@@ -1,0 +1,3 @@
+instance = "devbox"
+vm = {}
+sleep = []

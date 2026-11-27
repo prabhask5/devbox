@@ -1,0 +1,10 @@
+version = 1
+listen = "127.0.0.1:8090"
+[hosts]
+code = "code.example.com"
+agents = "agents.example.com"
+[tmux]
+socket = "devbox-test"
+[deploy]
+repo = "you/devbox"
+environment = "agents-hub-staging"

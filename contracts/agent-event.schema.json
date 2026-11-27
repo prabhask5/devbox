@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "agent-event.schema.json",
+  "title": "AgentEvent",
+  "x-version": 1,
+  "description": "One lifecycle event of a coding agent, sent by the hook relay to the hub over the internal socket.",
+  "type": "object",
+  "required": [
+    "v",
+    "agent",
+    "event",
+    "cwd",
+    "ts",
+    "payload"
+  ],
+  "properties": {
+    "v": {
+      "description": "Contract version of this message.",
+      "type": "integer"
+    },
+    "agent": {
+      "description": "Adapter id, e.g. `claude`.",
+      "type": "string"
+    },
+    "event": {
+      "description": "What happened. `Notification` is Claude's own event, which the hub maps onto the others.",
+      "type": "string",
+      "enum": [
+        "SessionStart",
+        "UserPromptSubmit",
+        "PreToolUse",
+        "PostToolUse",
+        "PermissionRequest",
+        "Notification",
+        "Stop",
+        "Error",
+        "SessionEnd"
+      ]
+    },
+    "devboxSession": {
+      "description": "`$DEVBOX_SESSION` of the agent's process, when the hub started it.",
+      "type": "string"
+    },
+    "tmuxPane": {
+      "description": "`$TMUX_PANE` of the agent's process, when it runs in tmux.",
+      "type": "string"
+    },
+    "cwd": {
+      "description": "Working directory of the agent.",
+      "type": "string"
+    },
+    "ts": {
+      "description": "When the event happened (Unix time, ms).",
+      "type": "integer"
+    },
+    "payload": {
+      "description": "The agent's hook JSON as received; a string when it was not valid JSON."
+    }
+  }
+}

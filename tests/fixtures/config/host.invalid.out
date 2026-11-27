@@ -1,0 +1,21 @@
+devbox.toml: deploy.hub_environment: must not be empty
+devbox.toml: deploy.repo: expected a GitHub repository like owner/name
+devbox.toml: deploy.wake_to_deploy: expected true or false
+devbox.toml: domain: expected a lowercase hostname like code.example.com
+devbox.toml: gateway.listen: expected a listen address like :8080
+devbox.toml: gateway.ssh_listen: expected a listen address like :2222, or "" to turn it off
+devbox.toml: gateway.sync_wait: expected a duration like 15m or 90s
+devbox.toml: hosts: expected a table
+devbox.toml: instance: expected a name of lowercase letters, digits and dashes
+devbox.toml: routing.entrypoint: must not be empty
+devbox.toml: routing.file: expected an absolute path
+devbox.toml: routing.provider: expected one of: traefik-file, none
+devbox.toml: routing.service_url: expected an http:// or https:// URL
+devbox.toml: sleep.activity_bytes_per_min: expected an integer of at least 0
+devbox.toml: sleep.idle: expected a duration like 15m or 90s
+devbox.toml: sleep.min_up: expected a string
+devbox.toml: sleep.mode: expected one of: stateful, shutdown, off
+devbox.toml: vm.address: required
+devbox.toml: vm.code_port: expected an integer between 1 and 65535
+devbox.toml: vm.hub_port: expected an integer between 1 and 65535
+devbox.toml: vm.ssh_port: expected an integer

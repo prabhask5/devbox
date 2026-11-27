@@ -1,0 +1,50 @@
+{
+  "hostname": {
+    "valid": ["example.com", "code.example.com", "localhost", "a.b", "xn--bcher-kva.example", "0.example"],
+    "invalid": ["", "Example.com", "-a.example.com", "a-.example.com", "a..b", ".example.com", "example.com.", "exa mple.com", "a_b.example.com", "https://example.com", "example.com:443"]
+  },
+  "ipv4": {
+    "valid": ["10.77.0.10", "0.0.0.0", "255.255.255.255"],
+    "invalid": ["", "10.77.0", "10.77.0.256", "10.77.0.10.1", "010.77.0.10", "::1", "example.com", " 10.77.0.10"]
+  },
+  "devbox-duration": {
+    "valid": ["15m", "90s", "1h30m", "250ms", "0s", "1h2m3s4ms"],
+    "invalid": ["", "15", "m", "15 m", "15min", "1.5h", "-5m", "5d", "15M", "9999999999s"]
+  },
+  "devbox-listen": {
+    "valid": [":8080", "127.0.0.1:8080", "localhost:1", ":65535"],
+    "invalid": ["", "8080", ":", ":0", ":65536", ":http", ":+80", "host name:80", ":80:"]
+  },
+  "devbox-listen-optional": {
+    "valid": ["", ":2222", "0.0.0.0:2222"],
+    "invalid": ["2222", ":0", " "]
+  },
+  "devbox-name": {
+    "valid": ["devbox", "dev-box-2", "0"],
+    "invalid": ["", "Devbox", "dev_box", "-devbox", "devbox-", "dev box", "dev.box"]
+  },
+  "devbox-abspath": {
+    "valid": ["/", "/etc/dokploy/traefik/dynamic/devbox.yml"],
+    "invalid": ["", "etc/devbox.yml", "./devbox.yml", "~/devbox.yml"]
+  },
+  "devbox-relpath": {
+    "valid": ["bashrc", "code-server/settings.json", ".config/x", "a/b/c"],
+    "invalid": ["", "/etc/passwd", "../outside", "a/../b", "a//b", "a/", "./a", "a/./b"]
+  },
+  "devbox-url": {
+    "valid": ["http://devbox-gateway:8080", "https://example.com/path"],
+    "invalid": ["", "devbox-gateway:8080", "ftp://example.com", "http://", "http://exa mple.com"]
+  },
+  "devbox-repo": {
+    "valid": ["you/devbox", "Some-Org/repo.name_2"],
+    "invalid": ["", "devbox", "you/", "/devbox", "you/dev/box", "you/dev box", "https://github.com/you/devbox"]
+  },
+  "devbox-phc": {
+    "valid": ["$argon2id$v=19$m=65536,t=3,p=1$RkFLRXNhbHRGQUtFc2FsdA$RkFLRWhhc2g"],
+    "invalid": ["", "FAKE-password", "$argon2i$v=19$m=65536,t=3,p=1$RkFLRXNhbHRGQUtFc2FsdA$RkFLRWhhc2g", "$2b$12$FAKEbcrypt"]
+  },
+  "devbox-nonempty": {
+    "valid": ["x", " "],
+    "invalid": [""]
+  }
+}

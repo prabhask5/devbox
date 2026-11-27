@@ -1,0 +1,1608 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$defs": {
+  "AdapterInfo": {
+   "description": "One kind of agent.",
+   "type": "object",
+   "required": [
+    "id",
+    "label",
+    "short",
+    "kind",
+    "available",
+    "hooks",
+    "answerKeys"
+   ],
+   "properties": {
+    "id": {
+     "description": "Adapter id, e.g. `claude`.",
+     "type": "string"
+    },
+    "label": {
+     "description": "Full name, e.g. `Claude Code`.",
+     "type": "string"
+    },
+    "short": {
+     "description": "Short name, e.g. `Claude`.",
+     "type": "string"
+    },
+    "kind": {
+     "description": "How the hub talks to it: a terminal in tmux, or a chat API (reserved).",
+     "type": "string",
+     "enum": [
+      "tmux",
+      "chat"
+     ]
+    },
+    "available": {
+     "description": "Its binary is installed.",
+     "type": "boolean"
+    },
+    "hooks": {
+     "description": "It reports lifecycle events.",
+     "type": "boolean"
+    },
+    "answerKeys": {
+     "description": "Buttons shown when a session of this agent needs input.",
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/AnswerKey"
+     }
+    }
+   }
+  },
+  "AgentEvent": {
+   "description": "One lifecycle event of a coding agent, sent by the hook relay to the hub over the internal socket.",
+   "type": "object",
+   "required": [
+    "v",
+    "agent",
+    "event",
+    "cwd",
+    "ts",
+    "payload"
+   ],
+   "properties": {
+    "v": {
+     "description": "Contract version of this message.",
+     "type": "integer"
+    },
+    "agent": {
+     "description": "Adapter id, e.g. `claude`.",
+     "type": "string"
+    },
+    "event": {
+     "description": "What happened. `Notification` is Claude's own event, which the hub maps onto the others.",
+     "type": "string",
+     "enum": [
+      "SessionStart",
+      "UserPromptSubmit",
+      "PreToolUse",
+      "PostToolUse",
+      "PermissionRequest",
+      "Notification",
+      "Stop",
+      "Error",
+      "SessionEnd"
+     ]
+    },
+    "devboxSession": {
+     "description": "`$DEVBOX_SESSION` of the agent's process, when the hub started it.",
+     "type": "string"
+    },
+    "tmuxPane": {
+     "description": "`$TMUX_PANE` of the agent's process, when it runs in tmux.",
+     "type": "string"
+    },
+    "cwd": {
+     "description": "Working directory of the agent.",
+     "type": "string"
+    },
+    "ts": {
+     "description": "When the event happened (Unix time, ms).",
+     "type": "integer"
+    },
+    "payload": {
+     "description": "The agent's hook JSON as received; a string when it was not valid JSON."
+    }
+   }
+  },
+  "AnswerKey": {
+   "description": "A button that sends one key to a session.",
+   "type": "object",
+   "required": [
+    "label",
+    "key"
+   ],
+   "properties": {
+    "label": {
+     "description": "Text on the button.",
+     "type": "string"
+    },
+    "key": {
+     "description": "tmux key name, e.g. `Enter` or `Escape`.",
+     "type": "string"
+    }
+   }
+  },
+  "DeployState": {
+   "description": "The last self-update of the hub.",
+   "type": "object",
+   "required": [
+    "status",
+    "version"
+   ],
+   "properties": {
+    "status": {
+     "description": "How the last update went.",
+     "type": "string",
+     "enum": [
+      "success",
+      "failure",
+      "in_progress"
+     ]
+    },
+    "version": {
+     "description": "Commit the update installs or installed.",
+     "type": "string"
+    },
+    "at": {
+     "description": "When the update finished (Unix time, ms).",
+     "type": "integer"
+    },
+    "error": {
+     "description": "Why it failed.",
+     "type": "string"
+    }
+   }
+  },
+  "DotfilesManifest": {
+   "description": "`devbox.toml` at the root of a dotfiles repository: what devbox installs from it. Paths are relative to the repository root.",
+   "type": "object",
+   "required": [
+    "version"
+   ],
+   "properties": {
+    "version": {
+     "description": "Version of this file's format.",
+     "type": "integer"
+    },
+    "vm": {
+     "description": "Additions to the VM.",
+     "type": "object",
+     "required": [],
+     "properties": {
+      "packages": {
+       "description": "apt packages on top of devbox's base set.",
+       "type": "array",
+       "items": {
+        "type": "string",
+        "format": "devbox-nonempty"
+       },
+       "default": []
+      },
+      "install": {
+       "description": "Script run as the VM user after provisioning; must be idempotent.",
+       "type": "string",
+       "format": "devbox-relpath"
+      }
+     },
+     "default": {}
+    },
+    "shell": {
+     "description": "Shell and git configuration.",
+     "type": "object",
+     "required": [],
+     "properties": {
+      "bashrc": {
+       "description": "File sourced from ~/.bashrc.",
+       "type": "string",
+       "format": "devbox-relpath"
+      },
+      "gitconfig": {
+       "description": "File included from ~/.gitconfig.",
+       "type": "string",
+       "format": "devbox-relpath"
+      }
+     },
+     "default": {}
+    },
+    "code_server": {
+     "description": "Editor configuration.",
+     "type": "object",
+     "required": [],
+     "properties": {
+      "settings": {
+       "description": "settings.json linked into code-server's User directory.",
+       "type": "string",
+       "format": "devbox-relpath"
+      },
+      "keybindings": {
+       "description": "keybindings.json linked into code-server's User directory.",
+       "type": "string",
+       "format": "devbox-relpath"
+      },
+      "extensions": {
+       "description": "File with one Open VSX extension id per line.",
+       "type": "string",
+       "format": "devbox-relpath"
+      }
+     },
+     "default": {}
+    },
+    "agents": {
+     "description": "Agent instructions.",
+     "type": "object",
+     "required": [],
+     "properties": {
+      "instructions": {
+       "description": "Instructions every agent reads.",
+       "type": "string",
+       "format": "devbox-relpath"
+      }
+     },
+     "default": {}
+    },
+    "context": {
+     "description": "Generated developer context.",
+     "type": "object",
+     "required": [],
+     "properties": {
+      "dir": {
+       "description": "Directory `devbox context` writes to. Absent: ~/.local/share/devbox/context in the VM.",
+       "type": "string",
+       "format": "devbox-relpath"
+      },
+      "ai": {
+       "description": "Write an AI summary.",
+       "type": "boolean",
+       "default": true
+      },
+      "commit": {
+       "description": "Commit the context directory after each run.",
+       "type": "boolean",
+       "default": true
+      }
+     },
+     "default": {}
+    },
+    "sync": {
+     "description": "Which repositories are cloned and synced.",
+     "type": "object",
+     "required": [],
+     "properties": {
+      "owner": {
+       "description": "Whose repositories to clone. Absent: the authenticated GitHub user.",
+       "type": "string",
+       "format": "devbox-nonempty"
+      },
+      "include_orgs": {
+       "description": "Extra owners or organizations.",
+       "type": "array",
+       "items": {
+        "type": "string",
+        "format": "devbox-nonempty"
+       },
+       "default": []
+      },
+      "exclude": {
+       "description": "Globs on repository names to leave out.",
+       "type": "array",
+       "items": {
+        "type": "string",
+        "format": "devbox-nonempty"
+       },
+       "default": []
+      },
+      "archived": {
+       "description": "Include archived repositories.",
+       "type": "boolean",
+       "default": false
+      }
+     },
+     "default": {}
+    }
+   }
+  },
+  "GatewayEvent": {
+   "$ref": "#/$defs/GatewayStatus"
+  },
+  "GatewayHealth": {
+   "description": "Health of the devbox for monitors, served at /__devbox/health (200 when ok, 503 otherwise).",
+   "type": "object",
+   "required": [
+    "v",
+    "status",
+    "problems",
+    "vm",
+    "phase",
+    "checkedAt"
+   ],
+   "properties": {
+    "v": {
+     "description": "Contract version of this message.",
+     "type": "integer"
+    },
+    "status": {
+     "description": "`ok`, or `problem` when `problems` is not empty.",
+     "type": "string",
+     "enum": [
+      "ok",
+      "problem"
+     ]
+    },
+    "problems": {
+     "description": "One stable sentence per problem.",
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "vm": {
+     "$ref": "#/$defs/VmState"
+    },
+    "phase": {
+     "$ref": "#/$defs/GatewayPhase"
+    },
+    "checkedAt": {
+     "description": "When this was computed (Unix time, ms).",
+     "type": "integer"
+    }
+   }
+  },
+  "GatewayIdle": {
+   "description": "How long the devbox has been idle and why.",
+   "type": "object",
+   "required": [
+    "idleMs",
+    "gatewayIdleMs",
+    "limitMs",
+    "hubReasons"
+   ],
+   "properties": {
+    "idleMs": {
+     "description": "The smaller of the gateway's and the hub's idle time, in ms.",
+     "type": "integer"
+    },
+    "gatewayIdleMs": {
+     "description": "Time since the last activity through the gateway, in ms.",
+     "type": "integer"
+    },
+    "hubIdleMs": {
+     "description": "Time the hub reports being idle, in ms; absent when the hub is unreachable.",
+     "type": "integer"
+    },
+    "limitMs": {
+     "description": "Idle time after which the VM sleeps, in ms.",
+     "type": "integer"
+    },
+    "hubReasons": {
+     "description": "Why the hub is busy, if it is.",
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    }
+   }
+  },
+  "GatewayPhase": {
+   "description": "What the gateway is doing with the VM.",
+   "type": "string",
+   "enum": [
+    "idle",
+    "waking",
+    "stopping"
+   ]
+  },
+  "GatewayStatus": {
+   "description": "State of the gateway and the VM, served at /__devbox/status and pushed over /__devbox/events.",
+   "type": "object",
+   "required": [
+    "v",
+    "version",
+    "serverNow",
+    "configured",
+    "vm",
+    "phase",
+    "typical"
+   ],
+   "properties": {
+    "v": {
+     "description": "Contract version of this message.",
+     "type": "integer"
+    },
+    "version": {
+     "description": "Commit the gateway was built from.",
+     "type": "string"
+    },
+    "serverNow": {
+     "description": "The gateway's clock, so pages can compute elapsed times (Unix time, ms).",
+     "type": "integer"
+    },
+    "configured": {
+     "description": "False until `devbox up` has written the host config.",
+     "type": "boolean"
+    },
+    "authed": {
+     "description": "Whether this request carries a valid wake cookie. Only on /__devbox/status.",
+     "type": "boolean"
+    },
+    "vm": {
+     "$ref": "#/$defs/VmState"
+    },
+    "phase": {
+     "$ref": "#/$defs/GatewayPhase"
+    },
+    "idle": {
+     "$ref": "#/$defs/GatewayIdle"
+    },
+    "lastStop": {
+     "$ref": "#/$defs/LastStop"
+    },
+    "wake": {
+     "$ref": "#/$defs/Wake"
+    },
+    "typical": {
+     "description": "Typical phase durations, from past wakes.",
+     "type": "object",
+     "required": [
+      "restore",
+      "cold"
+     ],
+     "properties": {
+      "restore": {
+       "$ref": "#/$defs/WakeEstimate"
+      },
+      "cold": {
+       "$ref": "#/$defs/WakeEstimate"
+      }
+     }
+    }
+   }
+  },
+  "HostConfig": {
+   "description": "Host configuration, /etc/devbox/devbox.toml: written by `devbox up`, read by the CLI and the gateway.",
+   "type": "object",
+   "required": [
+    "version",
+    "domain",
+    "vm"
+   ],
+   "properties": {
+    "version": {
+     "description": "Version of this file's format.",
+     "type": "integer"
+    },
+    "instance": {
+     "description": "Incus instance name.",
+     "type": "string",
+     "format": "devbox-name",
+     "default": "devbox"
+    },
+    "domain": {
+     "description": "Domain the devbox is served under.",
+     "type": "string",
+     "format": "hostname"
+    },
+    "hosts": {
+     "description": "Public hostnames.",
+     "type": "object",
+     "required": [],
+     "properties": {
+      "code": {
+       "description": "Editor hostname. Default: `code.<domain>`.",
+       "type": "string",
+       "format": "hostname"
+      },
+      "agents": {
+       "description": "Agents app hostname. Default: `agents.<domain>`.",
+       "type": "string",
+       "format": "hostname"
+      }
+     },
+     "default": {}
+    },
+    "vm": {
+     "description": "How the gateway reaches the VM.",
+     "type": "object",
+     "required": [
+      "address"
+     ],
+     "properties": {
+      "address": {
+       "description": "Static address of the VM on the Incus bridge.",
+       "type": "string",
+       "format": "ipv4"
+      },
+      "code_port": {
+       "description": "code-server port.",
+       "type": "integer",
+       "format": "uint16",
+       "minimum": 1,
+       "default": 8080
+      },
+      "hub_port": {
+       "description": "Hub port.",
+       "type": "integer",
+       "format": "uint16",
+       "minimum": 1,
+       "default": 8090
+      },
+      "ssh_port": {
+       "description": "sshd port.",
+       "type": "integer",
+       "format": "uint16",
+       "minimum": 1,
+       "default": 22
+      }
+     }
+    },
+    "sleep": {
+     "description": "When the VM is put to sleep.",
+     "type": "object",
+     "required": [],
+     "properties": {
+      "idle": {
+       "description": "Idle time after which the VM sleeps.",
+       "type": "string",
+       "format": "devbox-duration",
+       "default": "15m"
+      },
+      "min_up": {
+       "description": "Minimum time the VM stays up after a wake.",
+       "type": "string",
+       "format": "devbox-duration",
+       "default": "5m"
+      },
+      "mode": {
+       "description": "`stateful` saves memory, `shutdown` stops cleanly, `off` never sleeps.",
+       "type": "string",
+       "enum": [
+        "stateful",
+        "shutdown",
+        "off"
+       ],
+       "default": "stateful"
+      },
+      "activity_bytes_per_min": {
+       "description": "Client bytes per minute that count as activity.",
+       "type": "integer",
+       "minimum": 0,
+       "default": 4096
+      }
+     },
+     "default": {}
+    },
+    "gateway": {
+     "description": "Gateway listeners and timing.",
+     "type": "object",
+     "required": [],
+     "properties": {
+      "listen": {
+       "description": "HTTP listen address.",
+       "type": "string",
+       "format": "devbox-listen",
+       "default": ":8080"
+      },
+      "ssh_listen": {
+       "description": "SSH proxy listen address; empty disables SSH proxying.",
+       "type": "string",
+       "format": "devbox-listen-optional",
+       "default": ":2222"
+      },
+      "sync_wait": {
+       "description": "How long a wake waits for the repo sync before going on without it.",
+       "type": "string",
+       "format": "devbox-duration",
+       "default": "90s"
+      }
+     },
+     "default": {}
+    },
+    "routing": {
+     "description": "How public traffic reaches the gateway.",
+     "type": "object",
+     "required": [],
+     "properties": {
+      "provider": {
+       "description": "`traefik-file` writes a Traefik dynamic file; `none` leaves routing to the owner.",
+       "type": "string",
+       "enum": [
+        "traefik-file",
+        "none"
+       ],
+       "default": "traefik-file"
+      },
+      "file": {
+       "description": "The Traefik dynamic file devbox owns.",
+       "type": "string",
+       "format": "devbox-abspath",
+       "default": "/etc/dokploy/traefik/dynamic/devbox.yml"
+      },
+      "entrypoint": {
+       "description": "Traefik entrypoint for the routes.",
+       "type": "string",
+       "format": "devbox-nonempty",
+       "default": "websecure"
+      },
+      "service_url": {
+       "description": "URL Traefik uses to reach the gateway.",
+       "type": "string",
+       "format": "devbox-url",
+       "default": "http://devbox-gateway:8080"
+      }
+     },
+     "default": {}
+    },
+    "deploy": {
+     "description": "Continuous deployment of the hub.",
+     "type": "object",
+     "required": [],
+     "properties": {
+      "repo": {
+       "description": "GitHub repository whose deployments the VM installs. Absent: the hub does not update itself.",
+       "type": "string",
+       "format": "devbox-repo"
+      },
+      "hub_environment": {
+       "description": "GitHub environment of the hub's deployments.",
+       "type": "string",
+       "format": "devbox-nonempty",
+       "default": "agents-hub"
+      },
+      "wake_to_deploy": {
+       "description": "Wake a sleeping VM to install a new hub build.",
+       "type": "boolean",
+       "default": false
+      }
+     },
+     "default": {}
+    }
+   }
+  },
+  "HostSecrets": {
+   "description": "Host secrets, /etc/devbox/secrets.toml (mode 0600).",
+   "type": "object",
+   "required": [
+    "version",
+    "wake_password_hash",
+    "cookie_secret",
+    "hub_token"
+   ],
+   "properties": {
+    "version": {
+     "description": "Version of this file's format.",
+     "type": "integer"
+    },
+    "wake_password_hash": {
+     "description": "argon2id hash (PHC string) of the password that wakes the VM.",
+     "format": "devbox-phc",
+     "type": "string",
+     "x-rust-type": {
+      "crate": "devbox-core",
+      "version": "*",
+      "path": "devbox_core::secret::Secret"
+     },
+     "goJSONSchema": {
+      "type": "secret.Secret",
+      "imports": [
+       "github.com/prabhask5/devbox/internal/secret"
+      ]
+     }
+    },
+    "cookie_secret": {
+     "description": "Key that signs wake cookies.",
+     "format": "devbox-nonempty",
+     "type": "string",
+     "x-rust-type": {
+      "crate": "devbox-core",
+      "version": "*",
+      "path": "devbox_core::secret::Secret"
+     },
+     "goJSONSchema": {
+      "type": "secret.Secret",
+      "imports": [
+       "github.com/prabhask5/devbox/internal/secret"
+      ]
+     }
+    },
+    "hub_token": {
+     "description": "Bearer token the gateway presents to the hub.",
+     "format": "devbox-nonempty",
+     "type": "string",
+     "x-rust-type": {
+      "crate": "devbox-core",
+      "version": "*",
+      "path": "devbox_core::secret::Secret"
+     },
+     "goJSONSchema": {
+      "type": "secret.Secret",
+      "imports": [
+       "github.com/prabhask5/devbox/internal/secret"
+      ]
+     }
+    }
+   }
+  },
+  "HubConfig": {
+   "description": "Hub configuration, ~/.config/devbox/hub.toml in the VM.",
+   "type": "object",
+   "required": [
+    "version",
+    "hosts"
+   ],
+   "properties": {
+    "version": {
+     "description": "Version of this file's format.",
+     "type": "integer"
+    },
+    "listen": {
+     "description": "Listen address for the app and the gateway API.",
+     "type": "string",
+     "format": "devbox-listen",
+     "default": ":8090"
+    },
+    "hosts": {
+     "description": "Public hostnames, for links the hub hands out.",
+     "type": "object",
+     "required": [
+      "code",
+      "agents"
+     ],
+     "properties": {
+      "code": {
+       "description": "Editor hostname.",
+       "type": "string",
+       "format": "hostname"
+      },
+      "agents": {
+       "description": "Agents app hostname.",
+       "type": "string",
+       "format": "hostname"
+      }
+     }
+    },
+    "tmux": {
+     "description": "The tmux server that holds agent sessions.",
+     "type": "object",
+     "required": [],
+     "properties": {
+      "socket": {
+       "description": "tmux socket name (`tmux -L`).",
+       "type": "string",
+       "format": "devbox-name",
+       "default": "devbox"
+      }
+     },
+     "default": {}
+    },
+    "deploy": {
+     "description": "Self-update from GitHub Deployments.",
+     "type": "object",
+     "required": [],
+     "properties": {
+      "repo": {
+       "description": "GitHub repository whose deployments the VM installs. Absent: the hub does not update itself.",
+       "type": "string",
+       "format": "devbox-repo"
+      },
+      "environment": {
+       "description": "GitHub environment of the hub's deployments.",
+       "type": "string",
+       "format": "devbox-nonempty",
+       "default": "agents-hub"
+      }
+     },
+     "default": {}
+    }
+   }
+  },
+  "HubIdle": {
+   "description": "Whether anything is keeping the VM busy.",
+   "type": "object",
+   "required": [
+    "busy",
+    "reasons",
+    "idleSeconds"
+   ],
+   "properties": {
+    "busy": {
+     "description": "Something is running that must not be interrupted by sleep.",
+     "type": "boolean"
+    },
+    "reasons": {
+     "description": "One short sentence per reason the hub is busy.",
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "idleSeconds": {
+     "description": "Seconds since the hub was last busy, from a monotonic clock.",
+     "type": "integer"
+    }
+   }
+  },
+  "HubSecrets": {
+   "description": "Hub secrets, ~/.config/devbox/hub.secrets.toml in the VM (mode 0600).",
+   "type": "object",
+   "required": [
+    "version",
+    "app_password_hash",
+    "cookie_secret",
+    "hub_token"
+   ],
+   "properties": {
+    "version": {
+     "description": "Version of this file's format.",
+     "type": "integer"
+    },
+    "app_password_hash": {
+     "description": "argon2id hash (PHC string) of the agents app password.",
+     "format": "devbox-phc",
+     "type": "string",
+     "x-rust-type": {
+      "crate": "devbox-core",
+      "version": "*",
+      "path": "devbox_core::secret::Secret"
+     },
+     "goJSONSchema": {
+      "type": "secret.Secret",
+      "imports": [
+       "github.com/prabhask5/devbox/internal/secret"
+      ]
+     }
+    },
+    "cookie_secret": {
+     "description": "Key that signs app session cookies.",
+     "format": "devbox-nonempty",
+     "type": "string",
+     "x-rust-type": {
+      "crate": "devbox-core",
+      "version": "*",
+      "path": "devbox_core::secret::Secret"
+     },
+     "goJSONSchema": {
+      "type": "secret.Secret",
+      "imports": [
+       "github.com/prabhask5/devbox/internal/secret"
+      ]
+     }
+    },
+    "hub_token": {
+     "description": "Bearer token the gateway must present.",
+     "format": "devbox-nonempty",
+     "type": "string",
+     "x-rust-type": {
+      "crate": "devbox-core",
+      "version": "*",
+      "path": "devbox_core::secret::Secret"
+     },
+     "goJSONSchema": {
+      "type": "secret.Secret",
+      "imports": [
+       "github.com/prabhask5/devbox/internal/secret"
+      ]
+     }
+    },
+    "vapid_public_key": {
+     "description": "Web push application server key, base64url; written by the hub on first run.",
+     "type": "string",
+     "format": "devbox-nonempty"
+    },
+    "vapid_private_key": {
+     "description": "Web push private key, base64url; written by the hub on first run.",
+     "format": "devbox-nonempty",
+     "type": "string",
+     "x-rust-type": {
+      "crate": "devbox-core",
+      "version": "*",
+      "path": "devbox_core::secret::Secret"
+     },
+     "goJSONSchema": {
+      "type": "secret.Secret",
+      "imports": [
+       "github.com/prabhask5/devbox/internal/secret"
+      ]
+     }
+    },
+    "github_token": {
+     "description": "Token for reading deployments and reporting their status.",
+     "format": "devbox-nonempty",
+     "type": "string",
+     "x-rust-type": {
+      "crate": "devbox-core",
+      "version": "*",
+      "path": "devbox_core::secret::Secret"
+     },
+     "goJSONSchema": {
+      "type": "secret.Secret",
+      "imports": [
+       "github.com/prabhask5/devbox/internal/secret"
+      ]
+     }
+    }
+   }
+  },
+  "HubState": {
+   "description": "Everything the agents app shows, pushed over /api/stream on every change.",
+   "type": "object",
+   "required": [
+    "v",
+    "serverNow",
+    "sessions",
+    "devbox",
+    "adapters",
+    "commonKeys",
+    "pushDevices"
+   ],
+   "properties": {
+    "v": {
+     "description": "Contract version of this message.",
+     "type": "integer"
+    },
+    "serverNow": {
+     "description": "The hub's clock (Unix time, ms).",
+     "type": "integer"
+    },
+    "sessions": {
+     "description": "Every session, most recently changed first.",
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/Session"
+     }
+    },
+    "devbox": {
+     "$ref": "#/$defs/HubStatus"
+    },
+    "adapters": {
+     "description": "The agents the hub knows.",
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/AdapterInfo"
+     }
+    },
+    "commonKeys": {
+     "description": "Keys offered for every terminal session.",
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/AnswerKey"
+     }
+    },
+    "vapidPublicKey": {
+     "description": "Web push application server key, base64url.",
+     "type": "string"
+    },
+    "pushDevices": {
+     "description": "Devices subscribed to notifications.",
+     "type": "integer"
+    }
+   }
+  },
+  "HubStatus": {
+   "description": "What the hub tells the gateway at GET /devbox/status: whether the VM may sleep, sync progress, versions.",
+   "type": "object",
+   "required": [
+    "v",
+    "version",
+    "uptime",
+    "idle",
+    "sync"
+   ],
+   "properties": {
+    "v": {
+     "description": "Contract version of this message.",
+     "type": "integer"
+    },
+    "version": {
+     "description": "Commit the hub was built from.",
+     "type": "string"
+    },
+    "uptime": {
+     "description": "Seconds since the hub started.",
+     "type": "integer"
+    },
+    "idle": {
+     "$ref": "#/$defs/HubIdle"
+    },
+    "sync": {
+     "$ref": "#/$defs/SyncState"
+    },
+    "deploy": {
+     "$ref": "#/$defs/DeployState"
+    }
+   }
+  },
+  "HubWake": {
+   "description": "What the gateway posts to the hub (POST /devbox/wake) once the VM is up.",
+   "type": "object",
+   "required": [
+    "v",
+    "now",
+    "kind"
+   ],
+   "properties": {
+    "v": {
+     "description": "Contract version of this message.",
+     "type": "integer"
+    },
+    "now": {
+     "description": "The host's clock, to correct the guest clock after a restore (Unix time, ms).",
+     "type": "integer"
+    },
+    "kind": {
+     "$ref": "#/$defs/WakeKind"
+    }
+   }
+  },
+  "HubWakeResponse": {
+   "description": "The hub's answer to POST /devbox/wake.",
+   "type": "object",
+   "required": [
+    "v",
+    "runId"
+   ],
+   "properties": {
+    "v": {
+     "description": "Contract version of this message.",
+     "type": "integer"
+    },
+    "runId": {
+     "description": "The sync run to wait for.",
+     "type": "string"
+    }
+   }
+  },
+  "LastStop": {
+   "description": "One sleep of the VM.",
+   "type": "object",
+   "required": [
+    "at",
+    "reason",
+    "mode",
+    "ms"
+   ],
+   "properties": {
+    "at": {
+     "description": "When the VM stopped (Unix time, ms).",
+     "type": "integer"
+    },
+    "reason": {
+     "description": "Why, e.g. `idle 15m`.",
+     "type": "string"
+    },
+    "mode": {
+     "description": "How: `stateful`, `shutdown`, or `shutdown (stateful failed)`.",
+     "type": "string"
+    },
+    "ms": {
+     "description": "How long stopping took, in ms.",
+     "type": "integer"
+    }
+   }
+  },
+  "PhaseDurations": {
+   "description": "Milliseconds per wake phase.",
+   "type": "object",
+   "required": [
+    "start",
+    "code",
+    "hub",
+    "sync"
+   ],
+   "properties": {
+    "start": {
+     "description": "The `start` phase.",
+     "type": "integer"
+    },
+    "code": {
+     "description": "The `code` phase.",
+     "type": "integer"
+    },
+    "hub": {
+     "description": "The `hub` phase.",
+     "type": "integer"
+    },
+    "sync": {
+     "description": "The `sync` phase.",
+     "type": "integer"
+    }
+   }
+  },
+  "PhaseTiming": {
+   "description": "When one wake phase ran.",
+   "type": "object",
+   "required": [
+    "start"
+   ],
+   "properties": {
+    "start": {
+     "description": "When the phase began (Unix time, ms).",
+     "type": "integer"
+    },
+    "end": {
+     "description": "When it finished; absent while running (Unix time, ms).",
+     "type": "integer"
+    },
+    "skipped": {
+     "description": "The phase timed out and the wake went on without it.",
+     "type": "boolean"
+    }
+   }
+  },
+  "PushPayload": {
+   "description": "A notification as the service worker receives it.",
+   "type": "object",
+   "required": [
+    "v",
+    "title",
+    "body",
+    "url",
+    "tag",
+    "badge"
+   ],
+   "properties": {
+    "v": {
+     "description": "Contract version of this message.",
+     "type": "integer"
+    },
+    "title": {
+     "description": "Notification title.",
+     "type": "string"
+    },
+    "body": {
+     "description": "Notification text.",
+     "type": "string"
+    },
+    "url": {
+     "description": "Where a tap goes, e.g. `/#/s/a1b2c3d4`.",
+     "type": "string"
+    },
+    "tag": {
+     "description": "Notifications with the same tag replace each other.",
+     "type": "string"
+    },
+    "badge": {
+     "description": "App badge count: sessions that need input or are unread.",
+     "type": "integer"
+    }
+   }
+  },
+  "ScreenFrame": {
+   "description": "One frame of a session's screen, pushed over /api/sessions/:id/screen.",
+   "type": "object",
+   "required": [
+    "v"
+   ],
+   "properties": {
+    "v": {
+     "description": "Contract version of this message.",
+     "type": "integer"
+    },
+    "text": {
+     "description": "Scrollback and screen as lines with ANSI SGR styling; absent when there is no screen to show.",
+     "type": "string"
+    },
+    "cols": {
+     "description": "Columns of the tmux window.",
+     "type": "integer"
+    },
+    "rows": {
+     "description": "Rows of the tmux window.",
+     "type": "integer"
+    },
+    "reason": {
+     "description": "Why there is no screen.",
+     "type": "string",
+     "enum": [
+      "external",
+      "gone"
+     ]
+    }
+   }
+  },
+  "Session": {
+   "description": "One agent session: a tmux session (or an agent seen only through its hooks) and what the hub knows about it.",
+   "type": "object",
+   "required": [
+    "v",
+    "id",
+    "name",
+    "agent",
+    "kind",
+    "cwd",
+    "createdAt",
+    "state",
+    "stateSince",
+    "title",
+    "unread",
+    "adopted",
+    "attached",
+    "viewers"
+   ],
+   "properties": {
+    "v": {
+     "description": "Contract version of this message.",
+     "type": "integer"
+    },
+    "id": {
+     "description": "Eight hex characters.",
+     "type": "string"
+    },
+    "name": {
+     "description": "Unique display name, also the tmux session name when created by the hub.",
+     "type": "string"
+    },
+    "tmux": {
+     "description": "tmux session name; absent for external sessions.",
+     "type": "string"
+    },
+    "agent": {
+     "description": "Adapter id.",
+     "type": "string"
+    },
+    "kind": {
+     "description": "`tmux`: a terminal the hub can show and type into. `external`: seen only through hook events. `chat`: reserved.",
+     "type": "string",
+     "enum": [
+      "tmux",
+      "external",
+      "chat"
+     ]
+    },
+    "cwd": {
+     "description": "Working directory.",
+     "type": "string"
+    },
+    "repo": {
+     "description": "Repository name when `cwd` is inside `~/code/<repo>`.",
+     "type": "string"
+    },
+    "createdAt": {
+     "description": "When the session was created or first seen (Unix time, ms).",
+     "type": "integer"
+    },
+    "state": {
+     "$ref": "#/$defs/SessionState"
+    },
+    "stateSince": {
+     "description": "When `state` last changed (Unix time, ms).",
+     "type": "integer"
+    },
+    "title": {
+     "description": "Short description, from the first prompt; may be empty.",
+     "type": "string"
+    },
+    "lastPrompt": {
+     "description": "The owner's last prompt.",
+     "type": "string"
+    },
+    "lastTool": {
+     "description": "The tool the agent last used.",
+     "type": "string"
+    },
+    "lastReply": {
+     "description": "The agent's last reply.",
+     "type": "string"
+    },
+    "waitingFor": {
+     "description": "What the agent is asking, while `state` is `needs_input`.",
+     "type": "string"
+    },
+    "agentSessionId": {
+     "description": "The agent's own session id.",
+     "type": "string"
+    },
+    "transcriptPath": {
+     "description": "Where the agent keeps its transcript.",
+     "type": "string"
+    },
+    "turnStartedAt": {
+     "description": "When the current turn started (Unix time, ms).",
+     "type": "integer"
+    },
+    "lastEventAt": {
+     "description": "When the last hook event arrived (Unix time, ms).",
+     "type": "integer"
+    },
+    "unread": {
+     "description": "Something happened that the owner has not looked at.",
+     "type": "boolean"
+    },
+    "adopted": {
+     "description": "The tmux session was not created by the hub.",
+     "type": "boolean"
+    },
+    "attached": {
+     "description": "A tmux client is attached.",
+     "type": "boolean"
+    },
+    "size": {
+     "description": "Size of the tmux window.",
+     "type": "object",
+     "required": [
+      "cols",
+      "rows"
+     ],
+     "properties": {
+      "cols": {
+       "description": "Columns.",
+       "type": "integer"
+      },
+      "rows": {
+       "description": "Rows.",
+       "type": "integer"
+      }
+     }
+    },
+    "viewers": {
+     "description": "Open screen streams from the app.",
+     "type": "integer"
+    }
+   }
+  },
+  "SessionState": {
+   "description": "Where a session is in its lifecycle.",
+   "type": "string",
+   "enum": [
+    "starting",
+    "working",
+    "needs_input",
+    "idle",
+    "exited",
+    "error",
+    "gone",
+    "ended"
+   ]
+  },
+  "SyncProgress": {
+   "description": "One line of `devbox sync --json` (NDJSON). `start` carries `total`; `begin` carries `name`; `repo` carries `name`, `status` and `detail`; `done` ends the run.",
+   "type": "object",
+   "required": [
+    "v",
+    "type"
+   ],
+   "properties": {
+    "v": {
+     "description": "Contract version of this message.",
+     "type": "integer"
+    },
+    "type": {
+     "description": "What this line reports.",
+     "type": "string",
+     "enum": [
+      "start",
+      "begin",
+      "repo",
+      "done"
+     ]
+    },
+    "total": {
+     "description": "Repositories in this run.",
+     "type": "integer"
+    },
+    "name": {
+     "description": "Repository directory name, or `fetching` while all repositories are fetched.",
+     "type": "string"
+    },
+    "status": {
+     "$ref": "#/$defs/SyncStatus"
+    },
+    "detail": {
+     "description": "One line for the owner.",
+     "type": "string"
+    }
+   }
+  },
+  "SyncResult": {
+   "description": "Outcome of syncing one repository.",
+   "type": "object",
+   "required": [
+    "name",
+    "status",
+    "detail"
+   ],
+   "properties": {
+    "name": {
+     "description": "Repository directory name.",
+     "type": "string"
+    },
+    "status": {
+     "$ref": "#/$defs/SyncStatus"
+    },
+    "detail": {
+     "description": "One line for the owner, e.g. `pulled 3`.",
+     "type": "string"
+    }
+   }
+  },
+  "SyncState": {
+   "description": "Progress of a repo sync run.",
+   "type": "object",
+   "required": [
+    "state",
+    "total",
+    "done",
+    "results"
+   ],
+   "properties": {
+    "runId": {
+     "description": "Identifies the run; absent before the first run.",
+     "type": "string"
+    },
+    "state": {
+     "description": "Whether a run is in progress.",
+     "type": "string",
+     "enum": [
+      "idle",
+      "running",
+      "done"
+     ]
+    },
+    "startedAt": {
+     "description": "When the run started (Unix time, ms).",
+     "type": "integer"
+    },
+    "finishedAt": {
+     "description": "When the run finished (Unix time, ms).",
+     "type": "integer"
+    },
+    "total": {
+     "description": "Repositories in this run.",
+     "type": "integer"
+    },
+    "done": {
+     "description": "Repositories finished so far.",
+     "type": "integer"
+    },
+    "current": {
+     "description": "Repository being synced now.",
+     "type": "string"
+    },
+    "results": {
+     "description": "Outcome per finished repository.",
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/SyncResult"
+     }
+    },
+    "reason": {
+     "description": "What started the run, e.g. `wake (restore)`.",
+     "type": "string"
+    }
+   }
+  },
+  "SyncStatus": {
+   "description": "Outcome of syncing one repository.",
+   "type": "string",
+   "enum": [
+    "current",
+    "updated",
+    "cloned",
+    "conflict",
+    "skipped",
+    "error"
+   ]
+  },
+  "VmState": {
+   "description": "State of the VM as the gateway sees it.",
+   "type": "string",
+   "enum": [
+    "unknown",
+    "stopped",
+    "running",
+    "error"
+   ]
+  },
+  "Wake": {
+   "description": "One wake of the VM.",
+   "type": "object",
+   "required": [
+    "id",
+    "kind",
+    "reason",
+    "requestedAt",
+    "phases",
+    "done",
+    "eta",
+    "log"
+   ],
+   "properties": {
+    "id": {
+     "description": "Identifies this wake, e.g. for the skip cookie.",
+     "type": "string"
+    },
+    "kind": {
+     "$ref": "#/$defs/WakeKind"
+    },
+    "reason": {
+     "description": "What asked for the wake.",
+     "type": "string"
+    },
+    "requestedAt": {
+     "description": "When the wake was requested (Unix time, ms).",
+     "type": "integer"
+    },
+    "current": {
+     "$ref": "#/$defs/WakePhaseId"
+    },
+    "phases": {
+     "description": "Timing of each phase started so far.",
+     "type": "object",
+     "required": [],
+     "properties": {
+      "start": {
+       "$ref": "#/$defs/PhaseTiming"
+      },
+      "code": {
+       "$ref": "#/$defs/PhaseTiming"
+      },
+      "hub": {
+       "$ref": "#/$defs/PhaseTiming"
+      },
+      "sync": {
+       "$ref": "#/$defs/PhaseTiming"
+      }
+     }
+    },
+    "done": {
+     "description": "The wake finished successfully.",
+     "type": "boolean"
+    },
+    "error": {
+     "description": "Why the wake failed.",
+     "type": "string"
+    },
+    "eta": {
+     "$ref": "#/$defs/WakeEstimate"
+    },
+    "log": {
+     "description": "The last lines of the wake log.",
+     "type": "array",
+     "items": {
+      "type": "string"
+     }
+    },
+    "sync": {
+     "$ref": "#/$defs/SyncState"
+    }
+   }
+  },
+  "WakeEstimate": {
+   "description": "Expected phase durations for one kind of wake.",
+   "type": "object",
+   "required": [
+    "phases",
+    "samples"
+   ],
+   "properties": {
+    "phases": {
+     "$ref": "#/$defs/PhaseDurations"
+    },
+    "samples": {
+     "description": "How many recorded wakes the medians come from.",
+     "type": "integer"
+    }
+   }
+  },
+  "WakeKind": {
+   "description": "How the VM comes up: from saved memory, from a cold boot, or it was already running.",
+   "type": "string",
+   "enum": [
+    "restore",
+    "cold",
+    "attach"
+   ]
+  },
+  "WakePhaseId": {
+   "description": "A phase of a wake.",
+   "type": "string",
+   "enum": [
+    "start",
+    "code",
+    "hub",
+    "sync"
+   ]
+  }
+ }
+}

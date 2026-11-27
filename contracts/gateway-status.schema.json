@@ -1,0 +1,329 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "gateway-status.schema.json",
+  "title": "GatewayStatus",
+  "x-version": 1,
+  "description": "State of the gateway and the VM, served at /__devbox/status and pushed over /__devbox/events.",
+  "type": "object",
+  "required": [
+    "v",
+    "version",
+    "serverNow",
+    "configured",
+    "vm",
+    "phase",
+    "typical"
+  ],
+  "properties": {
+    "v": {
+      "description": "Contract version of this message.",
+      "type": "integer"
+    },
+    "version": {
+      "description": "Commit the gateway was built from.",
+      "type": "string"
+    },
+    "serverNow": {
+      "description": "The gateway's clock, so pages can compute elapsed times (Unix time, ms).",
+      "type": "integer"
+    },
+    "configured": {
+      "description": "False until `devbox up` has written the host config.",
+      "type": "boolean"
+    },
+    "authed": {
+      "description": "Whether this request carries a valid wake cookie. Only on /__devbox/status.",
+      "type": "boolean"
+    },
+    "vm": {
+      "description": "State of the VM.",
+      "$ref": "#/$defs/VmState"
+    },
+    "phase": {
+      "description": "What the gateway is doing with the VM.",
+      "$ref": "#/$defs/GatewayPhase"
+    },
+    "idle": {
+      "description": "Idle accounting from the last poll while the VM runs.",
+      "$ref": "#/$defs/GatewayIdle"
+    },
+    "lastStop": {
+      "description": "The last time the VM was put to sleep.",
+      "$ref": "#/$defs/LastStop"
+    },
+    "wake": {
+      "description": "The wake in progress or just finished.",
+      "$ref": "#/$defs/Wake"
+    },
+    "typical": {
+      "description": "Typical phase durations, from past wakes.",
+      "type": "object",
+      "required": [
+        "restore",
+        "cold"
+      ],
+      "properties": {
+        "restore": {
+          "description": "Waking from saved memory.",
+          "$ref": "#/$defs/WakeEstimate"
+        },
+        "cold": {
+          "description": "Booting from a clean stop.",
+          "$ref": "#/$defs/WakeEstimate"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "VmState": {
+      "description": "State of the VM as the gateway sees it.",
+      "type": "string",
+      "enum": [
+        "unknown",
+        "stopped",
+        "running",
+        "error"
+      ]
+    },
+    "GatewayPhase": {
+      "description": "What the gateway is doing with the VM.",
+      "type": "string",
+      "enum": [
+        "idle",
+        "waking",
+        "stopping"
+      ]
+    },
+    "WakeKind": {
+      "description": "How the VM comes up: from saved memory, from a cold boot, or it was already running.",
+      "type": "string",
+      "enum": [
+        "restore",
+        "cold",
+        "attach"
+      ]
+    },
+    "WakePhaseId": {
+      "description": "A phase of a wake.",
+      "type": "string",
+      "enum": [
+        "start",
+        "code",
+        "hub",
+        "sync"
+      ]
+    },
+    "PhaseDurations": {
+      "description": "Milliseconds per wake phase.",
+      "type": "object",
+      "required": [
+        "start",
+        "code",
+        "hub",
+        "sync"
+      ],
+      "properties": {
+        "start": {
+          "description": "The `start` phase.",
+          "type": "integer"
+        },
+        "code": {
+          "description": "The `code` phase.",
+          "type": "integer"
+        },
+        "hub": {
+          "description": "The `hub` phase.",
+          "type": "integer"
+        },
+        "sync": {
+          "description": "The `sync` phase.",
+          "type": "integer"
+        }
+      }
+    },
+    "PhaseTiming": {
+      "description": "When one wake phase ran.",
+      "type": "object",
+      "required": [
+        "start"
+      ],
+      "properties": {
+        "start": {
+          "description": "When the phase began (Unix time, ms).",
+          "type": "integer"
+        },
+        "end": {
+          "description": "When it finished; absent while running (Unix time, ms).",
+          "type": "integer"
+        },
+        "skipped": {
+          "description": "The phase timed out and the wake went on without it.",
+          "type": "boolean"
+        }
+      }
+    },
+    "WakeEstimate": {
+      "description": "Expected phase durations for one kind of wake.",
+      "type": "object",
+      "required": [
+        "phases",
+        "samples"
+      ],
+      "properties": {
+        "phases": {
+          "description": "Median of the recorded wakes, or the defaults without history.",
+          "$ref": "#/$defs/PhaseDurations"
+        },
+        "samples": {
+          "description": "How many recorded wakes the medians come from.",
+          "type": "integer"
+        }
+      }
+    },
+    "GatewayIdle": {
+      "description": "How long the devbox has been idle and why.",
+      "type": "object",
+      "required": [
+        "idleMs",
+        "gatewayIdleMs",
+        "limitMs",
+        "hubReasons"
+      ],
+      "properties": {
+        "idleMs": {
+          "description": "The smaller of the gateway's and the hub's idle time, in ms.",
+          "type": "integer"
+        },
+        "gatewayIdleMs": {
+          "description": "Time since the last activity through the gateway, in ms.",
+          "type": "integer"
+        },
+        "hubIdleMs": {
+          "description": "Time the hub reports being idle, in ms; absent when the hub is unreachable.",
+          "type": "integer"
+        },
+        "limitMs": {
+          "description": "Idle time after which the VM sleeps, in ms.",
+          "type": "integer"
+        },
+        "hubReasons": {
+          "description": "Why the hub is busy, if it is.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "LastStop": {
+      "description": "One sleep of the VM.",
+      "type": "object",
+      "required": [
+        "at",
+        "reason",
+        "mode",
+        "ms"
+      ],
+      "properties": {
+        "at": {
+          "description": "When the VM stopped (Unix time, ms).",
+          "type": "integer"
+        },
+        "reason": {
+          "description": "Why, e.g. `idle 15m`.",
+          "type": "string"
+        },
+        "mode": {
+          "description": "How: `stateful`, `shutdown`, or `shutdown (stateful failed)`.",
+          "type": "string"
+        },
+        "ms": {
+          "description": "How long stopping took, in ms.",
+          "type": "integer"
+        }
+      }
+    },
+    "Wake": {
+      "description": "One wake of the VM.",
+      "type": "object",
+      "required": [
+        "id",
+        "kind",
+        "reason",
+        "requestedAt",
+        "phases",
+        "done",
+        "eta",
+        "log"
+      ],
+      "properties": {
+        "id": {
+          "description": "Identifies this wake, e.g. for the skip cookie.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "How the VM comes up.",
+          "$ref": "#/$defs/WakeKind"
+        },
+        "reason": {
+          "description": "What asked for the wake.",
+          "type": "string"
+        },
+        "requestedAt": {
+          "description": "When the wake was requested (Unix time, ms).",
+          "type": "integer"
+        },
+        "current": {
+          "description": "The phase running now; absent once done or failed.",
+          "$ref": "#/$defs/WakePhaseId"
+        },
+        "phases": {
+          "description": "Timing of each phase started so far.",
+          "type": "object",
+          "required": [],
+          "properties": {
+            "start": {
+              "description": "The `start` phase.",
+              "$ref": "#/$defs/PhaseTiming"
+            },
+            "code": {
+              "description": "The `code` phase.",
+              "$ref": "#/$defs/PhaseTiming"
+            },
+            "hub": {
+              "description": "The `hub` phase.",
+              "$ref": "#/$defs/PhaseTiming"
+            },
+            "sync": {
+              "description": "The `sync` phase.",
+              "$ref": "#/$defs/PhaseTiming"
+            }
+          }
+        },
+        "done": {
+          "description": "The wake finished successfully.",
+          "type": "boolean"
+        },
+        "error": {
+          "description": "Why the wake failed.",
+          "type": "string"
+        },
+        "eta": {
+          "description": "Expected durations for this kind of wake.",
+          "$ref": "#/$defs/WakeEstimate"
+        },
+        "log": {
+          "description": "The last lines of the wake log.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "sync": {
+          "description": "Repo sync progress during the `sync` phase.",
+          "$ref": "hub-status.schema.json#/$defs/SyncState"
+        }
+      }
+    }
+  }
+}

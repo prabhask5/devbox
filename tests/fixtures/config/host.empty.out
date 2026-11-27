@@ -1,0 +1,3 @@
+devbox.toml: domain: required
+devbox.toml: version: required
+devbox.toml: vm: required

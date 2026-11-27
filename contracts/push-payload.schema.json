@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "push-payload.schema.json",
+  "title": "PushPayload",
+  "x-version": 1,
+  "description": "A notification as the service worker receives it.",
+  "type": "object",
+  "required": [
+    "v",
+    "title",
+    "body",
+    "url",
+    "tag",
+    "badge"
+  ],
+  "properties": {
+    "v": {
+      "description": "Contract version of this message.",
+      "type": "integer"
+    },
+    "title": {
+      "description": "Notification title.",
+      "type": "string"
+    },
+    "body": {
+      "description": "Notification text.",
+      "type": "string"
+    },
+    "url": {
+      "description": "Where a tap goes, e.g. `/#/s/a1b2c3d4`.",
+      "type": "string"
+    },
+    "tag": {
+      "description": "Notifications with the same tag replace each other.",
+      "type": "string"
+    },
+    "badge": {
+      "description": "App badge count: sessions that need input or are unread.",
+      "type": "integer"
+    }
+  }
+}

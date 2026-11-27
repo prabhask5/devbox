@@ -1,0 +1,204 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "host-config.schema.json",
+  "title": "HostConfig",
+  "x-version": 1,
+  "description": "Host configuration, /etc/devbox/devbox.toml: written by `devbox up`, read by the CLI and the gateway.",
+  "type": "object",
+  "required": [
+    "version",
+    "domain",
+    "vm"
+  ],
+  "properties": {
+    "version": {
+      "description": "Version of this file's format.",
+      "type": "integer"
+    },
+    "instance": {
+      "description": "Incus instance name.",
+      "type": "string",
+      "format": "devbox-name",
+      "default": "devbox"
+    },
+    "domain": {
+      "description": "Domain the devbox is served under.",
+      "type": "string",
+      "format": "hostname"
+    },
+    "hosts": {
+      "description": "Public hostnames.",
+      "type": "object",
+      "required": [],
+      "properties": {
+        "code": {
+          "description": "Editor hostname. Default: `code.<domain>`.",
+          "type": "string",
+          "format": "hostname"
+        },
+        "agents": {
+          "description": "Agents app hostname. Default: `agents.<domain>`.",
+          "type": "string",
+          "format": "hostname"
+        }
+      },
+      "default": {}
+    },
+    "vm": {
+      "description": "How the gateway reaches the VM.",
+      "type": "object",
+      "required": [
+        "address"
+      ],
+      "properties": {
+        "address": {
+          "description": "Static address of the VM on the Incus bridge.",
+          "type": "string",
+          "format": "ipv4"
+        },
+        "code_port": {
+          "description": "code-server port.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 1,
+          "default": 8080
+        },
+        "hub_port": {
+          "description": "Hub port.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 1,
+          "default": 8090
+        },
+        "ssh_port": {
+          "description": "sshd port.",
+          "type": "integer",
+          "format": "uint16",
+          "minimum": 1,
+          "default": 22
+        }
+      }
+    },
+    "sleep": {
+      "description": "When the VM is put to sleep.",
+      "type": "object",
+      "required": [],
+      "properties": {
+        "idle": {
+          "description": "Idle time after which the VM sleeps.",
+          "type": "string",
+          "format": "devbox-duration",
+          "default": "15m"
+        },
+        "min_up": {
+          "description": "Minimum time the VM stays up after a wake.",
+          "type": "string",
+          "format": "devbox-duration",
+          "default": "5m"
+        },
+        "mode": {
+          "description": "`stateful` saves memory, `shutdown` stops cleanly, `off` never sleeps.",
+          "type": "string",
+          "enum": [
+            "stateful",
+            "shutdown",
+            "off"
+          ],
+          "default": "stateful"
+        },
+        "activity_bytes_per_min": {
+          "description": "Client bytes per minute that count as activity.",
+          "type": "integer",
+          "minimum": 0,
+          "default": 4096
+        }
+      },
+      "default": {}
+    },
+    "gateway": {
+      "description": "Gateway listeners and timing.",
+      "type": "object",
+      "required": [],
+      "properties": {
+        "listen": {
+          "description": "HTTP listen address.",
+          "type": "string",
+          "format": "devbox-listen",
+          "default": ":8080"
+        },
+        "ssh_listen": {
+          "description": "SSH proxy listen address; empty disables SSH proxying.",
+          "type": "string",
+          "format": "devbox-listen-optional",
+          "default": ":2222"
+        },
+        "sync_wait": {
+          "description": "How long a wake waits for the repo sync before going on without it.",
+          "type": "string",
+          "format": "devbox-duration",
+          "default": "90s"
+        }
+      },
+      "default": {}
+    },
+    "routing": {
+      "description": "How public traffic reaches the gateway.",
+      "type": "object",
+      "required": [],
+      "properties": {
+        "provider": {
+          "description": "`traefik-file` writes a Traefik dynamic file; `none` leaves routing to the owner.",
+          "type": "string",
+          "enum": [
+            "traefik-file",
+            "none"
+          ],
+          "default": "traefik-file"
+        },
+        "file": {
+          "description": "The Traefik dynamic file devbox owns.",
+          "type": "string",
+          "format": "devbox-abspath",
+          "default": "/etc/dokploy/traefik/dynamic/devbox.yml"
+        },
+        "entrypoint": {
+          "description": "Traefik entrypoint for the routes.",
+          "type": "string",
+          "format": "devbox-nonempty",
+          "default": "websecure"
+        },
+        "service_url": {
+          "description": "URL Traefik uses to reach the gateway.",
+          "type": "string",
+          "format": "devbox-url",
+          "default": "http://devbox-gateway:8080"
+        }
+      },
+      "default": {}
+    },
+    "deploy": {
+      "description": "Continuous deployment of the hub.",
+      "type": "object",
+      "required": [],
+      "properties": {
+        "repo": {
+          "description": "GitHub repository whose deployments the VM installs. Absent: the hub does not update itself.",
+          "type": "string",
+          "format": "devbox-repo"
+        },
+        "hub_environment": {
+          "description": "GitHub environment of the hub's deployments.",
+          "type": "string",
+          "format": "devbox-nonempty",
+          "default": "agents-hub"
+        },
+        "wake_to_deploy": {
+          "description": "Wake a sleeping VM to install a new hub build.",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "default": {}
+    }
+  }
+}

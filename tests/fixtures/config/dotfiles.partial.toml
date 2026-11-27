@@ -1,0 +1,6 @@
+version = 1
+[context]
+ai = false
+[sync]
+include_orgs = ["some-org"]
+archived = true

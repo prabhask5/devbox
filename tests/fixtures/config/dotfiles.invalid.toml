@@ -1,0 +1,17 @@
+version = 1
+[vm]
+packages = ["ripgrep", "", 7]
+install = "/usr/local/bin/install.sh"
+[shell]
+bashrc = "../bashrc"
+[code_server]
+extensions = ["a.b"]
+[agents]
+instructions = ""
+[context]
+dir = "context/"
+ai = "yes"
+[sync]
+owner = ""
+exclude = "old-*"
+archived = 1

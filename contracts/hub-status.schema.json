@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "hub-status.schema.json",
+  "title": "HubStatus",
+  "x-version": 1,
+  "description": "What the hub tells the gateway at GET /devbox/status: whether the VM may sleep, sync progress, versions.",
+  "type": "object",
+  "required": [
+    "v",
+    "version",
+    "uptime",
+    "idle",
+    "sync"
+  ],
+  "properties": {
+    "v": {
+      "description": "Contract version of this message.",
+      "type": "integer"
+    },
+    "version": {
+      "description": "Commit the hub was built from.",
+      "type": "string"
+    },
+    "uptime": {
+      "description": "Seconds since the hub started.",
+      "type": "integer"
+    },
+    "idle": {
+      "description": "Whether anything is keeping the VM busy.",
+      "$ref": "#/$defs/HubIdle"
+    },
+    "sync": {
+      "description": "The current or last repo sync.",
+      "$ref": "#/$defs/SyncState"
+    },
+    "deploy": {
+      "description": "The last self-update of the hub.",
+      "$ref": "#/$defs/DeployState"
+    }
+  },
+  "$defs": {
+    "HubIdle": {
+      "description": "Whether anything is keeping the VM busy.",
+      "type": "object",
+      "required": [
+        "busy",
+        "reasons",
+        "idleSeconds"
+      ],
+      "properties": {
+        "busy": {
+          "description": "Something is running that must not be interrupted by sleep.",
+          "type": "boolean"
+        },
+        "reasons": {
+          "description": "One short sentence per reason the hub is busy.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "idleSeconds": {
+          "description": "Seconds since the hub was last busy, from a monotonic clock.",
+          "type": "integer"
+        }
+      }
+    },
+    "SyncStatus": {
+      "description": "Outcome of syncing one repository.",
+      "type": "string",
+      "enum": [
+        "current",
+        "updated",
+        "cloned",
+        "conflict",
+        "skipped",
+        "error"
+      ]
+    },
+    "SyncResult": {
+      "description": "Outcome of syncing one repository.",
+      "type": "object",
+      "required": [
+        "name",
+        "status",
+        "detail"
+      ],
+      "properties": {
+        "name": {
+          "description": "Repository directory name.",
+          "type": "string"
+        },
+        "status": {
+          "description": "What happened.",
+          "$ref": "#/$defs/SyncStatus"
+        },
+        "detail": {
+          "description": "One line for the owner, e.g. `pulled 3`.",
+          "type": "string"
+        }
+      }
+    },
+    "SyncState": {
+      "description": "Progress of a repo sync run.",
+      "type": "object",
+      "required": [
+        "state",
+        "total",
+        "done",
+        "results"
+      ],
+      "properties": {
+        "runId": {
+          "description": "Identifies the run; absent before the first run.",
+          "type": "string"
+        },
+        "state": {
+          "description": "Whether a run is in progress.",
+          "type": "string",
+          "enum": [
+            "idle",
+            "running",
+            "done"
+          ]
+        },
+        "startedAt": {
+          "description": "When the run started (Unix time, ms).",
+          "type": "integer"
+        },
+        "finishedAt": {
+          "description": "When the run finished (Unix time, ms).",
+          "type": "integer"
+        },
+        "total": {
+          "description": "Repositories in this run.",
+          "type": "integer"
+        },
+        "done": {
+          "description": "Repositories finished so far.",
+          "type": "integer"
+        },
+        "current": {
+          "description": "Repository being synced now.",
+          "type": "string"
+        },
+        "results": {
+          "description": "Outcome per finished repository.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SyncResult"
+          }
+        },
+        "reason": {
+          "description": "What started the run, e.g. `wake (restore)`.",
+          "type": "string"
+        }
+      }
+    },
+    "DeployState": {
+      "description": "The last self-update of the hub.",
+      "type": "object",
+      "required": [
+        "status",
+        "version"
+      ],
+      "properties": {
+        "status": {
+          "description": "How the last update went.",
+          "type": "string",
+          "enum": [
+            "success",
+            "failure",
+            "in_progress"
+          ]
+        },
+        "version": {
+          "description": "Commit the update installs or installed.",
+          "type": "string"
+        },
+        "at": {
+          "description": "When the update finished (Unix time, ms).",
+          "type": "integer"
+        },
+        "error": {
+          "description": "Why it failed.",
+          "type": "string"
+        }
+      }
+    }
+  }
+}

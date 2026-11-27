@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "sync-progress.schema.json",
+  "title": "SyncProgress",
+  "x-version": 1,
+  "description": "One line of `devbox sync --json` (NDJSON). `start` carries `total`; `begin` carries `name`; `repo` carries `name`, `status` and `detail`; `done` ends the run.",
+  "type": "object",
+  "required": [
+    "v",
+    "type"
+  ],
+  "properties": {
+    "v": {
+      "description": "Contract version of this message.",
+      "type": "integer"
+    },
+    "type": {
+      "description": "What this line reports.",
+      "type": "string",
+      "enum": [
+        "start",
+        "begin",
+        "repo",
+        "done"
+      ]
+    },
+    "total": {
+      "description": "Repositories in this run.",
+      "type": "integer"
+    },
+    "name": {
+      "description": "Repository directory name, or `fetching` while all repositories are fetched.",
+      "type": "string"
+    },
+    "status": {
+      "description": "Outcome for the repository.",
+      "$ref": "hub-status.schema.json#/$defs/SyncStatus"
+    },
+    "detail": {
+      "description": "One line for the owner.",
+      "type": "string"
+    }
+  }
+}

@@ -1,0 +1,5 @@
+ok
+devbox.toml: colour: unknown key, ignored
+devbox.toml: sleap: unknown key, ignored
+devbox.toml: sleep.schedule: unknown key, ignored
+devbox.toml: vm.cpus: unknown key, ignored

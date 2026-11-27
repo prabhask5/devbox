@@ -1,0 +1,16 @@
+{
+  "v": 1,
+  "id": "0e9f8a7b",
+  "name": "codex-home",
+  "agent": "codex",
+  "kind": "external",
+  "cwd": "/home/dev",
+  "createdAt": 1760000000000,
+  "state": "idle",
+  "stateSince": 1760000100000,
+  "title": "",
+  "unread": false,
+  "adopted": false,
+  "attached": false,
+  "viewers": 0
+}

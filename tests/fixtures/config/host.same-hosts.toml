@@ -1,0 +1,7 @@
+version = 1
+domain = "example.com"
+[hosts]
+code = "devbox.example.com"
+agents = "devbox.example.com"
+[vm]
+address = "10.77.0.10"

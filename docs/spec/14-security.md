@@ -18,14 +18,14 @@ The VM should reach the internet but not the host's private networks; `devbox up
 
 ## Passwords and cookies
 
-- Passwords hashed with argon2id (Go `golang.org/x/crypto/argon2`, Rust `argon2`), parameters m=64 MiB, t=3, p=1, 16-byte salt; PHC string format so both languages read the same hash.
+- Passwords hashed with argon2id (Go `golang.org/x/crypto/argon2`, Rust `argon2`), parameters m=64 MiB, t=3, p=1, 16-byte salt, 32-byte hash; PHC string format (`$argon2id$v=19$m=65536,t=3,p=1$<salt>$<hash>`, unpadded base64) so both languages read the same hash. Verification uses the parameters in the string and refuses anything devbox would not write: another algorithm or version, reordered or padded fields, non-canonical base64, or parameters out of range (m ≤ 1 GiB, t ≤ 16, p ≤ 16), which also bounds the work a corrupt file can cause. `tests/fixtures/password/vectors.json` holds hashes both implementations must derive, accept and reject identically.
 - Cookies: `<expiry>.<HMAC-SHA256(secret, expiry)>`, HttpOnly, Secure, SameSite=Lax, constant-time verification. Login rate limit 6/min per client IP plus a global lockout after 50 failures/hour (30 min).
 - CSRF: state-changing endpoints accept only `POST`/`DELETE` with `Content-Type: application/json` (or the login form with an `Origin` check); SameSite=Lax covers cross-site requests.
 - `next` redirects accept same-origin paths only.
 
 ## Secrets
 
-Host: `/etc/devbox/secrets.toml`, mode 0600, owned by the uid the gateway container runs as (a dedicated non-root uid chosen in M2; the container needs only that file, the state dir and the Incus socket's group); the gateway refuses to start if group or others can read it. VM: `~/.config/devbox/hub.secrets.toml` (0600). Never in logs, `--json`, status endpoints, context files, commit messages, or panic output; a `Secret` type whose Debug/Display/serialization is `***` in Go and Rust. VAPID private key and GitHub token are secrets.
+Host: `/etc/devbox/secrets.toml`, mode 0600, owned by the uid the gateway container runs as (a dedicated non-root uid chosen in M2; the container needs only that file, the state dir and the Incus socket's group); the gateway refuses to start if group or others can read it. VM: `~/.config/devbox/hub.secrets.toml` (0600). Never in logs, `--json`, status endpoints, context files, commit messages, or panic output; a `Secret` type whose Debug/Display/serialization is `***` in Go (`internal/secret`: every `fmt` verb, `slog`, JSON, TOML) and Rust (`devbox_core::secret`), which only `Expose()`/`expose()` reveals. The secret fields of the generated config types are of this type. VAPID private key and GitHub token are secrets.
 
 ## Supply chain
 
@@ -43,16 +43,17 @@ Each dependency and why (keep current when adding one):
 |---|---|---|
 | Go | `golang.org/x/crypto` (argon2, hkdf) | password hashing, web push key derivation |
 | Go | `modernc.org/sqlite` | hub database without cgo |
+| Go | `github.com/BurntSushi/toml` | config files |
 | Go | `github.com/fsnotify/fsnotify` | config hot reload |
 | Go | (decided in M4) a vt100 emulator, e.g. `github.com/hinshun/vt10x` or own minimal one | screen frames from tmux output |
 | Go | `github.com/coder/websocket` (or stdlib hijack only — decided in M2) | WebSocket handling where needed beyond raw proxying |
 | Rust | `clap`, `serde`, `serde_json`, `toml`, `thiserror` | CLI, config, contracts (same as moi) |
-| Rust | `argon2` | password hashing |
+| Rust | `argon2`, `getrandom` | password hashing, salts |
 | Rust | `ureq` or a minimal HTTP/1.1 client over the Incus unix socket (decided in M6/M8) | Incus REST, GitHub API |
 | Rust | `gix` (minimal features) | fast read-only git queries |
-| Rust | `typify` (build-time) | contracts → Rust types |
 | Rust (dev) | `proptest`, `insta` | property tests, golden files |
 | Web | `preact`, `vite`, `vitest`, `@playwright/test`, `typescript` | apps and tests |
 | Web (dev) | `eslint`, `@eslint/js`, `typescript-eslint`, `prettier`, `knip` | lint, format, unused files/exports/dependencies |
+| Web (dev) | `json-schema-to-typescript`, `ajv`, `@types/node` | contracts → TypeScript types; checking the examples against the schemas in tests |
 
-Tools that are not dependencies of the code run at versions pinned in `scripts/ci.sh` (`golangci-lint`, `staticcheck`, `deadcode`, `govulncheck` through `go run pkg@version`; `cargo-deny`, `cargo-machete`) and in the workflows (`gitleaks`).
+Tools that are not dependencies of the code run at versions pinned in `scripts/ci.sh` (`golangci-lint`, `staticcheck`, `deadcode`, `govulncheck` through `go run pkg@version`; `cargo-deny`, `cargo-machete`) and in the workflows (`gitleaks`); the contract generators `go-jsonschema` and `cargo-typify` are pinned in `scripts/gen.sh`. Generated Rust and Go code depends only on `serde`/`serde_json` and the standard library.

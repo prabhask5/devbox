@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "dotfiles-manifest.schema.json",
+  "title": "DotfilesManifest",
+  "x-version": 1,
+  "description": "`devbox.toml` at the root of a dotfiles repository: what devbox installs from it. Paths are relative to the repository root.",
+  "type": "object",
+  "required": [
+    "version"
+  ],
+  "properties": {
+    "version": {
+      "description": "Version of this file's format.",
+      "type": "integer"
+    },
+    "vm": {
+      "description": "Additions to the VM.",
+      "type": "object",
+      "required": [],
+      "properties": {
+        "packages": {
+          "description": "apt packages on top of devbox's base set.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "devbox-nonempty"
+          },
+          "default": []
+        },
+        "install": {
+          "description": "Script run as the VM user after provisioning; must be idempotent.",
+          "type": "string",
+          "format": "devbox-relpath"
+        }
+      },
+      "default": {}
+    },
+    "shell": {
+      "description": "Shell and git configuration.",
+      "type": "object",
+      "required": [],
+      "properties": {
+        "bashrc": {
+          "description": "File sourced from ~/.bashrc.",
+          "type": "string",
+          "format": "devbox-relpath"
+        },
+        "gitconfig": {
+          "description": "File included from ~/.gitconfig.",
+          "type": "string",
+          "format": "devbox-relpath"
+        }
+      },
+      "default": {}
+    },
+    "code_server": {
+      "description": "Editor configuration.",
+      "type": "object",
+      "required": [],
+      "properties": {
+        "settings": {
+          "description": "settings.json linked into code-server's User directory.",
+          "type": "string",
+          "format": "devbox-relpath"
+        },
+        "keybindings": {
+          "description": "keybindings.json linked into code-server's User directory.",
+          "type": "string",
+          "format": "devbox-relpath"
+        },
+        "extensions": {
+          "description": "File with one Open VSX extension id per line.",
+          "type": "string",
+          "format": "devbox-relpath"
+        }
+      },
+      "default": {}
+    },
+    "agents": {
+      "description": "Agent instructions.",
+      "type": "object",
+      "required": [],
+      "properties": {
+        "instructions": {
+          "description": "Instructions every agent reads.",
+          "type": "string",
+          "format": "devbox-relpath"
+        }
+      },
+      "default": {}
+    },
+    "context": {
+      "description": "Generated developer context.",
+      "type": "object",
+      "required": [],
+      "properties": {
+        "dir": {
+          "description": "Directory `devbox context` writes to. Absent: ~/.local/share/devbox/context in the VM.",
+          "type": "string",
+          "format": "devbox-relpath"
+        },
+        "ai": {
+          "description": "Write an AI summary.",
+          "type": "boolean",
+          "default": true
+        },
+        "commit": {
+          "description": "Commit the context directory after each run.",
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "default": {}
+    },
+    "sync": {
+      "description": "Which repositories are cloned and synced.",
+      "type": "object",
+      "required": [],
+      "properties": {
+        "owner": {
+          "description": "Whose repositories to clone. Absent: the authenticated GitHub user.",
+          "type": "string",
+          "format": "devbox-nonempty"
+        },
+        "include_orgs": {
+          "description": "Extra owners or organizations.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "devbox-nonempty"
+          },
+          "default": []
+        },
+        "exclude": {
+          "description": "Globs on repository names to leave out.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "devbox-nonempty"
+          },
+          "default": []
+        },
+        "archived": {
+          "description": "Include archived repositories.",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "default": {}
+    }
+  }
+}

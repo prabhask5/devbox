@@ -1,0 +1,8 @@
+version = 1
+listen = "8090"
+[hosts]
+code = "code.example.com/"
+[tmux]
+socket = "dev box"
+[deploy]
+repo = "https://github.com/you/devbox"
