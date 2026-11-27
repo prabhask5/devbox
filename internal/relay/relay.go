@@ -7,6 +7,7 @@ package relay
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -62,7 +63,9 @@ func Send(socket, agent, event string, stdin io.Reader, now time.Time) error {
 		return err
 	}
 
-	conn, err := net.DialTimeout("unix", socket, timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	conn, err := (&net.Dialer{}).DialContext(ctx, "unix", socket)
 	if err != nil {
 		return err
 	}

@@ -92,7 +92,6 @@ type harness struct {
 	clock                sys.Clock
 	stop                 context.CancelFunc
 	stopped              chan error
-	realHost             bool // use the machine's real process table
 }
 
 func testTimings() hub.Timings {

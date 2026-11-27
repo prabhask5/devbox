@@ -43,6 +43,7 @@ Each dependency and why (keep current when adding one):
 |---|---|---|
 | Go | `golang.org/x/crypto` (argon2, hkdf) | password hashing, web push key derivation |
 | Go | `modernc.org/sqlite` | hub database without cgo |
+| Go | `golang.org/x/sys` | peer credentials of the hub's unix socket |
 | Go | `github.com/BurntSushi/toml` | config files |
 | Go | (decided in M4) a vt100 emulator, e.g. `github.com/hinshun/vt10x` or own minimal one | screen frames from tmux output |
 | Rust | `clap`, `serde`, `serde_json`, `toml`, `thiserror` | CLI, config, contracts (same as moi) |

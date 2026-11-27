@@ -57,14 +57,14 @@ Specs: 03, 11 (gateway part), 16
 
 ## M4 — Hub core and agents
 Specs: 04, 05
-- [ ] tmux layer: dedicated socket, control-mode client, create/adopt/rename/kill, resize/restore, exit detection via pane children
-- [ ] Sessions store (SQLite, WAL), state machine, event matching, idle report, wake hook (clock fix, sync run reuse)
-- [ ] Adapters (claude, codex, opencode, shell, `KindChat` reserved); hook relay `devbox-hub event` over the unix socket meeting its latency budget
-- [ ] Hook config installers (Claude settings merge, Codex hooks.json, opencode plugin) as Go code used by provisioning; golden files
-- [ ] Fake agents with captured real hook payloads; answer keys verified against recorded prompt screens
-- [ ] Gateway↔hub bearer auth; internal socket peer-cred check; `agent` CLI
-- [ ] e2e harness: real hub behind the gateway; scenarios 3 and 4
-- [ ] Cleanup pass; `scripts/check-hygiene.sh` green
+- [x] tmux layer: dedicated socket, control-mode client, create/adopt/rename/kill, resize/restore, exit detection via pane children — [`tests/go/tmux/tmux_test.go`](../tests/go/tmux/tmux_test.go), [`tests/go/hub/sessions_test.go`](../tests/go/hub/sessions_test.go)
+- [x] Sessions store (SQLite, WAL), state machine, event matching, idle report, wake hook (clock fix, sync run reuse) — [`tests/go/hub/events_test.go`](../tests/go/hub/events_test.go), [`sessions_test.go`](../tests/go/hub/sessions_test.go)
+- [x] Adapters (claude, codex, opencode, shell, `KindChat` reserved); hook relay `devbox-hub event` over the unix socket meeting its latency budget — [`tests/go/relay/relay_test.go`](../tests/go/relay/relay_test.go), [`tests/perf/hub`](../tests/perf/hub)
+- [x] Hook config installers (Claude settings merge, Codex hooks.json, opencode plugin) as Go code used by provisioning; golden files — [`tests/go/hooks/hooks_test.go`](../tests/go/hooks/hooks_test.go)
+- [ ] Fake agents with captured real hook payloads; answer keys verified against recorded prompt screens — the fake agents exist and drive every state for claude, codex and opencode ([`tests/fakes/agents`](../tests/fakes/agents)), with payloads written from the agents' documentation; capturing payloads and prompt screens from the real agents is still open
+- [x] Gateway↔hub bearer auth; internal socket peer-cred check; `agent` CLI — [`tests/go/hub/events_test.go`](../tests/go/hub/events_test.go) (`TestAuthBoundaries`), [`binary_test.go`](../tests/go/hub/binary_test.go)
+- [x] e2e harness: real hub behind the gateway; scenarios 3 and 4 — [`tests/e2e/idle.spec.ts`](../tests/e2e/idle.spec.ts)
+- [x] Cleanup pass; `scripts/check-hygiene.sh` green
 
 ## M5 — Hub app and push
 Specs: 06, 16

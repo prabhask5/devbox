@@ -54,7 +54,7 @@ func serve(args []string, stderr io.Writer) int {
 	if mode := info.Mode().Perm(); mode&0o077 != 0 {
 		return problem(fmt.Errorf("hub.secrets.toml: readable by group or others (mode %04o); run chmod 600", mode))
 	}
-	secretsData, err := os.ReadFile(secretsPath)
+	secretsData, err := os.ReadFile(secretsPath) //nolint:gosec // the owner's own config directory
 	if err != nil {
 		return problem(err)
 	}

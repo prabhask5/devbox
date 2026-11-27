@@ -175,13 +175,17 @@ func (h *Hub) Kill(ctx context.Context, id string) error {
 		return err
 	}
 	name := s.Tmux
-	delete(h.sessions, id)
 	h.mu.Unlock()
+	// The tmux session goes first and the record after it: a reconcile in between sees a session
+	// that is gone, not an unknown tmux session to adopt.
 	if name != nil {
 		if err := h.opt.Tmux.Kill(ctx, *name); err != nil && !errors.Is(err, tmux.ErrNoSession) {
 			return err
 		}
 	}
+	h.mu.Lock()
+	delete(h.sessions, id)
+	h.mu.Unlock()
 	if err := h.store.remove(ctx, id); err != nil {
 		return err
 	}
