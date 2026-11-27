@@ -5,7 +5,9 @@
 extern crate self as devbox_core;
 
 pub mod config;
+pub mod fake;
 pub mod github;
+pub mod incus;
 pub mod password;
 pub mod proto;
 pub mod schema;

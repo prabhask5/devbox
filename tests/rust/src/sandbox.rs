@@ -12,7 +12,7 @@ use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime};
 
-use devbox_core::system::{self, Entry, Host, Output, System};
+use devbox_core::system::{self, Entry, Host, HttpRequest, HttpResponse, Output, System};
 use devbox_sync::{Event, Options, RepoResult};
 
 /// A directory that is removed when dropped.
@@ -103,6 +103,15 @@ impl System for At {
     }
     fn read_dir(&self, path: &Path) -> io::Result<Vec<Entry>> {
         self.host.read_dir(&self.confined(path))
+    }
+    fn set_mode(&self, path: &Path, mode: u32) -> io::Result<()> {
+        self.host.set_mode(&self.confined(path), mode)
+    }
+    fn mode(&self, path: &Path) -> Option<u32> {
+        self.host.mode(&self.confined(path))
+    }
+    fn unix_http(&self, socket: &Path, request: &HttpRequest) -> io::Result<HttpResponse> {
+        self.host.unix_http(socket, request)
     }
     fn exists(&self, path: &Path) -> bool {
         self.host.exists(&self.confined(path))

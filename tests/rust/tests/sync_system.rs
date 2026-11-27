@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime};
 
-use devbox_core::system::{Command, Entry, Host, Output, System};
+use devbox_core::system::{Command, Entry, Host, HttpRequest, HttpResponse, Output, System};
 use devbox_sync::{Options, SyncStatus};
 
 const TOKEN: &str = "FAKE-github-token";
@@ -80,6 +80,15 @@ impl System for Machine {
     }
     fn read_dir(&self, _: &Path) -> io::Result<Vec<Entry>> {
         Ok(Vec::new())
+    }
+    fn set_mode(&self, _: &Path, _: u32) -> io::Result<()> {
+        Ok(())
+    }
+    fn mode(&self, _: &Path) -> Option<u32> {
+        None
+    }
+    fn unix_http(&self, _: &Path, _: &HttpRequest) -> io::Result<HttpResponse> {
+        Err(io::Error::from(io::ErrorKind::NotFound))
     }
     fn exists(&self, path: &Path) -> bool {
         self.files.lock().unwrap().contains_key(path)

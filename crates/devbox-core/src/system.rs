@@ -100,6 +100,30 @@ impl Output {
     }
 }
 
+/// An HTTP request to a service that listens on a unix socket.
+#[derive(Clone, Debug, Default)]
+pub struct HttpRequest {
+    /// `GET`, `PUT`, …
+    pub method: String,
+    /// The path, with its query.
+    pub path: String,
+    /// Headers besides `Host`, `Content-Length` and `Connection`.
+    pub headers: Vec<(String, String)>,
+    /// The body; empty for none.
+    pub body: Vec<u8>,
+    /// How long the answer may take; `None` is as long as it takes.
+    pub timeout: Option<Duration>,
+}
+
+/// The answer to an [`HttpRequest`].
+#[derive(Clone, Debug, Default)]
+pub struct HttpResponse {
+    /// The status code.
+    pub status: u16,
+    /// The body.
+    pub body: Vec<u8>,
+}
+
 /// An entry of a directory.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Entry {
@@ -152,6 +176,24 @@ pub trait System: Sync {
     ///
     /// As [`std::fs::create_dir_all`].
     fn create_dir_all(&self, path: &Path) -> io::Result<()>;
+
+    /// Sets the permission bits of a file or directory (`0o600`, `0o755`).
+    ///
+    /// # Errors
+    ///
+    /// As [`std::fs::set_permissions`].
+    fn set_mode(&self, path: &Path, mode: u32) -> io::Result<()>;
+
+    /// The permission bits of what is at `path`; `None` when nothing is.
+    fn mode(&self, path: &Path) -> Option<u32>;
+
+    /// Sends an HTTP request to the service listening on the unix socket at `socket` and reads
+    /// its answer to the end.
+    ///
+    /// # Errors
+    ///
+    /// When the socket cannot be reached or the answer is not HTTP.
+    fn unix_http(&self, socket: &Path, request: &HttpRequest) -> io::Result<HttpResponse>;
 
     /// Lists a directory, sorted by name.
     ///
@@ -279,6 +321,40 @@ impl System for Host {
         std::fs::create_dir_all(path)
     }
 
+    fn set_mode(&self, path: &Path, mode: u32) -> io::Result<()> {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))
+    }
+
+    fn mode(&self, path: &Path) -> Option<u32> {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::metadata(path).ok().map(|meta| meta.permissions().mode() & 0o7777)
+    }
+
+    fn unix_http(&self, socket: &Path, request: &HttpRequest) -> io::Result<HttpResponse> {
+        let mut stream = std::os::unix::net::UnixStream::connect(socket)?;
+        stream.set_read_timeout(request.timeout)?;
+        stream.set_write_timeout(request.timeout)?;
+        let mut head = format!(
+            "{} {} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Length: {}\r\n",
+            request.method,
+            request.path,
+            request.body.len()
+        );
+        for (name, value) in &request.headers {
+            head.push_str(name);
+            head.push_str(": ");
+            head.push_str(value);
+            head.push_str("\r\n");
+        }
+        head.push_str("\r\n");
+        stream.write_all(head.as_bytes())?;
+        stream.write_all(&request.body)?;
+        let mut answer = Vec::new();
+        stream.read_to_end(&mut answer)?;
+        parse_response(&answer).ok_or_else(|| io::Error::other("the answer is not HTTP"))
+    }
+
     fn read_dir(&self, path: &Path) -> io::Result<Vec<Entry>> {
         let mut entries = Vec::new();
         for entry in std::fs::read_dir(path)? {
@@ -302,5 +378,59 @@ impl System for Host {
 
     fn now(&self) -> SystemTime {
         SystemTime::now()
+    }
+}
+
+/// Splits an HTTP/1.1 response read to its end into status and body, undoing chunked transfer
+/// encoding.
+fn parse_response(answer: &[u8]) -> Option<HttpResponse> {
+    let split = answer.windows(4).position(|window| window == b"\r\n\r\n")?;
+    let head = std::str::from_utf8(&answer[..split]).ok()?;
+    let mut body = &answer[split + 4..];
+    let mut lines = head.split("\r\n");
+    let status = lines.next()?.split(' ').nth(1)?.parse().ok()?;
+    let chunked = lines.any(|line| {
+        line.split_once(':').is_some_and(|(name, value)| {
+            name.eq_ignore_ascii_case("transfer-encoding")
+                && value.trim().eq_ignore_ascii_case("chunked")
+        })
+    });
+    if !chunked {
+        return Some(HttpResponse { status, body: body.to_vec() });
+    }
+    let mut decoded = Vec::new();
+    loop {
+        let line_end = body.windows(2).position(|window| window == b"\r\n")?;
+        let size_text = std::str::from_utf8(&body[..line_end]).ok()?;
+        let size = usize::from_str_radix(size_text.split(';').next()?.trim(), 16).ok()?;
+        body = &body[line_end + 2..];
+        if size == 0 {
+            return Some(HttpResponse { status, body: decoded });
+        }
+        decoded.extend_from_slice(body.get(..size)?);
+        body = body.get(size + 2..)?;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_response;
+
+    #[test]
+    fn responses_are_split_into_status_and_body() {
+        let plain = parse_response(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}").unwrap();
+        assert_eq!((plain.status, plain.body.as_slice()), (200, &b"{}"[..]));
+        let empty = parse_response(b"HTTP/1.1 404 Not Found\r\n\r\n").unwrap();
+        assert_eq!((empty.status, empty.body.len()), (404, 0));
+        let chunked = parse_response(
+            b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n4\r\n{\"a\"\r\n3;x=y\r\n:1}\r\n0\r\n\r\n",
+        )
+        .unwrap();
+        assert_eq!(chunked.body, b"{\"a\":1}");
+        assert!(parse_response(b"not http").is_none());
+        assert!(
+            parse_response(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nab")
+                .is_none()
+        );
     }
 }
