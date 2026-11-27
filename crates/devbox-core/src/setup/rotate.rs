@@ -46,7 +46,7 @@ pub fn wake(system: &dyn System, paths: &Paths, new: &str) -> Result<(), SetupEr
         ("cookie_secret", format!("\"{}\"", secret(system)?)),
     ];
     system
-        .write(&path, replaced(&text, &values).as_bytes())
+        .write(&path, replaced(&text, &values).as_bytes(), 0o600)
         .map_err(|err| SetupError(format!("{}: {err}", path.display())))
 }
 

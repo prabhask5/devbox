@@ -330,7 +330,6 @@ fn stack(system: &dyn System, dir: &Path) -> Vec<String> {
         .read_dir(&dir.join(".github/workflows"))
         .unwrap_or_default()
         .into_iter()
-        .map(|entry| entry.name)
         .filter(|name| has_extension(name, "yml") || has_extension(name, "yaml"))
         .collect();
     if !workflows.is_empty() {
@@ -592,13 +591,13 @@ fn walk(
     depth: usize,
     found: &mut Vec<PathBuf>,
 ) {
-    for entry in system.read_dir(dir).unwrap_or_default() {
-        let path = dir.join(&entry.name);
-        if entry.is_dir {
+    for name in system.read_dir(dir).unwrap_or_default() {
+        let path = dir.join(&name);
+        if devbox_core::system::is_dir(system, &path) {
             if depth < 5 {
                 walk(system, &path, wanted, depth + 1, found);
             }
-        } else if wanted(&entry.name) {
+        } else if wanted(&name) {
             found.push(path);
         }
     }
@@ -894,9 +893,8 @@ pub(crate) fn facts(
         .read_dir(&options.code_dir)
         .unwrap_or_default()
         .into_iter()
-        .filter(|entry| entry.is_dir && !entry.name.starts_with('.'))
-        .filter(|entry| system.exists(&options.code_dir.join(&entry.name).join(".git")))
-        .map(|entry| entry.name)
+        .filter(|name| !name.starts_with('.'))
+        .filter(|name| system.exists(&options.code_dir.join(name).join(".git")))
         .collect();
     let since = now - HISTORY_DAYS * DAY;
     let gathered = in_parallel(&names, |name| {

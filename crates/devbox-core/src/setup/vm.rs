@@ -95,7 +95,7 @@ fn remember(
     let path = paths.provisioned();
     let text = serde_json::to_string_pretty(&record).unwrap_or_default() + "\n";
     system
-        .write(&path, text.as_bytes())
+        .write(&path, text.as_bytes(), 0o644)
         .map_err(|err| SetupError(format!("{}: {err}", path.display())))
 }
 

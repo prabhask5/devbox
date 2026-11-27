@@ -300,8 +300,9 @@ fn secrets(c: &Context, desired: &mut Desired) -> Result<Step, SetupError> {
         return Ok(step);
     }
     let line = format!(
-        "+ write {}: wake password hash, cookie secret, gateway↔hub token (mode 0600, owner {GATEWAY_UID})",
-        path.display()
+        "+ write {}: wake password hash, cookie secret, gateway↔hub token (mode 0600, owner {})",
+        path.display(),
+        GATEWAY_UID.0
     );
     desired.hub_token = secret(c.system)?;
     match &c.passwords.wake {
@@ -656,11 +657,11 @@ fn routing(c: &Context, host: &Host, desired: &Desired) -> Step {
     let dir = host.routing_file.parent().unwrap_or(Path::new("/"));
     let mut candidates = vec![host.routing_file.clone()];
     for entry in c.system.read_dir(dir).unwrap_or_default() {
-        let yaml = Path::new(&entry.name)
+        let yaml = Path::new(&entry)
             .extension()
             .is_some_and(|extension| extension == "yml" || extension == "yaml");
         if yaml {
-            candidates.push(dir.join(entry.name));
+            candidates.push(dir.join(entry));
         }
     }
     let found = candidates.iter().filter_map(|file| read(c.system, file)).find_map(|yaml| {

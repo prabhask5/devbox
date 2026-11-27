@@ -28,7 +28,7 @@ pub use inspect::{doctor, render_doctor, render_status, status};
 /// The container the gateway runs in.
 pub const GATEWAY_CONTAINER: &str = "devbox-gateway";
 /// The uid the gateway runs as in its container, which owns the secrets it reads.
-const GATEWAY_UID: &str = "65532:65532";
+const GATEWAY_UID: (u32, u32) = (65532, 65532);
 
 /// Where devbox keeps its files on the host.
 #[derive(Clone, Debug)]
@@ -225,7 +225,7 @@ fn fail<T>(message: impl Into<String>) -> Result<T, SetupError> {
 #[derive(Clone, Debug)]
 pub(crate) enum Action {
     /// Write a file, saving what was there.
-    Write { path: PathBuf, content: Vec<u8>, mode: u32, owner: Option<&'static str> },
+    Write { path: PathBuf, content: Vec<u8>, mode: u32, owner: Option<(u32, u32)> },
     /// Run a program on the host; `undo` is what `down` runs to take it back, `reload` what it
     /// runs after restoring the files.
     Host { command: Command, undo: Option<Vec<String>>, reload: bool },
@@ -356,11 +356,10 @@ fn hex(bytes: &[u8]) -> String {
 
 /// A new secret: 32 bytes nobody can guess, as hex.
 pub(crate) fn secret(system: &dyn System) -> Result<String, SetupError> {
-    let mut bytes = [0u8; 32];
-    system
-        .random(&mut bytes)
-        .map_err(|err| SetupError(format!("no randomness for a secret: {err}")))?;
-    Ok(hex(&bytes))
+    match system.random_bytes(32) {
+        Ok(bytes) => Ok(hex(&bytes)),
+        Err(err) => fail(format!("no randomness for a secret: {err}")),
+    }
 }
 
 /// Works out what `up` has to do. Nothing on the machine changes.
@@ -450,22 +449,12 @@ fn write(
     path: &Path,
     content: &[u8],
     mode: u32,
-    owner: Option<&str>,
+    owner: Option<(u32, u32)>,
 ) -> Result<(), SetupError> {
     let failed = |err: std::io::Error| SetupError(format!("{}: {err}", path.display()));
-    if let Some(dir) = path.parent() {
-        system.create_dir_all(dir).map_err(failed)?;
-    }
-    // A file that holds secrets has its mode before it has its content.
-    if system.mode(path) != Some(mode) {
-        if !system.exists(path) {
-            system.write(path, b"").map_err(failed)?;
-        }
-        system.set_mode(path, mode).map_err(failed)?;
-    }
-    system.write(path, content).map_err(failed)?;
+    system.write(path, content, mode).map_err(failed)?;
     match owner {
-        Some(owner) => host(system, &Command::new("chown", [owner, &path.to_string_lossy()])),
+        Some((uid, gid)) => system.set_owner(path, uid, gid).map_err(failed),
         None => Ok(()),
     }
 }

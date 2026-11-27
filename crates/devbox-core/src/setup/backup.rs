@@ -25,7 +25,7 @@ fn manifests(system: &dyn System, paths: &Paths) -> Vec<(PathBuf, Value)> {
     let root = paths.state.join("backup");
     let mut found = Vec::new();
     for entry in system.read_dir(&root).unwrap_or_default() {
-        let dir = root.join(&entry.name);
+        let dir = root.join(&entry);
         let manifest = read(system, &dir.join("manifest.json"))
             .and_then(|text| serde_json::from_str(&text).ok());
         found.extend(manifest.map(|manifest: Value| (dir, manifest)));
@@ -71,8 +71,8 @@ impl<'a> Backup<'a> {
         let entry = match self.system.read(path) {
             Ok(content) => {
                 // A copy that cannot be written is found out by `store`, before the file changes.
-                let _ = self.system.write(&copy_of(&self.dir, &name), &content);
-                json!({"path": name, "existed": true, "mode": self.system.mode(path).unwrap_or(0o644)})
+                let _ = self.system.write(&copy_of(&self.dir, &name), &content, 0o600);
+                json!({"path": name, "existed": true, "mode": self.system.metadata(path).map_or(0o644, |meta| meta.mode)})
             }
             Err(_) => json!({"path": name, "existed": false}),
         };
@@ -115,7 +115,7 @@ impl<'a> Backup<'a> {
         let path = self.dir.join("manifest.json");
         let text = serde_json::to_string_pretty(&self.manifest).unwrap_or_default() + "\n";
         self.system
-            .write(&path, text.as_bytes())
+            .write(&path, text.as_bytes(), 0o600)
             .map_err(|err| SetupError(format!("{}: {err}", path.display())))?;
         self.changed = false;
         Ok(())
@@ -159,12 +159,11 @@ pub fn down(system: &dyn System, paths: &Paths, destroy: bool) -> Result<Vec<Str
             };
             if file["existed"] == true {
                 let content = system.read(&copy_of(dir, path)).map_err(failed(path))?;
-                system.write(Path::new(path), &content).map_err(failed(path))?;
                 let mode = file["mode"]
                     .as_u64()
                     .and_then(|mode| u32::try_from(mode).ok())
                     .unwrap_or(0o644);
-                system.set_mode(Path::new(path), mode).map_err(failed(path))?;
+                system.write(Path::new(path), &content, mode).map_err(failed(path))?;
                 done.push(format!("restored {path}"));
             } else {
                 system.remove_file(Path::new(path)).map_err(failed(path))?;

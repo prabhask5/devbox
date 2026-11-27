@@ -284,7 +284,8 @@ fn host_checks(
             None
         }
     };
-    let private = system.mode(&paths.secrets()).is_some_and(|mode| mode.trailing_zeros() >= 6);
+    let private =
+        system.metadata(&paths.secrets()).is_ok_and(|meta| meta.mode.trailing_zeros() >= 6);
     checks.check(
         "secrets",
         "The secrets are valid and private",

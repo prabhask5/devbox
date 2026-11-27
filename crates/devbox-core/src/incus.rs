@@ -4,12 +4,13 @@
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
+use std::io::{Read as _, Write as _};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use serde_json::{Value, json};
 
-use crate::system::{HttpRequest, System};
+use crate::system::System;
 
 /// Where Incus listens unless told otherwise.
 pub const SOCKET: &str = "/var/lib/incus/unix.socket";
@@ -140,15 +141,29 @@ impl<'a> Incus<'a> {
         body: Vec<u8>,
         timeout: Duration,
     ) -> Result<Option<Vec<u8>>, Error> {
-        let request = HttpRequest {
-            method: method.to_owned(),
-            path: path.to_owned(),
-            headers,
-            body,
-            timeout: Some(timeout),
+        // One request per connection, read to its end: nothing is kept open, and there is no
+        // HTTP library to bring along.
+        let mut message = format!(
+            "{method} {path} HTTP/1.1\r\nHost: incus\r\nConnection: close\r\nContent-Length: {}\r\n",
+            body.len()
+        );
+        for (name, value) in &headers {
+            let _ = write!(message, "{name}: {value}\r\n");
+        }
+        message.push_str("\r\n");
+        let exchange = || -> std::io::Result<Vec<u8>> {
+            let mut conn = self.system.connect_unix(self.socket)?;
+            conn.set_timeout(Some(timeout))?;
+            conn.write_all(message.as_bytes())?;
+            conn.write_all(&body)?;
+            conn.flush()?;
+            let mut answer = Vec::new();
+            conn.read_to_end(&mut answer)?;
+            Ok(answer)
         };
+        let answer = exchange().map_err(|err| self.unreachable(&err))?;
         let response =
-            self.system.unix_http(self.socket, &request).map_err(|err| self.unreachable(&err))?;
+            parse_response(&answer).ok_or_else(|| self.unreachable(&"its answer is not HTTP"))?;
         match response.status {
             404 => Ok(None),
             status if status < 400 => Ok(Some(response.body)),
@@ -445,6 +460,43 @@ impl<'a> Incus<'a> {
     }
 }
 
+/// An HTTP response: its status and its body.
+struct Response {
+    status: u16,
+    body: Vec<u8>,
+}
+
+/// Splits an HTTP/1.1 response read to its end into status and body, undoing chunked transfer
+/// encoding.
+fn parse_response(answer: &[u8]) -> Option<Response> {
+    let split = answer.windows(4).position(|window| window == b"\r\n\r\n")?;
+    let head = std::str::from_utf8(&answer[..split]).ok()?;
+    let mut body = &answer[split + 4..];
+    let mut lines = head.split("\r\n");
+    let status = lines.next()?.split(' ').nth(1)?.parse().ok()?;
+    let chunked = lines.any(|line| {
+        line.split_once(':').is_some_and(|(name, value)| {
+            name.eq_ignore_ascii_case("transfer-encoding")
+                && value.trim().eq_ignore_ascii_case("chunked")
+        })
+    });
+    if !chunked {
+        return Some(Response { status, body: body.to_vec() });
+    }
+    let mut decoded = Vec::new();
+    loop {
+        let line_end = body.windows(2).position(|window| window == b"\r\n")?;
+        let size_text = std::str::from_utf8(&body[..line_end]).ok()?;
+        let size = usize::from_str_radix(size_text.split(';').next()?.trim(), 16).ok()?;
+        body = &body[line_end + 2..];
+        if size == 0 {
+            return Some(Response { status, body: decoded });
+        }
+        decoded.extend_from_slice(body.get(..size)?);
+        body = body.get(size + 2..)?;
+    }
+}
+
 /// `text` as the value of a query parameter.
 fn query(text: &str) -> String {
     let mut out = String::new();
@@ -460,7 +512,25 @@ fn query(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::query;
+    use super::{parse_response, query};
+
+    #[test]
+    fn responses_are_split_into_status_and_body() {
+        let plain = parse_response(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}").unwrap();
+        assert_eq!((plain.status, plain.body.as_slice()), (200, &b"{}"[..]));
+        let empty = parse_response(b"HTTP/1.1 404 Not Found\r\n\r\n").unwrap();
+        assert_eq!((empty.status, empty.body.len()), (404, 0));
+        let chunked = parse_response(
+            b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n4\r\n{\"a\"\r\n3;x=y\r\n:1}\r\n0\r\n\r\n",
+        )
+        .unwrap();
+        assert_eq!(chunked.body, b"{\"a\":1}");
+        assert!(parse_response(b"not http").is_none());
+        assert!(
+            parse_response(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nab")
+                .is_none()
+        );
+    }
 
     #[test]
     fn paths_are_escaped_for_the_query() {

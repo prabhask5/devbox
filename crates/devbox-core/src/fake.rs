@@ -5,12 +5,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, SystemTime};
 
 use serde_json::{Value, json};
 
-use crate::system::{Command, Entry, HttpRequest, HttpResponse, Output, System};
+use crate::system::{Command, Conn, FileKind, Metadata, Output, System};
 
 /// What a program of the fake machine does when run: its output, or `None` to let the next
 /// handler of the same program answer.
@@ -175,7 +175,7 @@ impl FakeIncus {
     }
 
     #[allow(clippy::too_many_lines)] // one route per arm, as flat as the API
-    fn answer(&mut self, request: &HttpRequest) -> (u16, Vec<u8>) {
+    fn answer(&mut self, request: &Request) -> (u16, Vec<u8>) {
         let ok = |metadata: Value| {
             (
                 200,
@@ -390,14 +390,93 @@ impl FakeIncus {
     }
 }
 
+/// An HTTP request as the fake Incus reads it off a connection.
+struct Request {
+    method: String,
+    path: String,
+    headers: Vec<(String, String)>,
+    body: Vec<u8>,
+}
+
+impl Request {
+    /// The request in `bytes`, once all of it has arrived.
+    fn parse(bytes: &[u8]) -> Option<Self> {
+        let split = bytes.windows(4).position(|window| window == b"\r\n\r\n")?;
+        let head = std::str::from_utf8(&bytes[..split]).ok()?;
+        let mut lines = head.split("\r\n");
+        let mut first = lines.next()?.split(' ');
+        let (method, path) = (first.next()?.to_owned(), first.next()?.to_owned());
+        let headers: Vec<(String, String)> = lines
+            .filter_map(|line| line.split_once(": "))
+            .map(|(name, value)| (name.to_owned(), value.to_owned()))
+            .collect();
+        let length = headers
+            .iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case("content-length"))
+            .and_then(|(_, value)| value.parse::<usize>().ok())
+            .unwrap_or(0);
+        let body = bytes.get(split + 4..split + 4 + length)?.to_vec();
+        Some(Self { method, path, headers, body })
+    }
+}
+
+/// A connection to the fake Incus: what is written is the request, what is read its answer.
+struct FakeConn {
+    state: Arc<Mutex<State>>,
+    written: Vec<u8>,
+    answer: Option<std::io::Cursor<Vec<u8>>>,
+}
+
+impl std::fmt::Debug for FakeConn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("FakeConn")
+    }
+}
+
+impl io::Write for FakeConn {
+    fn write(&mut self, data: &[u8]) -> io::Result<usize> {
+        self.written.extend_from_slice(data);
+        Ok(data.len())
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+impl io::Read for FakeConn {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        if self.answer.is_none() {
+            let request = Request::parse(&self.written)
+                .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "not an HTTP request"))?;
+            let mut state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
+            state.incus.requests.push(format!("{} {}", request.method, request.path));
+            let (status, body) = state.incus.answer(&request);
+            let mut answer =
+                format!("HTTP/1.1 {status} X\r\nContent-Length: {}\r\n\r\n", body.len())
+                    .into_bytes();
+            answer.extend(body);
+            self.answer = Some(std::io::Cursor::new(answer));
+        }
+        self.answer.as_mut().map_or(Ok(0), |answer| answer.read(buffer))
+    }
+}
+
+impl Conn for FakeConn {
+    fn set_timeout(&mut self, _: Option<Duration>) -> io::Result<()> {
+        Ok(())
+    }
+}
+
 struct File {
     data: Vec<u8>,
     mode: u32,
+    owner: (u32, u32),
 }
 
 struct State {
     files: BTreeMap<PathBuf, File>,
     dirs: BTreeSet<PathBuf>,
+    links: BTreeMap<PathBuf, PathBuf>,
     env: BTreeMap<String, String>,
     now: SystemTime,
     programs: Vec<(String, Program)>,
@@ -409,7 +488,7 @@ struct State {
 /// The machine in memory. It starts empty: no files, no programs, 2026-09-21 on the clock, and
 /// an Incus with no instances.
 pub struct FakeSystem {
-    state: Mutex<State>,
+    state: Arc<Mutex<State>>,
 }
 
 impl Default for FakeSystem {
@@ -423,16 +502,17 @@ impl FakeSystem {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            state: Mutex::new(State {
+            state: Arc::new(Mutex::new(State {
                 files: BTreeMap::new(),
                 dirs: BTreeSet::new(),
+                links: BTreeMap::new(),
                 env: BTreeMap::new(),
                 now: SystemTime::UNIX_EPOCH + Duration::from_secs(1_790_000_000),
                 programs: Vec::new(),
                 ran: Vec::new(),
                 incus: FakeIncus::new(),
                 counter: 0,
-            }),
+            })),
         }
     }
 
@@ -442,9 +522,10 @@ impl FakeSystem {
 
     /// Puts a file on the machine, with mode 0644.
     pub fn put(&self, path: &str, data: impl AsRef<[u8]>) {
-        self.state()
-            .files
-            .insert(PathBuf::from(path), File { data: data.as_ref().to_vec(), mode: 0o644 });
+        self.state().files.insert(
+            PathBuf::from(path),
+            File { data: data.as_ref().to_vec(), mode: 0o644, owner: (0, 0) },
+        );
     }
 
     /// Sets the permission bits of a file that is there.
@@ -504,6 +585,12 @@ impl FakeSystem {
             .collect()
     }
 
+    /// The user and group ids that own a file; `None` when it is not there.
+    #[must_use]
+    pub fn owner(&self, path: &str) -> Option<(u32, u32)> {
+        self.state().files.get(Path::new(path)).map(|file| file.owner)
+    }
+
     /// The text of a file; `None` when it is not there.
     #[must_use]
     pub fn text(&self, path: &str) -> Option<String> {
@@ -543,32 +630,89 @@ impl System for FakeSystem {
             .ok_or_else(|| missing(&path.display()))
     }
 
-    fn write(&self, path: &Path, data: &[u8]) -> io::Result<()> {
-        let mut state = self.state();
-        match state.files.get_mut(path) {
-            Some(file) => file.data = data.to_vec(),
-            None => {
-                state.files.insert(path.to_owned(), File { data: data.to_vec(), mode: 0o644 });
+    fn read_dir(&self, path: &Path) -> io::Result<Vec<String>> {
+        let state = self.state();
+        let mut names = BTreeSet::new();
+        for candidate in state.files.keys().chain(&state.dirs) {
+            if let Ok(rest) = candidate.strip_prefix(path)
+                && let Some(first) = rest.components().next()
+            {
+                names.insert(first.as_os_str().to_string_lossy().into_owned());
             }
         }
+        if names.is_empty() && !state.dirs.contains(path) {
+            return Err(missing(&path.display()));
+        }
+        Ok(names.into_iter().collect())
+    }
+
+    fn exists(&self, path: &Path) -> bool {
+        let state = self.state();
+        state.files.contains_key(path)
+            || state.dirs.contains(path)
+            || state.files.keys().chain(&state.dirs).any(|other| other.starts_with(path))
+    }
+
+    fn metadata(&self, path: &Path) -> io::Result<Metadata> {
+        let state = self.state();
+        let now = state.now;
+        if let Some(file) = state.files.get(path) {
+            let size = file.data.len() as u64;
+            let (uid, gid) = file.owner;
+            return Ok(Metadata {
+                kind: FileKind::File,
+                size,
+                mode: file.mode,
+                uid,
+                gid,
+                mtime: now,
+            });
+        }
+        let is_dir = state.dirs.contains(path)
+            || state.files.keys().chain(&state.dirs).any(|other| other.starts_with(path));
+        if is_dir {
+            Ok(Metadata { kind: FileKind::Dir, size: 0, mode: 0o755, uid: 0, gid: 0, mtime: now })
+        } else {
+            Err(missing(&path.display()))
+        }
+    }
+
+    fn read_link(&self, path: &Path) -> io::Result<PathBuf> {
+        self.state().links.get(path).cloned().ok_or_else(|| missing(&path.display()))
+    }
+
+    fn write(&self, path: &Path, data: &[u8], mode: u32) -> io::Result<()> {
+        let mut state = self.state();
+        let owner = state.files.get(path).map_or((0, 0), |file| file.owner);
+        state.files.insert(path.to_owned(), File { data: data.to_vec(), mode, owner });
         Ok(())
     }
 
-    fn append(&self, path: &Path, data: &[u8]) -> io::Result<()> {
+    fn append(&self, path: &Path, data: &[u8], mode: u32) -> io::Result<()> {
         let mut state = self.state();
-        let file =
-            state.files.entry(path.to_owned()).or_insert(File { data: Vec::new(), mode: 0o644 });
+        let file = state.files.entry(path.to_owned()).or_insert(File {
+            data: Vec::new(),
+            mode,
+            owner: (0, 0),
+        });
         file.data.extend_from_slice(data);
         Ok(())
     }
 
-    fn remove_file(&self, path: &Path) -> io::Result<()> {
-        self.state().files.remove(path);
+    fn create_dir_all(&self, path: &Path, _mode: u32) -> io::Result<()> {
+        self.state().dirs.insert(path.to_owned());
         Ok(())
     }
 
-    fn create_dir_all(&self, path: &Path) -> io::Result<()> {
-        self.state().dirs.insert(path.to_owned());
+    fn remove_file(&self, path: &Path) -> io::Result<()> {
+        let mut state = self.state();
+        state.files.remove(path);
+        state.links.remove(path);
+        Ok(())
+    }
+
+    fn symlink(&self, target: &Path, path: &Path) -> io::Result<()> {
+        self.state().links.insert(path.to_owned(), target.to_owned());
         Ok(())
     }
 
@@ -582,50 +726,22 @@ impl System for FakeSystem {
         }
     }
 
-    fn mode(&self, path: &Path) -> Option<u32> {
-        self.state().files.get(path).map(|file| file.mode)
+    fn set_owner(&self, path: &Path, uid: u32, gid: u32) -> io::Result<()> {
+        match self.state().files.get_mut(path) {
+            Some(file) => {
+                file.owner = (uid, gid);
+                Ok(())
+            }
+            None => Err(missing(&path.display())),
+        }
     }
 
-    fn unix_http(&self, socket: &Path, request: &HttpRequest) -> io::Result<HttpResponse> {
-        let mut state = self.state();
-        if socket != state.incus.socket || state.incus.version.is_none() {
+    fn connect_unix(&self, path: &Path) -> io::Result<Box<dyn Conn>> {
+        let state = self.state();
+        if path != state.incus.socket || state.incus.version.is_none() {
             return Err(io::Error::new(io::ErrorKind::ConnectionRefused, "connection refused"));
         }
-        state.incus.requests.push(format!("{} {}", request.method, request.path));
-        let (status, body) = state.incus.answer(request);
-        Ok(HttpResponse { status, body })
-    }
-
-    fn read_dir(&self, path: &Path) -> io::Result<Vec<Entry>> {
-        let state = self.state();
-        let mut entries: BTreeMap<String, bool> = BTreeMap::new();
-        let below = |candidate: &Path| -> Option<(String, bool)> {
-            let rest = candidate.strip_prefix(path).ok()?;
-            let mut parts = rest.components();
-            let first = parts.next()?.as_os_str().to_string_lossy().into_owned();
-            Some((first, parts.next().is_some()))
-        };
-        for file in state.files.keys() {
-            if let Some((name, deeper)) = below(file) {
-                *entries.entry(name).or_default() |= deeper;
-            }
-        }
-        for dir in &state.dirs {
-            if let Some((name, _)) = below(dir) {
-                entries.insert(name, true);
-            }
-        }
-        if entries.is_empty() && !state.dirs.contains(path) {
-            return Err(missing(&path.display()));
-        }
-        Ok(entries.into_iter().map(|(name, is_dir)| Entry { name, is_dir }).collect())
-    }
-
-    fn exists(&self, path: &Path) -> bool {
-        let state = self.state();
-        state.files.contains_key(path)
-            || state.dirs.contains(path)
-            || state.files.keys().any(|file| file.starts_with(path))
+        Ok(Box::new(FakeConn { state: Arc::clone(&self.state), written: Vec::new(), answer: None }))
     }
 
     fn env(&self, name: &str) -> Option<String> {
@@ -636,18 +752,24 @@ impl System for FakeSystem {
         self.state().now
     }
 
+    /// The fake machine's monotonic clock is its clock.
+    fn monotonic(&self) -> Duration {
+        self.state().now.duration_since(SystemTime::UNIX_EPOCH).unwrap_or_default()
+    }
+
     /// Nobody waits on the fake machine: its clock moves on instead.
     fn sleep(&self, duration: Duration) {
         self.state().now += duration;
     }
 
     /// Bytes that count up from 1: the same "secrets" on every run.
-    fn random(&self, buffer: &mut [u8]) -> io::Result<()> {
+    fn random_bytes(&self, count: usize) -> io::Result<Vec<u8>> {
         let mut state = self.state();
-        for byte in buffer {
-            state.counter = state.counter.wrapping_add(1);
-            *byte = state.counter;
-        }
-        Ok(())
+        Ok((0..count)
+            .map(|_| {
+                state.counter = state.counter.wrapping_add(1);
+                state.counter
+            })
+            .collect())
     }
 }

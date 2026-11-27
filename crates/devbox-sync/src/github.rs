@@ -82,7 +82,7 @@ fn know_github(system: &dyn System, home: &Path) {
         && !output.stdout.is_empty()
     {
         // Without the key the clone over SSH fails and HTTPS is tried.
-        let _ = system.append(&known_hosts, &output.stdout);
+        let _ = system.append(&known_hosts, &output.stdout, 0o644);
     }
 }
 

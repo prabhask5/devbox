@@ -100,41 +100,55 @@ impl Output {
     }
 }
 
-/// An HTTP request to a service that listens on a unix socket.
-#[derive(Clone, Debug, Default)]
-pub struct HttpRequest {
-    /// `GET`, `PUT`, …
-    pub method: String,
-    /// The path, with its query.
-    pub path: String,
-    /// Headers besides `Host`, `Content-Length` and `Connection`.
-    pub headers: Vec<(String, String)>,
-    /// The body; empty for none.
-    pub body: Vec<u8>,
-    /// How long the answer may take; `None` is as long as it takes.
-    pub timeout: Option<Duration>,
+/// What a path is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FileKind {
+    /// A regular file.
+    File,
+    /// A directory.
+    Dir,
+    /// A symbolic link (only when the link itself is asked about).
+    Symlink,
+    /// Anything else: a socket, a device.
+    Other,
 }
 
-/// The answer to an [`HttpRequest`].
-#[derive(Clone, Debug, Default)]
-pub struct HttpResponse {
-    /// The status code.
-    pub status: u16,
-    /// The body.
-    pub body: Vec<u8>,
+/// The parts of `stat` devbox uses.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Metadata {
+    /// What it is.
+    pub kind: FileKind,
+    /// Its size in bytes.
+    pub size: u64,
+    /// Its permission bits (`0o7777` mask).
+    pub mode: u32,
+    /// The user id that owns it.
+    pub uid: u32,
+    /// The group id that owns it.
+    pub gid: u32,
+    /// When it was last changed.
+    pub mtime: SystemTime,
 }
 
-/// An entry of a directory.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Entry {
-    /// Its file name.
-    pub name: String,
-    /// Whether it is a directory (a link to one counts).
-    pub is_dir: bool,
+/// Whether `path` is a directory (a link to one counts).
+#[must_use]
+pub fn is_dir(system: &dyn System, path: &Path) -> bool {
+    system.metadata(path).is_ok_and(|meta| meta.kind == FileKind::Dir)
 }
 
-/// The machine devbox runs on. Implementations are shared between threads.
-pub trait System: Sync {
+/// A connected stream socket: the Incus API's unix socket.
+pub trait Conn: Read + Write + Send + std::fmt::Debug {
+    /// Fails reads and writes that block longer than this; `None` waits forever.
+    ///
+    /// # Errors
+    ///
+    /// When the socket refuses the setting.
+    fn set_timeout(&mut self, timeout: Option<Duration>) -> io::Result<()>;
+}
+
+/// The machine devbox runs on. Every method maps onto the method of the same name of moi's
+/// `host::Host` (docs/spec/12-moi.md), so that moi can drive devbox through its own host.
+pub trait System: Send + Sync {
     /// Runs a program to its end.
     ///
     /// # Errors
@@ -149,19 +163,52 @@ pub trait System: Sync {
     /// As [`std::fs::read`].
     fn read(&self, path: &Path) -> io::Result<Vec<u8>>;
 
-    /// Writes a file, replacing what is there and creating its directories when missing.
+    /// The names of a directory's entries, sorted.
+    ///
+    /// # Errors
+    ///
+    /// As [`std::fs::read_dir`].
+    fn read_dir(&self, path: &Path) -> io::Result<Vec<String>>;
+
+    /// Whether something exists at `path`.
+    fn exists(&self, path: &Path) -> bool;
+
+    /// What is at `path`, following symbolic links.
+    ///
+    /// # Errors
+    ///
+    /// As [`std::fs::metadata`].
+    fn metadata(&self, path: &Path) -> io::Result<Metadata>;
+
+    /// The target of a symbolic link, as stored.
+    ///
+    /// # Errors
+    ///
+    /// As [`std::fs::read_link`].
+    fn read_link(&self, path: &Path) -> io::Result<PathBuf>;
+
+    /// Writes a file with these permission bits, replacing what is there and creating its
+    /// directories when missing. The file has its mode before it has its content.
     ///
     /// # Errors
     ///
     /// As [`std::fs::write`].
-    fn write(&self, path: &Path, data: &[u8]) -> io::Result<()>;
+    fn write(&self, path: &Path, data: &[u8], mode: u32) -> io::Result<()>;
 
-    /// Adds `data` to the end of a file, creating it and its directories when missing.
+    /// Adds `data` to the end of a file, creating it (with `mode`) and its directories when
+    /// missing.
     ///
     /// # Errors
     ///
     /// As [`std::fs::OpenOptions::open`] and [`std::io::Write::write_all`].
-    fn append(&self, path: &Path, data: &[u8]) -> io::Result<()>;
+    fn append(&self, path: &Path, data: &[u8], mode: u32) -> io::Result<()>;
+
+    /// Creates a directory and those above it; the ones it creates get `mode`.
+    ///
+    /// # Errors
+    ///
+    /// As [`std::fs::create_dir_all`].
+    fn create_dir_all(&self, path: &Path, mode: u32) -> io::Result<()>;
 
     /// Removes a file; one that is not there is not an error.
     ///
@@ -170,12 +217,12 @@ pub trait System: Sync {
     /// As [`std::fs::remove_file`], except for a missing file.
     fn remove_file(&self, path: &Path) -> io::Result<()>;
 
-    /// Creates a directory and those above it.
+    /// Creates a symbolic link at `path` pointing to `target`, replacing a file or link there.
     ///
     /// # Errors
     ///
-    /// As [`std::fs::create_dir_all`].
-    fn create_dir_all(&self, path: &Path) -> io::Result<()>;
+    /// As [`std::os::unix::fs::symlink`].
+    fn symlink(&self, target: &Path, path: &Path) -> io::Result<()>;
 
     /// Sets the permission bits of a file or directory (`0o600`, `0o755`).
     ///
@@ -184,26 +231,19 @@ pub trait System: Sync {
     /// As [`std::fs::set_permissions`].
     fn set_mode(&self, path: &Path, mode: u32) -> io::Result<()>;
 
-    /// The permission bits of what is at `path`; `None` when nothing is.
-    fn mode(&self, path: &Path) -> Option<u32>;
-
-    /// Sends an HTTP request to the service listening on the unix socket at `socket` and reads
-    /// its answer to the end.
+    /// Sets the user and group that own a file.
     ///
     /// # Errors
     ///
-    /// When the socket cannot be reached or the answer is not HTTP.
-    fn unix_http(&self, socket: &Path, request: &HttpRequest) -> io::Result<HttpResponse>;
+    /// As [`std::os::unix::fs::chown`].
+    fn set_owner(&self, path: &Path, uid: u32, gid: u32) -> io::Result<()>;
 
-    /// Lists a directory, sorted by name.
+    /// Connects to the service listening on a unix stream socket.
     ///
     /// # Errors
     ///
-    /// As [`std::fs::read_dir`].
-    fn read_dir(&self, path: &Path) -> io::Result<Vec<Entry>>;
-
-    /// Whether something exists at `path`.
-    fn exists(&self, path: &Path) -> bool;
+    /// When nothing listens there or it may not be reached.
+    fn connect_unix(&self, path: &Path) -> io::Result<Box<dyn Conn>>;
 
     /// A variable of the environment; `None` when unset or not text.
     fn env(&self, name: &str) -> Option<String>;
@@ -211,15 +251,18 @@ pub trait System: Sync {
     /// The time.
     fn now(&self) -> SystemTime;
 
+    /// A clock that only moves forward, for measuring how long something took.
+    fn monotonic(&self) -> Duration;
+
     /// Waits.
     fn sleep(&self, duration: Duration);
 
-    /// Fills `buffer` with bytes nobody can guess, for secrets.
+    /// Bytes nobody can guess, for secrets.
     ///
     /// # Errors
     ///
     /// When the machine has no source of randomness.
-    fn random(&self, buffer: &mut [u8]) -> io::Result<()>;
+    fn random_bytes(&self, count: usize) -> io::Result<Vec<u8>>;
 }
 
 /// The real machine. Variables given to [`Host::with_env`] replace those of the process, for
@@ -257,6 +300,33 @@ fn lock(child: &Mutex<Child>) -> std::sync::MutexGuard<'_, Child> {
     child.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
+#[derive(Debug)]
+struct UnixConn(std::os::unix::net::UnixStream);
+
+impl Read for UnixConn {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        self.0.read(buffer)
+    }
+}
+
+impl Write for UnixConn {
+    fn write(&mut self, data: &[u8]) -> io::Result<usize> {
+        self.0.write(data)
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        self.0.flush()
+    }
+}
+
+impl Conn for UnixConn {
+    fn set_timeout(&mut self, timeout: Option<Duration>) -> io::Result<()> {
+        self.0.set_read_timeout(timeout)?;
+        self.0.set_write_timeout(timeout)
+    }
+}
+
+// The one place in the library crates that touches the operating system directly.
+#[allow(clippy::disallowed_methods)]
 impl System for Host {
     fn run(&self, command: &Command) -> io::Result<Output> {
         let mut process = std::process::Command::new(&command.program);
@@ -306,18 +376,71 @@ impl System for Host {
         std::fs::read(path)
     }
 
-    fn write(&self, path: &Path, data: &[u8]) -> io::Result<()> {
-        if let Some(dir) = path.parent() {
-            std::fs::create_dir_all(dir)?;
+    fn read_dir(&self, path: &Path) -> io::Result<Vec<String>> {
+        let mut names = Vec::new();
+        for entry in std::fs::read_dir(path)? {
+            names.push(entry?.file_name().to_string_lossy().into_owned());
         }
-        std::fs::write(path, data)
+        names.sort();
+        Ok(names)
     }
 
-    fn append(&self, path: &Path, data: &[u8]) -> io::Result<()> {
+    fn exists(&self, path: &Path) -> bool {
+        std::fs::symlink_metadata(path).is_ok()
+    }
+
+    fn metadata(&self, path: &Path) -> io::Result<Metadata> {
+        use std::os::unix::fs::MetadataExt;
+        let meta = std::fs::metadata(path)?;
+        let kind = if meta.is_dir() {
+            FileKind::Dir
+        } else if meta.is_file() {
+            FileKind::File
+        } else {
+            FileKind::Other
+        };
+        Ok(Metadata {
+            kind,
+            size: meta.len(),
+            mode: meta.mode() & 0o7777,
+            uid: meta.uid(),
+            gid: meta.gid(),
+            mtime: meta.modified()?,
+        })
+    }
+
+    fn read_link(&self, path: &Path) -> io::Result<PathBuf> {
+        std::fs::read_link(path)
+    }
+
+    fn write(&self, path: &Path, data: &[u8], mode: u32) -> io::Result<()> {
+        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
-        std::fs::OpenOptions::new().append(true).create(true).open(path)?.write_all(data)
+        // Created with its mode, and given it if it was there with another, before any content.
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .mode(mode)
+            .open(path)?;
+        file.set_permissions(std::fs::Permissions::from_mode(mode))?;
+        file.set_len(0)?;
+        file.write_all(data)
+    }
+
+    fn append(&self, path: &Path, data: &[u8], mode: u32) -> io::Result<()> {
+        use std::os::unix::fs::OpenOptionsExt;
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        std::fs::OpenOptions::new().append(true).create(true).mode(mode).open(path)?.write_all(data)
+    }
+
+    fn create_dir_all(&self, path: &Path, mode: u32) -> io::Result<()> {
+        use std::os::unix::fs::DirBuilderExt;
+        std::fs::DirBuilder::new().recursive(true).mode(mode).create(path)
     }
 
     fn remove_file(&self, path: &Path) -> io::Result<()> {
@@ -327,8 +450,11 @@ impl System for Host {
         }
     }
 
-    fn create_dir_all(&self, path: &Path) -> io::Result<()> {
-        std::fs::create_dir_all(path)
+    fn symlink(&self, target: &Path, path: &Path) -> io::Result<()> {
+        if std::fs::symlink_metadata(path).is_ok() {
+            std::fs::remove_file(path)?;
+        }
+        std::os::unix::fs::symlink(target, path)
     }
 
     fn set_mode(&self, path: &Path, mode: u32) -> io::Result<()> {
@@ -336,50 +462,12 @@ impl System for Host {
         std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))
     }
 
-    fn mode(&self, path: &Path) -> Option<u32> {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::metadata(path).ok().map(|meta| meta.permissions().mode() & 0o7777)
+    fn set_owner(&self, path: &Path, uid: u32, gid: u32) -> io::Result<()> {
+        std::os::unix::fs::chown(path, Some(uid), Some(gid))
     }
 
-    fn unix_http(&self, socket: &Path, request: &HttpRequest) -> io::Result<HttpResponse> {
-        let mut stream = std::os::unix::net::UnixStream::connect(socket)?;
-        stream.set_read_timeout(request.timeout)?;
-        stream.set_write_timeout(request.timeout)?;
-        let mut head = format!(
-            "{} {} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Length: {}\r\n",
-            request.method,
-            request.path,
-            request.body.len()
-        );
-        for (name, value) in &request.headers {
-            head.push_str(name);
-            head.push_str(": ");
-            head.push_str(value);
-            head.push_str("\r\n");
-        }
-        head.push_str("\r\n");
-        stream.write_all(head.as_bytes())?;
-        stream.write_all(&request.body)?;
-        let mut answer = Vec::new();
-        stream.read_to_end(&mut answer)?;
-        parse_response(&answer).ok_or_else(|| io::Error::other("the answer is not HTTP"))
-    }
-
-    fn read_dir(&self, path: &Path) -> io::Result<Vec<Entry>> {
-        let mut entries = Vec::new();
-        for entry in std::fs::read_dir(path)? {
-            let entry = entry?;
-            entries.push(Entry {
-                name: entry.file_name().to_string_lossy().into_owned(),
-                is_dir: entry.path().is_dir(),
-            });
-        }
-        entries.sort();
-        Ok(entries)
-    }
-
-    fn exists(&self, path: &Path) -> bool {
-        path.exists()
+    fn connect_unix(&self, path: &Path) -> io::Result<Box<dyn Conn>> {
+        Ok(Box::new(UnixConn(std::os::unix::net::UnixStream::connect(path)?)))
     }
 
     fn env(&self, name: &str) -> Option<String> {
@@ -390,65 +478,18 @@ impl System for Host {
         SystemTime::now()
     }
 
+    fn monotonic(&self) -> Duration {
+        static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+        START.get_or_init(std::time::Instant::now).elapsed()
+    }
+
     fn sleep(&self, duration: Duration) {
         std::thread::sleep(duration);
     }
 
-    fn random(&self, buffer: &mut [u8]) -> io::Result<()> {
-        getrandom::fill(buffer).map_err(io::Error::other)
-    }
-}
-
-/// Splits an HTTP/1.1 response read to its end into status and body, undoing chunked transfer
-/// encoding.
-fn parse_response(answer: &[u8]) -> Option<HttpResponse> {
-    let split = answer.windows(4).position(|window| window == b"\r\n\r\n")?;
-    let head = std::str::from_utf8(&answer[..split]).ok()?;
-    let mut body = &answer[split + 4..];
-    let mut lines = head.split("\r\n");
-    let status = lines.next()?.split(' ').nth(1)?.parse().ok()?;
-    let chunked = lines.any(|line| {
-        line.split_once(':').is_some_and(|(name, value)| {
-            name.eq_ignore_ascii_case("transfer-encoding")
-                && value.trim().eq_ignore_ascii_case("chunked")
-        })
-    });
-    if !chunked {
-        return Some(HttpResponse { status, body: body.to_vec() });
-    }
-    let mut decoded = Vec::new();
-    loop {
-        let line_end = body.windows(2).position(|window| window == b"\r\n")?;
-        let size_text = std::str::from_utf8(&body[..line_end]).ok()?;
-        let size = usize::from_str_radix(size_text.split(';').next()?.trim(), 16).ok()?;
-        body = &body[line_end + 2..];
-        if size == 0 {
-            return Some(HttpResponse { status, body: decoded });
-        }
-        decoded.extend_from_slice(body.get(..size)?);
-        body = body.get(size + 2..)?;
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::parse_response;
-
-    #[test]
-    fn responses_are_split_into_status_and_body() {
-        let plain = parse_response(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}").unwrap();
-        assert_eq!((plain.status, plain.body.as_slice()), (200, &b"{}"[..]));
-        let empty = parse_response(b"HTTP/1.1 404 Not Found\r\n\r\n").unwrap();
-        assert_eq!((empty.status, empty.body.len()), (404, 0));
-        let chunked = parse_response(
-            b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n4\r\n{\"a\"\r\n3;x=y\r\n:1}\r\n0\r\n\r\n",
-        )
-        .unwrap();
-        assert_eq!(chunked.body, b"{\"a\":1}");
-        assert!(parse_response(b"not http").is_none());
-        assert!(
-            parse_response(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nab")
-                .is_none()
-        );
+    fn random_bytes(&self, count: usize) -> io::Result<Vec<u8>> {
+        let mut bytes = vec![0; count];
+        getrandom::fill(&mut bytes).map_err(io::Error::other)?;
+        Ok(bytes)
     }
 }
