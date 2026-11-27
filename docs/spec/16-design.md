@@ -31,7 +31,7 @@ The prototype source (`reference/prototype/devbox/hub/public/app.css`, `referenc
 | agent colours | claude `#e8916b`, codex `#8fd3c7`, opencode `#f2c14e`, shell `#9198a3` | agent badges (letter on a 10 % tint) |
 | progress gradient | `#4aa3ff → #7cc4ff` | progress bars |
 | radii | cards 16, buttons/inputs 12, chips 99, badges 10, sheets 22 (top) | |
-| type | system stack (`-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui`); page titles 28/700, section labels 12/600 uppercase tracking .06em, body 15, mono `ui-monospace, "SF Mono", Menlo, "JetBrains Mono"` | |
+| type | system stack (`ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif`, the prototype's; `system-ui` is left out because Linux browsers map it to a different font than `sans-serif`); page titles 28/700, section labels 12/600 uppercase tracking .06em, body 15, mono `ui-monospace, "SF Mono", Menlo, "JetBrains Mono"` | |
 
 ## Components (must look like the screenshots)
 

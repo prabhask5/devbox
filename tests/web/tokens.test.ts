@@ -35,7 +35,7 @@ const design: Record<string, string> = {
   "--radius-chip": "99px",
   "--radius-badge": "10px",
   "--radius-sheet": "22px",
-  "--font-sans": '-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif',
+  "--font-sans": 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif',
   "--font-mono": 'ui-monospace, "SF Mono", Menlo, "JetBrains Mono", monospace',
 };
 
