@@ -2,7 +2,9 @@
 
 Speed is a product requirement. Budgets live in `budgets.toml` and are enforced by the `budgets` CI job (release builds, fixtures and fakes, median of 5 runs; fails when a metric exceeds its budget by more than 10 %). The job writes a table (metric, budget, measured, result) to the job summary. Metrics without a measurement yet are listed as "pending".
 
-`scripts/budgets.sh` does the comparison. The gateway's metrics are measured by `tests/perf/gateway` (`go run ./tests/perf/gateway`): an in-process gateway on loopback in front of a fake VM, compared with requests straight to that VM. The measurement suites in `tests/perf/` write their medians as `metric = value` lines (the names used in `budgets.toml`) to `target/budgets/measured.toml` (`$BUDGETS_MEASURED` overrides the path); a measurement without a budget is an error. Every metric is a maximum except those ending in `_rps`, which are minimums and fail when more than 10 % below the budget.
+The budgets are for Linux, where devbox runs, and are enforced there (CI). On another system `scripts/ci.sh` still measures and prints the table but does not fail: starting a process, for one, costs several milliseconds more on macOS.
+
+`scripts/budgets.sh` does the comparison. The gateway's metrics are measured by `tests/perf/gateway` (`go run ./tests/perf/gateway`): an in-process gateway on loopback in front of a fake VM, compared with requests straight to that VM. The hook relay is measured by `tests/perf/hub`: the whole `devbox-hub event` process, start to exit, 200 times against a running hub. The measurement suites in `tests/perf/` write their medians as `metric = value` lines (the names used in `budgets.toml`) to `target/budgets/measured.toml` (`$BUDGETS_MEASURED` overrides the path); a measurement without a budget is an error. Every metric is a maximum except those ending in `_rps`, which are minimums and fail when more than 10 % below the budget.
 
 | Metric | Budget | How it is measured |
 |---|---|---|

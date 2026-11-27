@@ -291,17 +291,15 @@ func TestWakeIgnoresAHubSpeakingAnotherVersion(t *testing.T) {
 
 func TestSyncProblemsAreCounted(t *testing.T) {
 	h := start(t, stoppedVM(false))
-	<-h.gw.RequestWake("warm up") // so the hub has a sync state to modify
-	h.wakeDone()
-	<-h.gw.Sleep("test")
 	h.vm.mu.Lock()
-	h.vm.syncPolls = 2
+	h.vm.syncPolls = 1 << 30 // the sync runs until the test ends it
 	h.vm.mu.Unlock()
 	done := h.gw.RequestWake("test")
-	eventually(t, "the sync phase", func() bool { w := h.status().Wake; return w != nil && w.Phases.Sync != nil })
+	eventually(t, "the sync phase", func() bool { w := h.status().Wake; return w != nil && w.Sync != nil })
 	h.vm.mu.Lock()
 	h.vm.hubStatus.Sync.Results = append(h.vm.hubStatus.Sync.Results,
 		proto.SyncResult{Name: "moi", Status: proto.SyncStatusConflict, Detail: "left exactly as it was"})
+	h.vm.syncPolls = 0
 	h.vm.mu.Unlock()
 	<-done
 	if wake := h.wakeDone(); !strings.Contains(strings.Join(wake.Log, "\n"), "Repos synced (1 need attention)") {

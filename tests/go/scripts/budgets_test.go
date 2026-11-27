@@ -80,6 +80,22 @@ func TestBudgetsFailBeyondTenPercent(t *testing.T) {
 	}
 }
 
+func TestBudgetsCanBeReportedWithoutBeingEnforced(t *testing.T) {
+	dir := t.TempDir()
+	measured := filepath.Join(dir, "measured.toml")
+	if err := os.WriteFile(measured, []byte("relay_p50_ms = 9\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	script := filepath.Join(repo.Root(t), "scripts/budgets.sh")
+	code, out := runScript(t, script, []string{"BUDGETS_MEASURED=" + measured, "BUDGETS_REPORT_ONLY=1", "GITHUB_STEP_SUMMARY="})
+	if code != 0 || !strings.Contains(out, "| relay_p50_ms | 5 | 9 | over budget |") || !strings.Contains(out, "not enforced") {
+		t.Errorf("report only: exit %d\n%s", code, out)
+	}
+	if code, _ := runScript(t, script, []string{"BUDGETS_MEASURED=" + measured, "BUDGETS_REPORT_ONLY=", "GITHUB_STEP_SUMMARY="}); code != 1 {
+		t.Errorf("enforced: exit %d", code)
+	}
+}
+
 func TestBudgetsRejectUnknownAndMalformedMeasurements(t *testing.T) {
 	code, out, _ := budgets(t, "relay_p50 = 1\n")
 	if code != 1 || !strings.Contains(out, "measurements without a budget in budgets.toml: relay_p50") {

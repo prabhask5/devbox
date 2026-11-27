@@ -99,10 +99,14 @@ build() {
 budgets() {
   rm -f target/budgets/measured.toml
   step "measure the gateway"
-  go build -o target/budgets/devbox-gateway ./cmd/devbox-gateway
+  go build -trimpath -ldflags "-s -w" -o target/budgets/devbox-gateway ./cmd/devbox-gateway
   go run ./tests/perf/gateway -gateway target/budgets/devbox-gateway
+  step "measure the hub"
+  go build -trimpath -ldflags "-s -w" -o target/budgets/devbox-hub ./cmd/devbox-hub
+  go run ./tests/perf/hub -hub target/budgets/devbox-hub
   if [[ ${DEVBOX_DOCKER:-} == 1 ]]; then step "measure the gateway image"; scripts/check-image.sh --measure; fi
-  step "budgets"; scripts/budgets.sh
+  # Process start-up and scheduling differ too much elsewhere for the numbers to mean the same.
+  step "budgets"; BUDGETS_REPORT_ONLY=$([[ $(uname -s) == Linux ]] || echo 1) scripts/budgets.sh
 }
 
 stages=("$@")

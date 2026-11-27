@@ -1,0 +1,57 @@
+{
+    "model": "opus",
+    "permissions": {
+        "allow": [
+            "Bash(go test:*)"
+        ],
+        "deny": [
+            "Bash(sudo:*)"
+        ]
+    },
+    "hooks": {
+        "PreToolUse": [
+            {
+                "matcher": "Bash",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "~/bin/audit-bash.sh"
+                    }
+                ]
+            }
+        ],
+        "Stop": [
+            {
+                "matcher": "",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "/old/path/devbox-hub event claude Stop",
+                        "timeout": 5
+                    }
+                ]
+            },
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "say done"
+                    }
+                ]
+            }
+        ],
+        "PreCompact": [
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": "echo compacting"
+                    }
+                ]
+            }
+        ]
+    },
+    "env": {
+        "FOO": "<bar> & baz"
+    }
+}

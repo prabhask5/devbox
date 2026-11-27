@@ -38,7 +38,7 @@ func run(t *testing.T, bin string, args ...string) (code int, stdout, stderr str
 
 func TestHubSubcommandsAreNotImplementedYet(t *testing.T) {
 	bin := build(t, "devbox-hub")
-	for _, sub := range []string{"serve", "event", "agent", "update", "selftest", "healthcheck"} {
+	for _, sub := range []string{"update", "selftest", "healthcheck"} {
 		code, stdout, stderr := run(t, bin, sub)
 		want := "devbox-hub " + sub + ": not implemented yet\n"
 		if code != 3 || stdout != "" || stderr != want {

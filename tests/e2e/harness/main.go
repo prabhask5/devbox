@@ -35,8 +35,9 @@ import (
 
 	"golang.org/x/crypto/argon2"
 
+	"github.com/prabhask5/devbox/internal/config"
 	"github.com/prabhask5/devbox/internal/gateway"
-	"github.com/prabhask5/devbox/internal/proto"
+	"github.com/prabhask5/devbox/internal/hub"
 	"github.com/prabhask5/devbox/internal/sys"
 	incusfake "github.com/prabhask5/devbox/tests/fakes/incus"
 	"github.com/prabhask5/devbox/tests/fakes/wsecho"
@@ -68,12 +69,10 @@ func main() {
 type vm struct {
 	incus *incusfake.Server
 
-	mu         sync.Mutex
-	codeUp     bool
-	hubUp      bool
-	syncHeld   bool // a repo sync, once started, runs until released
-	syncRun    int
-	syncActive bool
+	mu       sync.Mutex
+	codeUp   bool
+	hubUp    bool
+	syncHeld bool // a repo sync, once started, runs until released
 }
 
 func (v *vm) up(service *bool) bool {
@@ -108,57 +107,65 @@ func (v *vm) codeServer() http.Handler {
 	})
 }
 
-func (v *vm) hub() http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /devbox/status", func(w http.ResponseWriter, _ *http.Request) {
-		v.mu.Lock()
-		defer v.mu.Unlock()
-		status := proto.HubStatus{
-			V: proto.HubStatusVersion, Version: "e2e", Uptime: 60,
-			Idle: proto.HubIdle{Busy: true, Reasons: []string{"end-to-end tests are running"}},
-			Sync: proto.SyncState{State: proto.SyncStateStateIdle, Results: []proto.SyncResult{}},
-		}
-		if v.syncRun > 0 {
-			run, current := "s-"+strconv.Itoa(v.syncRun), "devbox"
-			status.Sync = proto.SyncState{
-				RunID: &run, State: proto.SyncStateStateRunning, Total: 3, Done: 2, Current: &current,
-				Results: []proto.SyncResult{
-					{Name: "dotfiles", Status: proto.SyncStatusCurrent, Detail: "up to date"},
-					{Name: "notes", Status: proto.SyncStatusUpdated, Detail: "pulled 3"},
-				},
-			}
-			if !v.syncHeld {
-				v.syncActive = false
-			}
-			if !v.syncActive {
-				status.Sync.State, status.Sync.Done, status.Sync.Current = proto.SyncStateStateDone, 3, nil
-				status.Sync.Results = append(status.Sync.Results, proto.SyncResult{Name: "devbox", Status: proto.SyncStatusCurrent, Detail: "up to date"})
-			}
-		}
-		_ = json.NewEncoder(w).Encode(status)
-	})
-	mux.HandleFunc("POST /devbox/wake", func(w http.ResponseWriter, _ *http.Request) {
-		v.mu.Lock()
-		defer v.mu.Unlock()
-		v.syncRun++
-		v.syncActive = true
-		_ = json.NewEncoder(w).Encode(proto.HubWakeResponse{V: proto.HubWakeResponseVersion, RunID: "s-" + strconv.Itoa(v.syncRun)})
-	})
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprintf(w, `<!doctype html><title>Agents</title><h1>agents app</h1><p id="url">%s</p>`, r.URL.RequestURI())
-	})
+// hubGuard stands between the gateway and the real hub, which runs in this process whatever
+// the fake Incus says: while the VM is "stopped" its port must be dead.
+func (v *vm) hubGuard(hubAddr *atomic.Pointer[string]) http.Handler {
+	proxy := &httputil.ReverseProxy{
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			pr.SetURL(&url.URL{Scheme: "http", Host: *hubAddr.Load()})
+			pr.Out.Host = pr.In.Host
+		},
+		FlushInterval: -1,
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !v.up(&v.hubUp) {
 			refuse(w)
 			return
 		}
-		if len(r.URL.Path) >= 8 && r.URL.Path[:8] == "/devbox/" && r.Header.Get("Authorization") != "Bearer "+hubToken {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-		mux.ServeHTTP(w, r)
+		proxy.ServeHTTP(w, r)
 	})
+}
+
+// quietHost is the machine as the hub sees it: the real process table, because the sessions
+// are real processes, but never loaded and long since booted — the load of the machine running
+// the tests must not decide whether the "VM" may sleep.
+type quietHost struct{}
+
+func (quietHost) HasChildren(pid int) bool { return sys.Machine().HasChildren(pid) }
+func (quietHost) Load() (float64, int)     { return 0, 4 }
+func (quietHost) Uptime() time.Duration    { return 24 * time.Hour }
+
+// commands is what the hub runs on the VM. `devbox sync --json` is played by a script that the
+// tests can hold in the middle; everything else (setting the clock, starting units) succeeds
+// without doing anything.
+type commands struct{ vm *vm }
+
+func (commands) Run(context.Context, string, ...string) ([]byte, error) { return nil, nil }
+
+func (c commands) Stream(ctx context.Context, line func(string), name string, args ...string) error {
+	if name != "devbox" || len(args) == 0 || args[0] != "sync" {
+		return nil
+	}
+	for _, progress := range []string{
+		`{"v": 1, "type": "start", "total": 3}`,
+		`{"v": 1, "type": "repo", "name": "dotfiles", "status": "current", "detail": "up to date"}`,
+		`{"v": 1, "type": "repo", "name": "notes", "status": "updated", "detail": "pulled 3"}`,
+		`{"v": 1, "type": "begin", "name": "devbox"}`,
+	} {
+		line(progress)
+	}
+	for {
+		c.vm.mu.Lock()
+		held := c.vm.syncHeld
+		c.vm.mu.Unlock()
+		if !held || ctx.Err() != nil {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	line(`{"v": 1, "type": "repo", "name": "devbox", "status": "current", "detail": "up to date"}`)
+	line(`{"v": 1, "type": "done"}`)
+	return nil
 }
 
 // sshd sends a banner and echoes lines.
@@ -259,23 +266,89 @@ func run(ctx context.Context, controlAddr, codeAddr, agentsAddr string) error {
 		return err
 	}
 	go http.Serve(codeListener, machine.codeServer()) // ends with the process
-	go http.Serve(hubListener, machine.hub())
+	var hubAddr atomic.Pointer[string]
+	go http.Serve(hubListener, machine.hubGuard(&hubAddr))
 	go machine.sshd(sshListener)
 
 	salt := []byte("FAKEsaltFAKEsalt")
 	hash := fmt.Sprintf("$argon2id$v=19$m=64,t=1,p=1$%s$%s", base64.RawStdEncoding.EncodeToString(salt),
 		base64.RawStdEncoding.EncodeToString(argon2.IDKey([]byte(wakePassword), salt, 1, 64, 1, 32)))
-	config := fmt.Sprintf("version = 1\ndomain = \"example.com\"\n[vm]\naddress = \"127.0.0.1\"\ncode_port = %d\nhub_port = %d\nssh_port = %d\n",
-		portOf(codeListener), portOf(hubListener), portOf(sshListener))
+	writeConfig := func(idle string) error {
+		config := fmt.Sprintf("version = 1\ndomain = \"example.com\"\n[vm]\naddress = \"127.0.0.1\"\ncode_port = %d\nhub_port = %d\nssh_port = %d\n[sleep]\nidle = %q\nmin_up = \"0s\"\n",
+			portOf(codeListener), portOf(hubListener), portOf(sshListener), idle)
+		tmp := filepath.Join(dir, "etc", "devbox.toml.new")
+		if err := os.WriteFile(tmp, []byte(config), 0o644); err != nil {
+			return err
+		}
+		return os.Rename(tmp, filepath.Join(dir, "etc", "devbox.toml"))
+	}
 	secrets := fmt.Sprintf("version = 1\nwake_password_hash = '%s'\ncookie_secret = \"FAKE-cookie-secret\"\nhub_token = %q\n", hash, hubToken)
 	if err := os.MkdirAll(filepath.Join(dir, "etc"), 0o755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(dir, "etc", "devbox.toml"), []byte(config), 0o644); err != nil {
+	if err := writeConfig("15m"); err != nil {
 		return err
 	}
 	if err := os.WriteFile(filepath.Join(dir, "etc", "secrets.toml"), []byte(secrets), 0o600); err != nil {
 		return err
+	}
+
+	// The real hub: real tmux on its own socket in a temporary home, fake agents on PATH that
+	// report through the real relay.
+	agents, err := newAgents(dir)
+	if err != nil {
+		return err
+	}
+	defer agents.tmux.KillServer(context.Background())
+	hubConfig, _, err := config.Hub("hub.toml", []byte("version = 1\n[hosts]\ncode = \""+codeHost+"\"\nagents = \""+agentsHost+"\"\n"))
+	if err != nil {
+		return err
+	}
+	hubSecrets, _, err := config.HubSecrets("hub.secrets.toml", []byte(
+		fmt.Sprintf("version = 1\napp_password_hash = '%s'\ncookie_secret = \"FAKE-hub-cookie-secret\"\nhub_token = %q\n", hash, hubToken)))
+	if err != nil {
+		return err
+	}
+	hubTimings := hub.DefaultTimings()
+	hubTimings.Tick = 100 * time.Millisecond
+	hubTimings.ExitGrace = time.Second
+	var theHub atomic.Pointer[hub.Hub]
+	startHub := func() (stop func(), err error) {
+		_ = agents.tmux.KillServer(ctx)
+		_ = os.RemoveAll(filepath.Join(dir, "hub-state"))
+		_ = os.Remove(agents.socket)
+		tcp, err := listen("127.0.0.1:0")
+		if err != nil {
+			return nil, err
+		}
+		socket, err := (&net.ListenConfig{}).Listen(ctx, "unix", agents.socket)
+		if err != nil {
+			return nil, err
+		}
+		instance, err := hub.New(ctx, hub.Options{
+			Config: hubConfig, Secrets: hubSecrets, Home: agents.home, CodeDir: filepath.Join(agents.home, "code"),
+			StateDir: filepath.Join(dir, "hub-state"), Version: "e2e", TCP: tcp, Socket: socket, Tmux: agents.tmux,
+			Clock: sys.SystemClock(), Host: quietHost{}, Runner: commands{machine}, Timings: hubTimings,
+			Log: slog.New(slog.NewTextHandler(os.Stderr, nil)),
+		})
+		if err != nil {
+			return nil, err
+		}
+		hubCtx, cancel := context.WithCancel(ctx)
+		done := make(chan struct{})
+		go func() {
+			if err := instance.Run(hubCtx); err != nil {
+				fmt.Fprintln(os.Stderr, "harness: hub:", err)
+			}
+			close(done)
+		}()
+		address := tcp.Addr().String()
+		hubAddr.Store(&address)
+		theHub.Store(instance)
+		return func() {
+			cancel()
+			<-done
+		}, nil
 	}
 
 	// Production behaviour at a pace tests can wait for.
@@ -326,10 +399,14 @@ func run(ctx context.Context, controlAddr, codeAddr, agentsAddr string) error {
 
 	// reset puts everything back to "asleep with saved memory, all services fine" behind a
 	// gateway that remembers nothing.
-	var stopGateway func()
+	var stopGateway, stopHub func()
 	reset := func() error {
 		if stopGateway != nil {
 			stopGateway()
+			stopHub()
+		}
+		if err := writeConfig("15m"); err != nil {
+			return err
 		}
 		_ = incus.Resume()
 		for _, failure := range []incusfake.Failure{incusfake.FailStart, incusfake.FailRestore, incusfake.FailStop, incusfake.FailStatefulStop} {
@@ -339,9 +416,12 @@ func run(ctx context.Context, controlAddr, codeAddr, agentsAddr string) error {
 		incus.SetInstance("devbox", "Stopped", true)
 		incus.ForgetRequests()
 		machine.mu.Lock()
-		machine.codeUp, machine.hubUp, machine.syncHeld, machine.syncRun, machine.syncActive = true, true, false, 0, false
+		machine.codeUp, machine.hubUp, machine.syncHeld = true, true, false
 		machine.mu.Unlock()
 		var err error
+		if stopHub, err = startHub(); err != nil {
+			return err
+		}
 		stopGateway, err = startGateway()
 		return err
 	}
@@ -374,7 +454,7 @@ func run(ctx context.Context, controlAddr, codeAddr, agentsAddr string) error {
 		}
 		_, _ = io.WriteString(w, "ok")
 	})
-	// POST /set?incus=down|up&code=down|up&hub=down|up&sync=hold|release&start=fail|ok&startMs=<n>
+	// POST /set?incus=down|up&code=down|up&hub=down|up&sync=hold|release&start=fail|ok&startMs=<n>&idle=<duration>
 	control.HandleFunc("POST /set", func(w http.ResponseWriter, r *http.Request) {
 		query := r.URL.Query()
 		machine.mu.Lock()
@@ -399,6 +479,12 @@ func run(ctx context.Context, controlAddr, codeAddr, agentsAddr string) error {
 		case "ok":
 			incus.Fail(incusfake.FailStart, "")
 		}
+		if idle := query.Get("idle"); idle != "" {
+			if err := writeConfig(idle); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
 		if ms, err := strconv.Atoi(query.Get("startMs")); err == nil {
 			incus.SetDelays(time.Duration(ms)*time.Millisecond, 0)
 		}
@@ -407,6 +493,30 @@ func run(ctx context.Context, controlAddr, codeAddr, agentsAddr string) error {
 	control.HandleFunc("GET /incus", func(w http.ResponseWriter, _ *http.Request) {
 		status, stateful := incus.Instance("devbox")
 		_ = json.NewEncoder(w).Encode(map[string]any{"status": status, "stateful": stateful, "stateChanges": incus.StateChanges()})
+	})
+	// The agent sessions, as the `agent` command and the app drive them.
+	// POST /sessions {agent, cwd?, prompt?} → session; POST /sessions/<id>/type {text}; GET /sessions → the hub's state.
+	control.HandleFunc("POST /sessions", func(w http.ResponseWriter, r *http.Request) {
+		var request hub.NewSession
+		_ = json.NewDecoder(r.Body).Decode(&request)
+		created, err := theHub.Load().Create(r.Context(), request)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(created)
+	})
+	control.HandleFunc("POST /sessions/{id}/type", func(w http.ResponseWriter, r *http.Request) {
+		var input hub.Input
+		_ = json.NewDecoder(r.Body).Decode(&input)
+		if err := theHub.Load().Send(r.Context(), r.PathValue("id"), input); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		_, _ = io.WriteString(w, "ok")
+	})
+	control.HandleFunc("GET /sessions", func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(theHub.Load().State())
 	})
 	controlListener, err := listen(controlAddr)
 	if err != nil {
@@ -420,5 +530,6 @@ func run(ctx context.Context, controlAddr, codeAddr, agentsAddr string) error {
 	_ = controlServer.Close()
 	resetting.Lock()
 	stopGateway()
+	stopHub()
 	return nil
 }
