@@ -6,7 +6,7 @@ _Facts gathered automatically from my devbox. Times are UTC._
 
 - Devbox: Ubuntu 26.04 LTS VM, 4 vCPU, 8 GiB RAM; repos in `~/code`; config in `~/dotfiles`
 - Reached at code.example.com (VS Code in the browser), agents.example.com (phone app for agent sessions) and SSH. Sleeps when idle with its memory saved; sessions resume.
-- Tools: git: git version 2.41.0; node: v24.1.0; pnpm: 12.23.0; rustc: rustc 1.100.0 (0ef1bc386 2026-08-04); gh: gh version 2.80.0 (2026-07-01)
+- Tools: git: git version <installed>; node: v24.1.0; pnpm: 12.23.0; rustc: rustc 1.100.0 (0ef1bc386 2026-08-04); gh: gh version 2.80.0 (2026-07-01)
 - Git identity: Dev <dev@example.com>; pull.rebase true; default branch main; push.autoSetupRemote true
 
 ## Languages across my repos (tracked files)

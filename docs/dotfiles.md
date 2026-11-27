@@ -19,7 +19,7 @@ devbox never touches anything else in the repo.
 
 ## Minimal setup
 
-A dotfiles repo with nothing in it works: devbox uses its defaults and keeps your context in the VM instead. To get the benefits, add a `devbox.toml`:
+A dotfiles repo with nothing in it works: devbox uses its defaults, and your context goes into its `context/` folder. (Without a dotfiles repo at all, the context stays in the VM.) To get the benefits, add a `devbox.toml`:
 
 ```toml
 version = 1

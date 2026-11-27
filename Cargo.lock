@@ -189,7 +189,6 @@ name = "devbox-sync"
 version = "0.0.0"
 dependencies = [
  "devbox-core",
- "serde_json",
  "thiserror",
 ]
 

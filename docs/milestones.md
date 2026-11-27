@@ -85,10 +85,10 @@ Specs: 07
 
 ## M7 — Developer context (Rust)
 Specs: 08
-- [ ] `devbox-context` crate + `devbox context`: sources (git, GitHub, hub events, transcripts, history, editor), all files, deterministic output
-- [ ] Redaction corpus test; commit behaviour; AI summary with a fake `claude`
-- [ ] Budget measured
-- [ ] Cleanup pass; `scripts/check-hygiene.sh` green
+- [x] `devbox-context` crate + `devbox context`: sources (git, GitHub, hub events, transcripts, history, editor), all files, deterministic output — [`crates/devbox-context`](../crates/devbox-context), [`tests/rust/tests/context.rs`](../tests/rust/tests/context.rs), [`tests/fixtures/context/expected`](../tests/fixtures/context/expected)
+- [x] Redaction corpus test; commit behaviour; AI summary with a fake `claude` — [`tests/rust/tests/context.rs`](../tests/rust/tests/context.rs), [`tests/fixtures/context/secrets.txt`](../tests/fixtures/context/secrets.txt)
+- [x] Budget measured — [`tests/perf/context`](../tests/perf/context)
+- [x] Cleanup pass; `scripts/check-hygiene.sh` green
 
 ## M8 — Setup CLI (Rust)
 Specs: 09, 10, 12

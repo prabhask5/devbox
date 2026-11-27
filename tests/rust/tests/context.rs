@@ -74,7 +74,11 @@ fn home() -> Home {
     s.write(&site, ".github/workflows/ci.yml", "name: ci\n");
     s.write(&site, "CLAUDE.md", "# site\nUse pnpm.\n");
     commit(&mut s, &site, "2026-09-10T09:00:00Z", "feat: landing page");
-    s.write(&site, "src/index.ts", format!("export const title = 'site';\n// TODO: debounce the resize handler\n// FIXME: remove the test login, password={}\n", secret[6]));
+    s.write(
+        &site,
+        "src/index.ts",
+        devbox_tests::read("tests/fixtures/context/index.ts.txt").replace("{password}", &secret[6]),
+    );
     commit(&mut s, &site, "2026-09-18T15:30:00Z", "fix(nav): close the menu on route change");
     s.write(&site, "README.md", "# site\n\n[![ci](https://example.com/badge.svg)](https://example.com)\n\nThe marketing site: a landing page and a blog, statically built.\n\n## Develop\n\n- pnpm dev\n- pnpm build\n");
     s.git(&site, &["add", "--all"]);
@@ -292,6 +296,15 @@ fn home() -> Home {
     Home { s, github, hub }
 }
 
+/// `content` as it is on any machine: the sandbox's own directory and the version of the git
+/// that happens to be installed are replaced.
+fn portable(s: &Sandbox, content: &str) -> String {
+    let scrubbed = s.scrub(content);
+    let Some(start) = scrubbed.find("git: git version ") else { return scrubbed };
+    let end = scrubbed[start..].find([';', '\n']).map_or(scrubbed.len(), |at| start + at);
+    format!("{}git: git version <installed>{}", &scrubbed[..start], &scrubbed[end..])
+}
+
 /// Every file under `dir`, by its path relative to it.
 fn tree(dir: &Path) -> BTreeMap<String, String> {
     fn walk(root: &Path, dir: &Path, files: &mut BTreeMap<String, String>) {
@@ -328,13 +341,13 @@ fn the_context_of_the_fixture_home() {
         for (name, content) in &written {
             let path = expected_dir.join(name);
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-            std::fs::write(path, home.s.scrub(content)).unwrap();
+            std::fs::write(path, portable(&home.s, content)).unwrap();
         }
     }
     let expected = tree(&expected_dir);
     assert_eq!(written.keys().collect::<Vec<_>>(), expected.keys().collect::<Vec<_>>());
     for (name, content) in &written {
-        assert_eq!(&home.s.scrub(content), &expected[name], "{name}");
+        assert_eq!(&portable(&home.s, content), &expected[name], "{name}");
     }
     assert_eq!(
         written.keys().map(String::as_str).collect::<Vec<_>>(),
@@ -429,7 +442,7 @@ fn no_secret_reaches_any_file() {
         "Use the JWT <redacted-jwt>",
         "wip navigation, deploy with <redacted-key>",
         "Rotate the deploy key, token: <redacted>",
-        "FIXME: remove the test login, password=<redacted>",
+        "remove the test login, password=<redacted>",
     ] {
         assert!(all.contains(kept), "{kept}\n{all}");
     }
@@ -516,4 +529,253 @@ fn an_invalid_manifest_is_said_and_its_settings_ignored() {
         "{err}"
     );
     assert_eq!(home.s.scrub(&out), "context written to <sandbox>/home/dotfiles/context\n");
+}
+
+// ---------------------------------------------------------------- committing
+
+fn dotfiles(home: &Home) -> PathBuf {
+    home.s.home().join("dotfiles")
+}
+
+/// The subjects of the commits on the dotfiles' upstream, newest first.
+fn pushed(home: &Home) -> String {
+    home.s.git(&home.s.remote("dotfiles"), &["log", "--format=%s", "main"])
+}
+
+#[test]
+fn committing_takes_only_the_context_and_leaves_other_changes_alone() {
+    let home = home();
+    let dir = dotfiles(&home);
+    // The owner is in the middle of something in their dotfiles.
+    home.s.write(&dir, "bashrc", "alias g=git\n");
+    home.s.git(&dir, &["add", "bashrc"]);
+    home.s.write(
+        &dir,
+        "devbox.toml",
+        "version = 1\n\n[context]\ndir = \"context\"\n# a note to self\n",
+    );
+    home.s.write(&dir, "scratch.txt", "untracked\n");
+
+    let (code, out, err) = home.s.devbox(&["context", "--no-ai", "--commit"]);
+    assert_eq!(
+        (code, out.as_str(), err.as_str()),
+        (ExitCode::SUCCESS, "context updated and pushed\n", "")
+    );
+    assert_eq!(pushed(&home), "context: auto-update\ndotfiles\nfirst");
+    let committed =
+        home.s.git(&home.s.remote("dotfiles"), &["show", "--format=", "--name-only", "main"]);
+    assert_eq!(
+        committed,
+        "context/README.md\ncontext/activity.md\ncontext/me.md\ncontext/projects/engine.md\ncontext/projects/notes.md\ncontext/projects/site.md"
+    );
+    // What was staged is staged, what was edited is edited, what was untracked is untracked.
+    assert_eq!(
+        home.s.git(&dir, &["status", "--porcelain"]),
+        "A  bashrc\n M devbox.toml\n?? scratch.txt"
+    );
+
+    // Nothing changed: no commit.
+    let (_, out, _) = home.s.devbox(&["context", "--no-ai", "--commit"]);
+    assert_eq!(out, "context unchanged\n");
+    assert_eq!(pushed(&home), "context: auto-update\ndotfiles\nfirst");
+    assert_eq!(home.s.git(&dir, &["rev-list", "--count", "HEAD"]), "3");
+}
+
+#[test]
+fn a_push_that_fails_keeps_the_commit_for_the_next_run() {
+    let home = home();
+    let dir = dotfiles(&home);
+    let upstream = home.s.remote("dotfiles").to_string_lossy().into_owned();
+    home.s.git(&dir, &["remote", "set-url", "origin", "/nowhere/dotfiles.git"]);
+
+    let (code, out, _) = home.s.devbox(&["context", "--no-ai", "--commit"]);
+    assert_eq!(code, ExitCode::SUCCESS);
+    assert_eq!(
+        home.s.scrub(&out),
+        "context committed in <sandbox>/home/dotfiles/context, not pushed: the push failed\n"
+    );
+    assert_eq!(home.s.git(&dir, &["log", "--format=%s", "-1"]), "context: auto-update");
+    assert_eq!(pushed(&home), "dotfiles\nfirst");
+
+    // The next run has nothing new to write, and pushes what waits.
+    home.s.git(&dir, &["remote", "set-url", "origin", &upstream]);
+    let (_, out, _) = home.s.devbox(&["context", "--no-ai", "--commit"]);
+    assert_eq!(out, "context updated and pushed\n");
+    assert_eq!(pushed(&home), "context: auto-update\ndotfiles\nfirst");
+}
+
+#[test]
+fn the_owners_own_unpushed_commits_are_never_pushed_for_them() {
+    let mut home = home();
+    let dir = dotfiles(&home);
+    home.s.write(&dir, "bashrc", "alias g=git\n");
+    commit(&mut home.s, &dir, "2026-09-21T10:00:00Z", "shell: an alias, not ready to share");
+
+    let (_, out, _) = home.s.devbox(&["context", "--no-ai", "--commit"]);
+    assert_eq!(
+        home.s.scrub(&out),
+        "context committed in <sandbox>/home/dotfiles/context, not pushed: the dotfiles have other commits that are not pushed\n"
+    );
+    assert_eq!(pushed(&home), "dotfiles\nfirst");
+    assert_eq!(
+        home.s.git(&dir, &["log", "--format=%s", "-2"]),
+        "context: auto-update\nshell: an alias, not ready to share"
+    );
+}
+
+#[test]
+fn what_others_pushed_to_the_dotfiles_is_taken_in_before_pushing() {
+    let home = home();
+    let dir = dotfiles(&home);
+    let _ = home.s.git(&home.s.seed("dotfiles"), &["pull", "--quiet"]);
+    home.s.push_upstream("dotfiles", "main", "from-the-laptop.txt", "x\n");
+    home.s.write(&dir, "notes.txt", "uncommitted, and still here afterwards\n");
+
+    let (_, out, _) = home.s.devbox(&["context", "--no-ai", "--commit"]);
+    assert_eq!(out, "context updated and pushed\n");
+    assert_eq!(
+        pushed(&home),
+        "context: auto-update\nupstream: from-the-laptop.txt\ndotfiles\nfirst"
+    );
+    assert!(dir.join("from-the-laptop.txt").exists());
+    assert_eq!(home.s.git(&dir, &["status", "--porcelain"]), "?? notes.txt");
+}
+
+#[test]
+fn the_manifest_can_turn_commits_off_and_without_a_repository_there_is_none() {
+    let home = home();
+    let dir = dotfiles(&home);
+    home.s.write(
+        &dir,
+        "devbox.toml",
+        "version = 1\n[context]\ndir = \"context\"\ncommit = false\n",
+    );
+    let (_, out, _) = home.s.devbox(&["context", "--no-ai", "--commit"]);
+    assert_eq!(home.s.scrub(&out), "context written to <sandbox>/home/dotfiles/context\n");
+    assert_eq!(home.s.git(&dir, &["log", "--format=%s", "-1"]), "dotfiles");
+
+    // Dotfiles that are a plain directory.
+    let plain = Sandbox::new();
+    plain.write(&plain.home(), "dotfiles/devbox.toml", "version = 1\n");
+    let (code, out, err) = plain.devbox(&["context", "--no-ai", "--commit"]);
+    assert_eq!((code, err.as_str()), (ExitCode::SUCCESS, ""));
+    assert_eq!(plain.scrub(&out), "context written to <sandbox>/home/dotfiles/context\n");
+}
+
+// ---------------------------------------------------------------- the AI summary
+
+/// Installs a `claude` that records how it was called and answers with `answer`.
+fn claude(home: &Home, answer: &str) {
+    let record = home.s.root().join("claude-calls");
+    home.s.program(
+        "claude",
+        &format!(
+            "[ \"$1\" = --version ] && echo '2.5.0 (Claude Code)' && exit 0\nprintf '%s\\n' \"$*\" >> '{0}'\ncat > '{0}.input'\ncat <<'ANSWER'\n{answer}\nANSWER",
+            record.display()
+        ),
+    );
+}
+
+fn claude_calls(home: &Home) -> Vec<String> {
+    let record = std::fs::read_to_string(home.s.root().join("claude-calls")).unwrap_or_default();
+    record.lines().filter(|line| line.starts_with("-p ")).map(str::to_owned).collect()
+}
+
+fn summary(home: &Home) -> Option<String> {
+    std::fs::read_to_string(context_dir(home).join("summary.md")).ok()
+}
+
+const ANSWER: &str = "## Who I am as a developer\nA web and systems developer: Svelte with pnpm on the site, a Rust workspace for the engine.\n\n## What I'm working on right now\n- site: navigation, unpushed.\n- engine: price levels, on a branch.\n\n## How to work with me\nConventional commits; small changes.\n\n## Open threads\nThe deploy key, password=FAKEpasswordgggg, needs rotating.";
+
+#[test]
+fn the_summary_is_written_by_the_owners_claude_at_most_once_in_twenty_hours() {
+    let mut home = home();
+    claude(&home, ANSWER);
+    let (code, out, err) = home.s.devbox(&["context"]);
+    assert_eq!((code, err.as_str()), (ExitCode::SUCCESS, ""));
+    assert!(out.starts_with("context written to "), "{out}");
+
+    let written = summary(&home).unwrap();
+    assert!(
+        written.starts_with("# Summary (AI-written)\n\n_Generated 2026-09-21 by Claude from the files in this folder._\n\n## Who I am as a developer\n"),
+        "{written}"
+    );
+    // What the model says is redacted like everything else.
+    assert!(
+        written.contains("password=<redacted>") && !written.contains("FAKEpasswordgggg"),
+        "{written}"
+    );
+    let calls = claude_calls(&home);
+    assert_eq!(calls.len(), 1);
+    assert!(calls[0].starts_with("-p You are maintaining a context file"), "{}", calls[0]);
+    let record = std::fs::read_to_string(home.s.root().join("claude-calls")).unwrap();
+    assert!(record.trim_end().ends_with("Under 600 words. --output-format text"), "{record}");
+    let input = std::fs::read_to_string(home.s.root().join("claude-calls.input")).unwrap();
+    for part in ["# How I work", "# Last 14 days", "# site\n", "# engine\n", "# notes\n"] {
+        assert!(input.contains(part), "{part} is not in what Claude was given");
+    }
+    for secret in secrets() {
+        assert!(!input.contains(&secret), "{secret} was given to Claude");
+    }
+    assert!(tree(&context_dir(&home))["me.md"].contains("claude: 2.5.0 (Claude Code)"));
+
+    // Nothing changed: not asked again.
+    let (_, out, _) = home.s.devbox(&["context"]);
+    assert_eq!(out, "context unchanged\n");
+    assert_eq!(claude_calls(&home).len(), 1);
+
+    // The facts change within the twenty hours: still not asked again.
+    let site = home.s.repo("site");
+    home.s.write(&site, "src/blog.ts", "export {};\n");
+    commit(&mut home.s, &site, "2026-09-21T14:00:00Z", "feat: blog index");
+    home.s.system.now += Duration::from_hours(1);
+    let (_, out, _) = home.s.devbox(&["context"]);
+    assert!(out.starts_with("context written to "), "{out}");
+    assert_eq!(claude_calls(&home).len(), 1);
+    assert_eq!(summary(&home).unwrap(), written);
+
+    // Twenty hours on, with nothing new: no reason to ask.
+    home.s.system.now += Duration::from_hours(20);
+    let before = tree(&context_dir(&home));
+    let _ = home.s.devbox(&["context"]);
+    if tree(&context_dir(&home)) == before {
+        assert_eq!(claude_calls(&home).len(), 1);
+    }
+    // And once the facts have changed again, a new summary.
+    home.s.write(&site, "src/feed.ts", "export {};\n");
+    commit(&mut home.s, &site, "2026-09-22T11:00:00Z", "feat: feed");
+    claude(&home, &ANSWER.replace("navigation, unpushed", "the blog and its feed"));
+    let _ = home.s.devbox(&["context"]);
+    let refreshed = summary(&home).unwrap();
+    assert!(
+        refreshed.contains("_Generated 2026-09-22 by Claude")
+            && refreshed.contains("the blog and its feed"),
+        "{refreshed}"
+    );
+}
+
+#[test]
+fn the_summary_can_be_turned_off_and_a_poor_answer_is_not_one() {
+    let home = home();
+    claude(&home, ANSWER);
+    let _ = home.s.devbox(&["context", "--no-ai"]);
+    assert_eq!((claude_calls(&home).len(), summary(&home)), (0, None));
+
+    let dir = dotfiles(&home);
+    home.s.write(&dir, "devbox.toml", "version = 1\n[context]\ndir = \"context\"\nai = false\n");
+    let _ = home.s.devbox(&["context"]);
+    assert_eq!((claude_calls(&home).len(), summary(&home)), (0, None));
+
+    // Asked, but what comes back is no summary: an error message, a refusal, nothing.
+    home.s.write(&dir, "devbox.toml", "version = 1\n[context]\ndir = \"context\"\n");
+    claude(&home, "Not logged in.");
+    let (code, out, err) = home.s.devbox(&["context"]);
+    assert_eq!((code, out.as_str(), err.as_str()), (ExitCode::SUCCESS, "context unchanged\n", ""));
+    assert_eq!((claude_calls(&home).len(), summary(&home)), (1, None));
+    home.s.program(
+        "claude",
+        "[ \"$1\" = --version ] && echo '2.5.0 (Claude Code)' && exit 0\ncat > /dev/null\nexit 1",
+    );
+    let (code, _, err) = home.s.devbox(&["context"]);
+    assert_eq!((code, err.as_str(), summary(&home)), (ExitCode::SUCCESS, "", None));
 }

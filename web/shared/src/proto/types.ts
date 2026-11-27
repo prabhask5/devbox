@@ -205,7 +205,7 @@ export interface DotfilesManifest {
    */
   context: {
     /**
-     * Directory `devbox context` writes to. Absent: ~/.local/share/devbox/context in the VM.
+     * Directory of the dotfiles `devbox context` writes to. Absent: `context`.
      */
     dir?: string;
     /**
