@@ -10,7 +10,7 @@
     "@devbox/gateway-ui": "workspace:*",
     "@devbox/shared": "workspace:*",
     "@testing-library/preact": "^3.2.6",
-    "@types/node": "^24.19.4",
+    "@types/node": "^26.6.6",
     "ajv": "^8.20.0",
     "happy-dom": "^21.0.4",
     "preact": "^11.2.0",
