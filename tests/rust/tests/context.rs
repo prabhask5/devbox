@@ -238,7 +238,7 @@ fn home() -> Home {
     s.write(
         &s.home(),
         ".bash_history",
-        format!("#1789990000\ngit status\ngit status\ngit commit -m 'checkpoint-zz'\npnpm dev\npnpm dev\npnpm dev\ncargo test --workspace\nGITHUB_TOKEN={} gh pr create\ncurl -H 'Authorization: Bearer {}' https://api.example.com\nexport API_PASSWORD={}\nls -la\ncd code/site\n", secret[0], secret[1], secret[6]),
+        format!("#1789990000\ngit status\ngit status\ngit commit -m 'checkpoint-zz'\npnpm dev\npnpm dev\npnpm dev\ncargo test --workspace\nGITHUB_TOKEN={} gh pr create\ncurl -H 'Authorization: Bearer {}' https://api.example.com\nexport API_PASSWORD={}\nls -Zq\ncd code/site\n", secret[0], secret[1], secret[6]),
     );
 
     // The dotfiles: a repository with an upstream, a manifest, and the editor's settings.
