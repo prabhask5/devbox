@@ -144,7 +144,10 @@ fn check(local_ops: &[Local], upstream_ops: &[Upstream]) -> Result<(), TestCaseE
     let after = s.snapshot(&dir);
 
     match result.status {
-        SyncStatus::Conflict => prop_assert_eq!(&after, &before, "{}", result.detail),
+        // Skipped is for a state a stash cannot record; like a conflict, it changes nothing.
+        SyncStatus::Conflict | SyncStatus::Skipped => {
+            prop_assert_eq!(&after, &before, "{}", result.detail);
+        }
         SyncStatus::Current => {
             prop_assert_eq!(pushed, 0, "{}", result.detail);
             prop_assert_eq!(&after, &before);

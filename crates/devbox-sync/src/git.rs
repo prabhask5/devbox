@@ -33,12 +33,18 @@ impl Git<'_> {
         self.system.run(&command(args).in_dir(self.dir).timeout(limit))
     }
 
+    /// The output of a `git` that exited with 0, reading and writing `index` instead of the
+    /// repository's own index.
+    pub fn text_with_index(&self, index: &Path, args: &[&str]) -> Option<String> {
+        let command =
+            command(args).in_dir(self.dir).env("GIT_INDEX_FILE", &index.to_string_lossy());
+        self.system.run(&command).ok().filter(Output::success).map(|output| output.text())
+    }
+
     /// Whether `git`, reading and writing `index` instead of the repository's own index, ran
     /// and exited with 0.
     pub fn ok_with_index(&self, index: &Path, args: &[&str]) -> bool {
-        let command =
-            command(args).in_dir(self.dir).env("GIT_INDEX_FILE", &index.to_string_lossy());
-        self.system.run(&command).is_ok_and(|output| output.success())
+        self.text_with_index(index, args).is_some()
     }
 
     /// Whether `git` ran and exited with 0.

@@ -1,7 +1,8 @@
 //! Updating one repository: fast-forward or rebase onto its upstream with every local change
 //! kept, or leave it exactly as it was.
 
-use std::path::Path;
+use std::collections::BTreeSet;
+use std::path::{Path, PathBuf};
 
 use devbox_core::proto::SyncStatus;
 use devbox_core::system::System;
@@ -85,6 +86,58 @@ fn drop_stash(git: Git, commit: &str) {
     }
 }
 
+/// The uncommitted state of a repository as two trees: what is staged, and every file of the
+/// working tree that is not ignored, untracked ones included. Unlike a stash it records exactly
+/// what is there — `git stash` forgets, for one, that a file added to the index was deleted from
+/// the working tree again — so it is what the repository is put back from, and what a stash is
+/// checked against before it is trusted to carry the changes onto new commits.
+struct Saved {
+    index: String,
+    files: String,
+    scratch: PathBuf,
+}
+
+/// Records the uncommitted state. Nothing in the repository changes: the working tree is read
+/// through a copy of the index.
+fn save(git: Git) -> Option<Saved> {
+    let git_dir = PathBuf::from(git.text(&["rev-parse", "--absolute-git-dir"])?);
+    let scratch = git_dir.join("devbox-sync-index");
+    let index = git.text(&["write-tree"])?;
+    let copy = git.system.read(&git_dir.join("index")).ok()?;
+    git.system.remove_file(&scratch).ok()?;
+    git.system.append(&scratch, &copy).ok()?;
+    let files = git
+        .text_with_index(&scratch, &["add", "--all"])
+        .and_then(|_| git.text_with_index(&scratch, &["write-tree"]));
+    // Left behind, the scratch index would only be a stray file inside `.git`.
+    let _ = git.system.remove_file(&scratch);
+    Some(Saved { index, files: files?, scratch })
+}
+
+/// The files of a tree, one line each: mode, kind, object and path.
+fn listing(git: Git, tree: &str) -> Option<BTreeSet<String>> {
+    Some(git.text(&["ls-tree", "-r", tree])?.lines().map(str::to_owned).collect())
+}
+
+/// Whether a stash holds exactly the state that was saved: the same index, and the same files
+/// between its tracked and its untracked part.
+fn faithful(git: Git, stash: &str, saved: &Saved) -> bool {
+    let staged = git.text(&["rev-parse", "--quiet", "--verify", &format!("{stash}^2^{{tree}}")]);
+    let untracked = format!("{stash}^3");
+    let has_untracked =
+        git.ok(&["rev-parse", "--quiet", "--verify", &format!("{untracked}^{{commit}}")]);
+    let (Some(expected), Some(mut held)) = (listing(git, &saved.files), listing(git, stash)) else {
+        return false;
+    };
+    let mut entries = held.len();
+    if has_untracked {
+        let Some(more) = listing(git, &untracked) else { return false };
+        entries += more.len();
+        held.extend(more);
+    }
+    staged.as_deref() == Some(saved.index.as_str()) && held == expected && entries == expected.len()
+}
+
 /// Puts back what a stash holds on top of `base`: with the index as it was when that works,
 /// else as plain changes. Whatever a failed attempt left behind is cleared before the next one;
 /// that is safe because everything local, untracked files included, is in the stash.
@@ -102,43 +155,26 @@ fn apply_stash(git: Git, base: &str, stash: &str) -> bool {
     false
 }
 
-/// Rebuilds, on top of the commit a stash was made on, exactly what the stash recorded: the
-/// working tree, the untracked files and the index, each from the commit the stash keeps it in.
-/// `git stash apply` cannot always do this — it refuses, for one, a path whose deletion is staged
-/// while an untracked file has taken its place — but the three trees say all there is to say.
-fn rebuild(git: Git, before: &str, stash: &str) -> bool {
-    let Some(git_dir) = git.text(&["rev-parse", "--absolute-git-dir"]) else { return false };
-    // The working tree is changed through an index of our own, so the real one can be set to
-    // what was staged without git comparing it with the files.
-    let scratch = Path::new(&git_dir).join("devbox-sync-index");
-    let untracked = format!("{stash}^3");
-    let has_untracked =
-        git.ok(&["rev-parse", "--quiet", "--verify", &format!("{untracked}^{{commit}}")]);
-    let rebuilt = git.ok(&["reset", "--hard", "--quiet", before])
-        && git.ok(&["clean", "-fdq"])
-        && git.ok_with_index(&scratch, &["read-tree", before])
-        && git.ok_with_index(&scratch, &["read-tree", "--reset", "-u", stash])
-        && (!has_untracked
-            || (git.ok_with_index(&scratch, &["read-tree", &untracked])
-                && git.ok_with_index(&scratch, &["checkout-index", "--all", "--force"])))
-        && git.ok(&["read-tree", &format!("{stash}^2")]);
-    // Left behind, the scratch index would only be a stray file inside `.git`.
-    let _ = git.system.remove_file(&scratch);
-    git.ok(&["update-index", "--quiet", "--refresh"]);
-    rebuilt
-}
-
-/// Puts the repository back exactly as it was before the update was tried. `Err` when the
-/// uncommitted changes could not be put back: they are then still in the stash.
-fn restore(git: Git, before: &str, stash: Option<&str>) -> Result<(), ()> {
+/// Puts the repository back exactly as it was before the update was tried: the commit, then the
+/// working tree and the index from what was saved. `Err` when the uncommitted changes could not
+/// be put back: they are then still in the stash.
+fn restore(git: Git, before: &str, stash: Option<&Stash>) -> Result<(), ()> {
     git.ok(&["rebase", "--abort"]);
     git.ok(&["reset", "--hard", "--quiet", before]);
     // Untracked files are removed only when a stash holds every one of them: then all that is
     // left to remove is what a failed attempt created. Without a stash nothing is cleaned.
-    let Some(stash) = stash else { return Ok(()) };
+    let Some(Stash { commit, saved, .. }) = stash else { return Ok(()) };
     git.ok(&["clean", "-fdq"]);
-    if git.ok(&["stash", "apply", "--index", "--quiet", stash]) || rebuild(git, before, stash) {
-        drop_stash(git, stash);
+    // The working tree is changed through an index of our own, so the real one can be set to
+    // what was staged without git comparing it with the files.
+    let scratch = &saved.scratch;
+    let rebuilt = git.ok_with_index(scratch, &["read-tree", before])
+        && git.ok_with_index(scratch, &["read-tree", "--reset", "-u", &saved.files])
+        && git.ok(&["read-tree", &saved.index]);
+    let _ = git.system.remove_file(scratch);
+    git.ok(&["update-index", "--quiet", "--refresh"]);
+    if rebuilt {
+        drop_stash(git, commit);
         Ok(())
     } else {
         Err(())
@@ -245,6 +281,7 @@ fn assess(
 struct Stash {
     commit: String,
     backup: String,
+    saved: Saved,
 }
 
 /// Puts uncommitted changes, untracked files included, into a stash, and points a ref of our
@@ -257,18 +294,20 @@ fn stash_changes(git: Git, name: &str, now: u64) -> Result<Option<Stash>, RepoRe
     if clean {
         return Ok(None);
     }
+    let untouched =
+        || result(name, SyncStatus::Error, "couldn't stash local changes; left untouched");
+    let Some(saved) = save(git) else { return Err(untouched()) };
     let stashed_before = git.text(&["rev-parse", "--quiet", "--verify", "refs/stash"]);
     let message = format!("devbox-sync {}", rfc3339(now));
     if !git.ok(&["stash", "push", "--include-untracked", "--quiet", "-m", &message]) {
-        let detail = "couldn't stash local changes; left untouched";
-        return Err(result(name, SyncStatus::Error, detail));
+        return Err(untouched());
     }
     // Changes git has nothing to stash for (inside a submodule, say) make no new entry.
     match git.text(&["rev-parse", "--quiet", "--verify", "refs/stash"]) {
         Some(commit) if Some(&commit) != stashed_before.as_ref() => {
             let backup = format!("{BACKUP_PREFIX}{now}");
             git.ok(&["update-ref", &backup, &commit]);
-            Ok(Some(Stash { commit, backup }))
+            Ok(Some(Stash { commit, backup, saved }))
         }
         _ => Ok(None),
     }
@@ -294,10 +333,18 @@ pub(crate) fn update(
     };
     let stashed = stash.as_ref().map(|stash| stash.commit.as_str());
     // Back to how it was, and say why; or say where the changes are if even that failed.
-    let give_up = |why: String| match restore(git, &before, stashed) {
-        Ok(()) => result(name, SyncStatus::Conflict, format!("{why}; left exactly as it was")),
+    let put_back = |status: SyncStatus, why: String| match restore(git, &before, stash.as_ref()) {
+        Ok(()) => result(name, status, format!("{why}; left exactly as it was")),
         Err(()) => not_restored(name, stash.as_ref().map_or("", |stash| stash.backup.as_str())),
     };
+    let give_up = |why: String| put_back(SyncStatus::Conflict, why);
+    // Only a stash that holds exactly what was there is trusted to carry it onto new commits.
+    if let Some(stash) = &stash
+        && !faithful(git, &stash.commit, &stash.saved)
+    {
+        let why = "your uncommitted changes are in a state git stash cannot carry over (a file added and then deleted, for one)";
+        return put_back(SyncStatus::Skipped, why.to_owned());
+    }
 
     if ahead == 0 {
         if !git.ok(&["merge", "--ff-only", "--quiet", "@{u}"]) {

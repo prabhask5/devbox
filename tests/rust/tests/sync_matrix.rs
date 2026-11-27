@@ -408,11 +408,55 @@ fn a_staged_deletion_with_an_untracked_file_in_its_place_is_put_back_exactly() {
     assert!(before.index.contains("staged.txt") && !before.index.contains("src/lib.rs"));
 
     let result = s.sync_one("app");
-    assert_eq!(result.status, SyncStatus::Conflict, "{}", result.detail);
+    assert!(
+        matches!(result.status, SyncStatus::Conflict | SyncStatus::Skipped),
+        "{}: {}",
+        result.status,
+        result.detail
+    );
+    assert!(result.detail.ends_with("; left exactly as it was"), "{}", result.detail);
     assert_eq!(s.snapshot(&dir), before);
     assert_eq!(
         s.git(&dir, &["status", "--porcelain", "--untracked-files=all"]),
         " M README.md\nD  src/lib.rs\nA  staged.txt\n?? src/lib.rs"
     );
     assert!(!dir.join(".git/devbox-sync-index").exists());
+}
+
+#[test]
+fn a_state_git_stash_cannot_record_is_not_touched() {
+    // A file added to the index and deleted from the working tree again: a stash brings the
+    // file back. Nothing would be lost, but the checkout would not be what it was.
+    let s = Sandbox::new();
+    let dir = s.repository("app");
+    s.push_upstream("app", "main", "new.txt", "new\n");
+    s.write(&dir, "draft.txt", "draft\n");
+    s.git(&dir, &["add", "draft.txt"]);
+    std::fs::remove_file(dir.join("draft.txt")).unwrap();
+    s.write(&dir, "README.md", "# app\nedited\n");
+    s.write(&dir, "untracked.txt", "untracked\n");
+    let before = s.snapshot(&dir);
+    assert_eq!(
+        s.git(&dir, &["status", "--porcelain"]),
+        " M README.md\nAD draft.txt\n?? untracked.txt"
+    );
+
+    let result = s.sync_one("app");
+    assert_eq!(
+        (result.status, result.detail.as_str()),
+        (
+            SyncStatus::Skipped,
+            "your uncommitted changes are in a state git stash cannot carry over (a file added and then deleted, for one); left exactly as it was"
+        )
+    );
+    assert_eq!(s.snapshot(&dir), before);
+    assert_eq!(
+        s.git(&dir, &["status", "--porcelain"]),
+        " M README.md\nAD draft.txt\n?? untracked.txt"
+    );
+    assert!(!dir.join(".git/devbox-sync-index").exists());
+
+    // Once the state is one a stash can carry, the next sync updates.
+    s.git(&dir, &["rm", "--quiet", "--cached", "draft.txt"]);
+    assert_eq!(s.sync_one("app").status, SyncStatus::Updated);
 }
