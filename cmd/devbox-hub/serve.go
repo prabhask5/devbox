@@ -1,0 +1,108 @@
+package main
+
+import (
+	"context"
+	"flag"
+	"fmt"
+	"io"
+	"log/slog"
+	"net"
+	"os"
+	"os/exec"
+	"os/signal"
+	"path/filepath"
+	"syscall"
+
+	"github.com/prabhask5/devbox/internal/cli"
+	"github.com/prabhask5/devbox/internal/config"
+	"github.com/prabhask5/devbox/internal/hub"
+	"github.com/prabhask5/devbox/internal/relay"
+	"github.com/prabhask5/devbox/internal/sys"
+	"github.com/prabhask5/devbox/internal/tmux"
+)
+
+func serve(args []string, stderr io.Writer) int {
+	home, _ := os.UserHomeDir()
+	flags := flag.NewFlagSet("devbox-hub serve", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	configDir := flags.String("config-dir", filepath.Join(home, ".config", "devbox"), "directory holding hub.toml and hub.secrets.toml")
+	stateDir := flags.String("state-dir", filepath.Join(home, ".local", "state", "devbox"), "directory for the hub's database")
+	codeDir := flags.String("code-dir", filepath.Join(home, "code"), "where repositories live")
+	socket := flags.String("socket", relay.SocketPath(), "unix socket of the internal API")
+	listen := flags.String("listen", "", "listen address (default: listen from hub.toml)")
+	if err := flags.Parse(args); err != nil || flags.NArg() > 0 {
+		return cli.ExitUsage
+	}
+	problem := func(err error) int {
+		fmt.Fprintln(stderr, "devbox-hub:", err)
+		return 1
+	}
+
+	configData, err := os.ReadFile(filepath.Join(*configDir, "hub.toml"))
+	if err != nil {
+		return problem(err)
+	}
+	cfg, warnings, err := config.Hub("hub.toml", configData)
+	if err != nil {
+		return problem(err)
+	}
+	secretsPath := filepath.Join(*configDir, "hub.secrets.toml")
+	info, err := os.Stat(secretsPath)
+	if err != nil {
+		return problem(err)
+	}
+	if mode := info.Mode().Perm(); mode&0o077 != 0 {
+		return problem(fmt.Errorf("hub.secrets.toml: readable by group or others (mode %04o); run chmod 600", mode))
+	}
+	secretsData, err := os.ReadFile(secretsPath)
+	if err != nil {
+		return problem(err)
+	}
+	secrets, moreWarnings, err := config.HubSecrets("hub.secrets.toml", secretsData)
+	if err != nil {
+		return problem(err)
+	}
+	log := slog.New(slog.NewTextHandler(stderr, nil))
+	for _, warning := range append(warnings, moreWarnings...) {
+		log.Warn(warning)
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
+	options := hub.Options{
+		Config: cfg, Secrets: secrets, Home: home, CodeDir: *codeDir, StateDir: *stateDir, Version: version,
+		Tmux: tmux.Server{Socket: cfg.Tmux.Socket}, Clock: sys.SystemClock(), Host: sys.Machine(), Runner: sys.Exec(),
+		Timings: hub.DefaultTimings(), Log: log,
+		Installed: func(bin string) bool {
+			// As the owner's interactive shell sees it: tools installed by version managers count.
+			return exec.CommandContext(ctx, "bash", "-ic", "command -v "+bin).Run() == nil //nolint:gosec // bin is one of the adapters' fixed names
+		},
+	}
+	address := cfg.Listen
+	if *listen != "" {
+		address = *listen
+	}
+	var listener net.ListenConfig
+	// Reachable from the gateway only: the host firewall admits nothing else to this port.
+	if options.TCP, err = listener.Listen(ctx, "tcp", address); err != nil {
+		return problem(err)
+	}
+	_ = os.Remove(*socket) // left behind by a hub that was killed
+	if options.Socket, err = listener.Listen(ctx, "unix", *socket); err != nil {
+		return problem(err)
+	}
+	if err := os.Chmod(*socket, 0o600); err != nil {
+		return problem(err)
+	}
+
+	server, err := hub.New(ctx, options)
+	if err != nil {
+		return problem(err)
+	}
+	log.Info("devbox-hub started", "version", version, "listen", options.TCP.Addr().String(), "socket", *socket)
+	if err := server.Run(ctx); err != nil {
+		return problem(err)
+	}
+	log.Info("devbox-hub stopped")
+	return 0
+}
