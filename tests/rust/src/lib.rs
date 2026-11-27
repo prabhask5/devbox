@@ -1,7 +1,8 @@
 //! Helpers shared by the tests of the devbox Rust crates: access to the repository's fixtures,
-//! and a sandbox to run `devbox sync` and `devbox context` in.
+//! a sandbox to run `devbox sync` and `devbox context` in, and servers in memory for `devbox up`.
 
 pub mod github;
+pub mod hosts;
 pub mod hub;
 pub mod sandbox;
 

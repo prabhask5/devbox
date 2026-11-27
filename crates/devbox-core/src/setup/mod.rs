@@ -110,7 +110,7 @@ pub enum Routing {
 }
 
 /// What `devbox up` was asked for. `None` is "as it is, or the default".
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct UpOptions {
     /// Where devbox keeps its files on this host.
     pub paths: Paths,
@@ -166,39 +166,6 @@ pub struct UpOptions {
     pub release: Option<String>,
     /// Only plan: nothing is changed, and nobody is asked anything.
     pub dry_run: bool,
-}
-
-impl Default for UpOptions {
-    fn default() -> Self {
-        Self {
-            paths: Paths::default(),
-            domain: None,
-            code_host: None,
-            agents_host: None,
-            instance: None,
-            adopt: false,
-            cpu: None,
-            memory: None,
-            disk: None,
-            image: None,
-            user: None,
-            dotfiles: None,
-            idle: None,
-            no_agents: Vec::new(),
-            routing: None,
-            traefik_file: None,
-            firewall: None,
-            firewall_manager: None,
-            wake_password: None,
-            app_password: None,
-            kuma_monitor: None,
-            github_token: false,
-            ssh_keys: None,
-            binaries: None,
-            release: None,
-            dry_run: false,
-        }
-    }
 }
 
 /// Whoever is asked before a plan is applied. The library never prompts: the `devbox` binary
@@ -629,12 +596,13 @@ pub(crate) fn existing_secrets(system: &dyn System, paths: &Paths) -> Option<Val
 /// The secrets file: the wake password's hash, the secret cookies are signed with, the token
 /// the gateway and the hub know each other by and, once known, the app password's hash.
 pub(crate) fn secrets_file(
+    system: &dyn System,
     wake_password: &SecretString,
     cookie_secret: &str,
     hub_token: &str,
     app_hash: Option<&str>,
 ) -> Result<String, SetupError> {
-    let hash = password::hash(wake_password.expose())
+    let hash = password::hash(system, wake_password.expose())
         .map_err(|err| SetupError(format!("the wake password could not be hashed: {err}")))?;
     let mut text = format!(
         "# Written by `devbox up`. Rotate a password with `devbox password wake|app`.\nversion = 1\nwake_password_hash = '{hash}'\ncookie_secret = \"{cookie_secret}\"\nhub_token = \"{hub_token}\"\n"

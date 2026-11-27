@@ -137,8 +137,8 @@ impl<'a> Incus<'a> {
         &self,
         method: &str,
         path: &str,
-        headers: Vec<(String, String)>,
-        body: Vec<u8>,
+        headers: &[(String, String)],
+        body: &[u8],
         timeout: Duration,
     ) -> Result<Option<Vec<u8>>, Error> {
         // One request per connection, read to its end: nothing is kept open, and there is no
@@ -147,7 +147,7 @@ impl<'a> Incus<'a> {
             "{method} {path} HTTP/1.1\r\nHost: incus\r\nConnection: close\r\nContent-Length: {}\r\n",
             body.len()
         );
-        for (name, value) in &headers {
+        for (name, value) in headers {
             let _ = write!(message, "{name}: {value}\r\n");
         }
         message.push_str("\r\n");
@@ -155,7 +155,7 @@ impl<'a> Incus<'a> {
             let mut conn = self.system.connect_unix(self.socket)?;
             conn.set_timeout(Some(timeout))?;
             conn.write_all(message.as_bytes())?;
-            conn.write_all(&body)?;
+            conn.write_all(body)?;
             conn.flush()?;
             let mut answer = Vec::new();
             conn.read_to_end(&mut answer)?;
@@ -195,7 +195,7 @@ impl<'a> Incus<'a> {
             ),
             None => (Vec::new(), Vec::new()),
         };
-        let Some(answer) = self.request(method, path, headers, body, timeout)? else {
+        let Some(answer) = self.request(method, path, &headers, &body, timeout)? else {
             return Ok(None);
         };
         serde_json::from_slice(&answer)
@@ -372,8 +372,7 @@ impl<'a> Incus<'a> {
         let result = self.finished(&answer, limit)?;
         let output = |stream: &str| -> Result<String, Error> {
             let Some(log) = result["output"][stream].as_str() else { return Ok(String::new()) };
-            let bytes =
-                self.request("GET", log, Vec::new(), Vec::new(), Duration::from_secs(60))?;
+            let bytes = self.request("GET", log, &[], &[], Duration::from_secs(60))?;
             Ok(String::from_utf8_lossy(&bytes.unwrap_or_default()).into_owned())
         };
         Ok(ExecOutput {
@@ -405,7 +404,7 @@ impl<'a> Incus<'a> {
             ("X-Incus-gid".to_owned(), owner.1.to_string()),
         ];
         let target = format!("/1.0/instances/{name}/files?path={}", query(path));
-        self.request("POST", &target, headers, data.to_vec(), Duration::from_secs(120))?
+        self.request("POST", &target, &headers, data, Duration::from_secs(120))?
             .map(|_| ())
             .ok_or_else(|| Error::Refused(format!("{path} cannot be written in {name}")))
     }
@@ -417,7 +416,7 @@ impl<'a> Incus<'a> {
     /// When Incus cannot be reached or refuses.
     pub fn pull_file(&self, name: &str, path: &str) -> Result<Option<Vec<u8>>, Error> {
         let target = format!("/1.0/instances/{name}/files?path={}", query(path));
-        self.request("GET", &target, Vec::new(), Vec::new(), Duration::from_secs(120))
+        self.request("GET", &target, &[], &[], Duration::from_secs(120))
     }
 
     /// The devices a profile gives the instances that use it; `None` when there is no such

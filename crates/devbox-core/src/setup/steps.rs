@@ -201,6 +201,39 @@ fn address(c: &Context, host: &Host, instance: &str) -> Result<String, SetupErro
     )
 }
 
+/// The `[provision]` section: how the VM is built, so that it can be built again without
+/// anybody being asked. What the options do not say stays as it is.
+fn built(c: &Context, host: &Host, user: &str, provision: &mut Value) -> Result<(), SetupError> {
+    provision["user"] = json!(user);
+    if let Some(cpu) = c.options.cpu {
+        provision["cpu"] = json!(cpu);
+    }
+    for (key, given) in
+        [("memory", &c.options.memory), ("disk", &c.options.disk), ("image", &c.options.image)]
+    {
+        if let Some(given) = given {
+            provision[key] = json!(given);
+        }
+    }
+    if let Some(unknown) =
+        c.options.no_agents.iter().find(|agent| !AGENTS.contains(&agent.as_str()))
+    {
+        return fail(format!("--no-agents {unknown}: the agents are claude, codex and opencode."));
+    }
+    if !c.options.no_agents.is_empty() {
+        let kept: Vec<&str> = AGENTS
+            .into_iter()
+            .filter(|agent| !c.options.no_agents.iter().any(|skipped| skipped == agent))
+            .collect();
+        provision["agents"] = json!(kept);
+    }
+    let remembered_dotfiles = host.remembered["dotfiles"].as_str().map(str::to_owned);
+    if let Some(dotfiles) = c.options.dotfiles.clone().or(remembered_dotfiles) {
+        provision["dotfiles"] = json!(dotfiles);
+    }
+    Ok(())
+}
+
 /// What the host is to be like: the options, where given; else what is there; else the default.
 fn desired(c: &Context, host: &Host) -> Result<Desired, SetupError> {
     let was = |keys: &[&str]| -> Option<String> {
@@ -269,35 +302,7 @@ fn desired(c: &Context, host: &Host) -> Result<Desired, SetupError> {
     } else {
         settings["routing"]["provider"] = json!("none");
     }
-    // How the VM is built, so that it can be built again without anybody being asked.
-    let provision = &mut settings["provision"];
-    provision["user"] = json!(user);
-    if let Some(cpu) = c.options.cpu {
-        provision["cpu"] = json!(cpu);
-    }
-    for (key, given) in
-        [("memory", &c.options.memory), ("disk", &c.options.disk), ("image", &c.options.image)]
-    {
-        if let Some(given) = given {
-            provision[key] = json!(given);
-        }
-    }
-    if let Some(unknown) =
-        c.options.no_agents.iter().find(|agent| !AGENTS.contains(&agent.as_str()))
-    {
-        return fail(format!("--no-agents {unknown}: the agents are claude, codex and opencode."));
-    }
-    if !c.options.no_agents.is_empty() {
-        let kept: Vec<&str> = AGENTS
-            .into_iter()
-            .filter(|agent| !c.options.no_agents.iter().any(|skipped| skipped == agent))
-            .collect();
-        provision["agents"] = json!(kept);
-    }
-    let remembered_dotfiles = host.remembered["dotfiles"].as_str().map(str::to_owned);
-    if let Some(dotfiles) = c.options.dotfiles.clone().or(remembered_dotfiles) {
-        provision["dotfiles"] = json!(dotfiles);
-    }
+    built(c, host, &user, &mut settings["provision"])?;
     let resolved = match config::host("devbox.toml", &files::host_config(&settings)) {
         Ok(parsed) => serde_json::to_value(parsed.value).unwrap_or(Value::Null),
         Err(error) => {
@@ -342,7 +347,7 @@ fn secrets(c: &Context, desired: &mut Desired) -> Result<(Step, bool), SetupErro
         step.say(line);
         return Ok((step, true));
     };
-    let content = secrets_file(wake, &secret(c.system)?, &desired.hub_token, None)?;
+    let content = secrets_file(c.system, wake, &secret(c.system)?, &desired.hub_token, None)?;
     let owner = Some(GATEWAY_UID);
     step.act(line, Action::Write { path, content: content.into_bytes(), mode: 0o600, owner });
     Ok((step, false))

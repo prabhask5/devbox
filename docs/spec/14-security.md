@@ -46,7 +46,7 @@ Each dependency and why (keep current when adding one):
 | Go | `golang.org/x/sys` | peer credentials of the hub's unix socket |
 | Go | `github.com/BurntSushi/toml` | config files |
 | Rust | `clap`, `serde`, `serde_json`, `toml`, `thiserror` | CLI, config, contracts (same as moi) |
-| Rust | `argon2`, `getrandom` | password hashing, salts |
+| Rust | `argon2` | password hashing (salts and secrets come from `/dev/urandom` through `System::random_bytes`) |
 | Rust | none for HTTP: the Incus REST API is spoken over its unix socket with the standard library, and the GitHub API is asked with `curl` run through `System` | keeps TLS out of the `devbox` binary |
 | Rust | none for git: the `git` binary, run through `System` | the owner's hooks, credential helpers and config apply |
 | Rust (dev) | `proptest` | property tests |

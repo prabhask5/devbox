@@ -1,0 +1,36 @@
+name: Publish crates
+
+# Tags crates-v<version> publish the library crates that moi embeds (devbox-core, devbox-sync,
+# devbox-context) to crates.io, in dependency order. The tag must point at a commit where all
+# three are at <version> and where everything the `compat` job checks still holds.
+
+on:
+  push:
+    tags: ["crates-v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-crates
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: crates-io
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+        with: { go: false, rust: true, web: false }
+      - uses: taiki-e/install-action@073e1fd0bc889c9aee68dbaaa927cde1b5653a83 # v2.90.11
+        with:
+          tool: cargo-deny@0.22.1
+      - name: What moi needs still holds
+        run: scripts/ci.sh compat
+      - name: Publish
+        run: scripts/publish-crates.sh "${GITHUB_REF_NAME#crates-v}"
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}

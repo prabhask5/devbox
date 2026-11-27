@@ -24,8 +24,8 @@ fn replaced(text: &str, values: &[(&str, String)]) -> String {
     out
 }
 
-fn hashed(new: &str) -> Result<String, SetupError> {
-    match password::hash(new) {
+fn hashed(system: &dyn System, new: &str) -> Result<String, SetupError> {
+    match password::hash(system, new) {
         Ok(hash) => Ok(format!("'{hash}'")),
         Err(error) => fail(format!("the password could not be hashed: {error}")),
     }
@@ -114,7 +114,7 @@ fn wake(system: &dyn System, paths: &Paths, new: &str) -> Result<(), SetupError>
         return fail(format!("{} is missing: run `devbox up` first.", path.display()));
     };
     let values = [
-        ("wake_password_hash", hashed(new)?),
+        ("wake_password_hash", hashed(system, new)?),
         ("cookie_secret", format!("\"{}\"", secret(system)?)),
     ];
     system
@@ -164,7 +164,7 @@ fn app(system: &dyn System, paths: &Paths, new: &str) -> Result<(), SetupError> 
     let Some(text) = incus.pull_file(name, &path)? else {
         return fail(format!("{path} is missing in the VM: run `devbox up` to provision it."));
     };
-    let hash = hashed(new)?;
+    let hash = hashed(system, new)?;
     keep_app_hash(system, paths, hash.trim_matches('\''))?;
     let values =
         [("app_password_hash", hash), ("cookie_secret", format!("\"{}\"", secret(system)?))];

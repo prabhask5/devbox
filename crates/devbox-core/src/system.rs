@@ -488,8 +488,9 @@ impl System for Host {
     }
 
     fn random_bytes(&self, count: usize) -> io::Result<Vec<u8>> {
+        // The kernel's generator; never short of entropy once the system is up.
         let mut bytes = vec![0; count];
-        getrandom::fill(&mut bytes).map_err(io::Error::other)?;
+        std::fs::File::open("/dev/urandom")?.read_exact(&mut bytes)?;
         Ok(bytes)
     }
 }

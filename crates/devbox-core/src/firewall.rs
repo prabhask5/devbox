@@ -205,7 +205,7 @@ impl HostFirewall {
 }
 
 impl Manager for HostFirewall {
-    fn describe(&self) -> &str {
+    fn describe(&self) -> &'static str {
         "host-firewall"
     }
 
@@ -319,7 +319,7 @@ impl Ufw {
 }
 
 impl Manager for Ufw {
-    fn describe(&self) -> &str {
+    fn describe(&self) -> &'static str {
         "ufw"
     }
 
@@ -369,7 +369,7 @@ impl Nftables {
 }
 
 impl Manager for Nftables {
-    fn describe(&self) -> &str {
+    fn describe(&self) -> &'static str {
         "nftables"
     }
 
@@ -473,7 +473,7 @@ impl Moi {
                         file.display()
                     ),
                 },
-                other => other,
+                failed @ Error::Io { .. } => failed,
             })?;
             restore.push(Restore::Reload(words(&Self::APPLY)));
         }
@@ -482,7 +482,7 @@ impl Moi {
 }
 
 impl Manager for Moi {
-    fn describe(&self) -> &str {
+    fn describe(&self) -> &'static str {
         "moi"
     }
 
@@ -519,7 +519,7 @@ impl Manager for Moi {
 pub struct Manual;
 
 impl Manager for Manual {
-    fn describe(&self) -> &str {
+    fn describe(&self) -> &'static str {
         "none"
     }
 

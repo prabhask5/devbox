@@ -2,7 +2,7 @@ name: Release
 
 # Tags v* publish a release: static binaries for amd64 and arm64 with checksums and build provenance
 # attestations, install.sh, and the gateway image on GHCR. The tag must pass release-mode hygiene and a full-history secret scan.
-# TODO(M12): publish the library crates to crates.io.
+# The library crates have their own tags and workflow (publish-crates.yml).
 
 on:
   push:

@@ -224,7 +224,7 @@ pub(crate) fn provision(
     let kept = |key: &str| existing.get(key).and_then(toml::Value::as_str).map(str::to_owned);
     let in_vm = kept("app_password_hash");
     let app_hash = match (&provision.app_password, in_vm.or_else(|| desired.app_hash.clone())) {
-        (Some(app_password), _) => password::hash(app_password.expose())
+        (Some(app_password), _) => password::hash(system, app_password.expose())
             .map_err(|err| SetupError(format!("the app password could not be hashed: {err}")))?,
         (None, Some(hash)) => hash,
         (None, None) => {

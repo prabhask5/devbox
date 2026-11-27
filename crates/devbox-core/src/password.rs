@@ -23,14 +23,14 @@ pub enum PasswordError {
     Random(String),
 }
 
-/// A new hash of `password` with a random salt.
+/// A new hash of `password` with a random salt from `system`.
 ///
 /// # Errors
 ///
-/// [`PasswordError::Random`] when the operating system gives no random bytes.
-pub fn hash(password: &str) -> Result<String, PasswordError> {
-    let mut salt = [0u8; SALT_LEN];
-    getrandom::fill(&mut salt).map_err(|err| PasswordError::Random(err.to_string()))?;
+/// [`PasswordError::Random`] when the machine gives no random bytes.
+pub fn hash(system: &dyn crate::system::System, password: &str) -> Result<String, PasswordError> {
+    let salt =
+        system.random_bytes(SALT_LEN).map_err(|err| PasswordError::Random(err.to_string()))?;
     hash_with_salt(password, &salt)
 }
 

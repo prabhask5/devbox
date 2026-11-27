@@ -1,9 +1,10 @@
 [package]
 name = "devbox-sync"
 description = "Repository sync for devbox: every GitHub repo current, never losing local work"
-version.workspace = true
+version = "0.1.0"
 edition.workspace = true
-rust-version.workspace = true
+# At most moi's, which embeds this crate (docs/spec/12-moi.md).
+rust-version = "1.88"
 license.workspace = true
 repository.workspace = true
 
