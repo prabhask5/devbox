@@ -33,7 +33,7 @@ phone / browser / ssh ─► Traefik ─► devbox-gateway (host, Docker) ─┬
 
 Requirements: a Linux server with systemd, [Incus](https://linuxcontainers.org/incus/) ≥ 6.0, Docker, and Traefik (e.g. via [Dokploy](https://dokploy.com)); a domain on Cloudflare (or any DNS pointing at Traefik).
 
-1. **Deploy the gateway** in Dokploy as a Compose app from this repo (`deploy/gateway/compose.yml`, Auto Deploy on, no domain, no previews) — see `docs/deploy-gateway.md` (written in M3).
+1. **Deploy the gateway** in Dokploy as a Compose app from this repo (`deploy/gateway/compose.yml`, Auto Deploy on, no domain, no previews) — see [docs/deploy-gateway.md](docs/deploy-gateway.md).
 2. **Install the CLI and run one command** on the server:
 
    ```bash

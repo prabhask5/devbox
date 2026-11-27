@@ -3,6 +3,7 @@ package gateway_test
 import (
 	"bufio"
 	"encoding/json"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -203,7 +204,9 @@ func TestEventStream(t *testing.T) {
 			break
 		}
 	}
-	if len(seen) != 4 {
+	// Changes that follow each other within a write are sent as one event, so a phase that
+	// takes no time may never be seen as the current one.
+	if len(seen) < 2 || !seen[proto.WakePhaseIDStart] {
 		t.Errorf("the stream showed these phases as current: %v", seen)
 	}
 
@@ -348,11 +351,10 @@ func TestBinary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body := make([]byte, 4096)
-	n, _ := resp.Body.Read(body)
+	body, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
-	if resp.StatusCode != 503 || !strings.Contains(string(body[:n]), "devbox is not set up yet") || !strings.Contains(string(body[:n]), "devbox up") {
-		t.Errorf("page: HTTP %d %s", resp.StatusCode, body[:n])
+	if resp.StatusCode != 503 || !strings.Contains(string(body), `"unconfigured":true`) || !strings.Contains(string(body), "devbox is not set up yet") {
+		t.Errorf("page: HTTP %d %.300s", resp.StatusCode, body)
 	}
 	var status proto.GatewayStatus
 	resp, _ = http.Get("http://" + address + "/__devbox/status")
@@ -360,6 +362,12 @@ func TestBinary(t *testing.T) {
 	resp.Body.Close()
 	if status.Version != "abc1234" || status.Configured {
 		t.Errorf("status: %+v", status)
+	}
+
+	// The container's health check: a gateway that answers is healthy, configured or not.
+	check := exec.Command(bin, "healthcheck", "--config-dir", filepath.Join(dir, "etc"), "--listen", address)
+	if out, err := check.CombinedOutput(); err != nil || string(out) != "problem\n" {
+		t.Errorf("healthcheck of a running gateway: %v: %s", err, out)
 	}
 
 	if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
@@ -370,6 +378,14 @@ func TestBinary(t *testing.T) {
 	}
 	if err := cmd.Wait(); err != nil || !strings.Contains(line, "devbox-gateway stopped") {
 		t.Errorf("exit: %v, last log line: %s", err, line)
+	}
+
+	check = exec.Command(bin, "healthcheck", "--listen", address)
+	if out, err := check.CombinedOutput(); check.ProcessState.ExitCode() != 1 || !strings.Contains(string(out), "devbox-gateway healthcheck: ") {
+		t.Errorf("healthcheck of a stopped gateway: exit %d, %v: %s", check.ProcessState.ExitCode(), err, out)
+	}
+	if extra := exec.Command(bin, "serve"); extra.Run() == nil || extra.ProcessState.ExitCode() != 2 {
+		t.Errorf("unknown command: exit %d", extra.ProcessState.ExitCode())
 	}
 
 	usage := exec.Command(bin, "--no-such-flag")

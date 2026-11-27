@@ -154,9 +154,6 @@ func TestAsleepPagesGetTheBootScreenAndRequestsGetTheStatus(t *testing.T) {
 	if resp.code != 200 || boot["needsAuth"] != true || boot["host"] != codeHost || boot["app"] != "code" || resp.header.Get("Cache-Control") != "no-store" {
 		t.Errorf("page: HTTP %d %v %v", resp.code, boot, resp.header)
 	}
-	if !strings.Contains(resp.body, `name="next" value="/some/path?q=1"`) {
-		t.Errorf("the sign-in form does not return to the page asked for: %s", resp.body)
-	}
 	if boot := h.get(agentsHost, "/", page).boot(t); boot["app"] != "agents" || boot["host"] != agentsHost {
 		t.Errorf("agents page: %v", boot)
 	}

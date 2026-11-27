@@ -2,7 +2,15 @@ import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["**/node_modules/", "**/dist/", "web/shared/src/proto/"] },
+  {
+    ignores: [
+      "**/node_modules/",
+      "**/dist/",
+      "**/test-results/",
+      "**/playwright-report/",
+      "web/shared/src/proto/",
+    ],
+  },
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   ...tseslint.configs.stylisticTypeChecked,

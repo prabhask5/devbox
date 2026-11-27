@@ -2,13 +2,13 @@ package gateway
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
-	"fmt"
-	"html"
 	"io"
 	"mime"
 	"net/http"
 	"net/url"
+	"regexp"
 	"time"
 
 	"github.com/prabhask5/devbox/internal/proto"
@@ -20,41 +20,41 @@ type bootData struct {
 	App          string `json:"app"` // "code" or "agents"
 	NeedsAuth    bool   `json:"needsAuth"`
 	Error        string `json:"error,omitempty"`
+	Next         string `json:"next,omitempty"` // after a failed sign-in: the page still to return to
 	UpstreamDown bool   `json:"upstreamDown,omitempty"`
 	Unconfigured bool   `json:"unconfigured,omitempty"`
 }
 
-// serveBoot answers a page load with the boot screen.
+// bootPage is the boot screen: one self-contained HTML file built from web/gateway-ui by
+// scripts/gen.sh. The data for a request goes into its devbox-boot script element.
 //
-// TODO(M3): serve the embedded boot screen UI; this page only carries the same data and a
-// plain sign-in form.
+//go:embed boot.gen.html
+var bootPage string
+
+// bootBefore and bootAfter are the page around the JSON of its devbox-boot element.
+var bootBefore, bootAfter = func() (string, string) {
+	const open = `<script id="devbox-boot" type="application/json">`
+	slot := regexp.MustCompile(open + `\s*\{\}\s*</script>`).FindStringIndex(bootPage)
+	if slot == nil {
+		panic("boot.gen.html has no empty devbox-boot element; run scripts/gen.sh")
+	}
+	return bootPage[:slot[0]] + open, "</script>" + bootPage[slot[1]:]
+}()
+
+// serveBoot answers a page load with the boot screen.
 func (g *Gateway) serveBoot(w http.ResponseWriter, r *http.Request, s *settings, data bootData, code int) {
 	data.Host, data.App = requestHost(r), "code"
 	if s != nil && data.Host == *s.host.Hosts.Agents {
 		data.App = "agents"
 	}
+	// encoding/json escapes <, > and &, so the data cannot end the script element.
 	injected, _ := json.Marshal(data) //nolint:errchkjson // strings and booleans
-	title, body := "Waking your devbox", `<p>This page reloads until the devbox is ready.</p>`
-	refresh := `<meta http-equiv="refresh" content="3">`
-	switch {
-	case data.Unconfigured:
-		title, body = "devbox is not set up yet", "<p>Run <code>devbox up</code> on the host.</p>"
-	case data.UpstreamDown:
-		title, body = "Reconnecting", "<p>The devbox is up but "+map[string]string{"code": "code-server", "agents": "the agents hub"}[data.App]+" isn't answering yet.</p>"
-	case data.NeedsAuth:
-		title, refresh = "Devbox is asleep", ""
-		body = fmt.Sprintf(`<form method="post" action="/__devbox/login"><input type="hidden" name="next" value="%s">`+
-			`<label>Wake password <input type="password" name="password" autocomplete="current-password" autofocus required></label>`+
-			`<button type="submit">Wake</button></form>`, html.EscapeString(r.URL.RequestURI()))
-		if data.Error != "" {
-			body += `<p role="alert">` + html.EscapeString(data.Error) + `</p>`
-		}
-	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(code)
-	fmt.Fprintf(w, `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">%s<title>%s</title></head>`+
-		`<body><main><h1>%s</h1>%s</main><script id="devbox-boot" type="application/json">%s</script></body></html>`, refresh, title, title, body, injected)
+	_, _ = io.WriteString(w, bootBefore)
+	_, _ = w.Write(injected)
+	_, _ = io.WriteString(w, bootAfter)
 }
 
 func (g *Gateway) serveDevbox(w http.ResponseWriter, r *http.Request) {
@@ -142,12 +142,13 @@ func isJSON(r *http.Request) bool {
 // screen's form posts here and is redirected; the agents app posts JSON and gets a status.
 func (g *Gateway) serveLogin(w http.ResponseWriter, r *http.Request, s *settings) {
 	asJSON := isJSON(r)
+	next := "/"
 	fail := func(code int, message string) {
 		if asJSON {
 			writeJSON(w, code, map[string]string{"error": message})
 			return
 		}
-		g.serveBoot(w, r, s, bootData{NeedsAuth: true, Error: message}, code)
+		g.serveBoot(w, r, s, bootData{NeedsAuth: true, Error: message, Next: next}, code)
 	}
 	if s == nil {
 		fail(http.StatusServiceUnavailable, "devbox is not set up yet")
@@ -175,6 +176,7 @@ func (g *Gateway) serveLogin(w http.ResponseWriter, r *http.Request, s *settings
 		values, _ := url.ParseQuery(string(body))
 		form.Password, form.Next = values.Get("password"), values.Get("next")
 	}
+	next = safeNext(form.Next)
 
 	if !g.login.allow(clientAddress(r), g.now()) {
 		fail(http.StatusTooManyRequests, "Too many attempts, wait a minute.")
@@ -191,7 +193,7 @@ func (g *Gateway) serveLogin(w http.ResponseWriter, r *http.Request, s *settings
 		writeJSON(w, http.StatusAccepted, map[string]bool{"ok": true})
 		return
 	}
-	http.Redirect(w, r, safeNext(form.Next), http.StatusSeeOther)
+	http.Redirect(w, r, next, http.StatusSeeOther)
 }
 
 // serveEvents streams the gateway status: once at the start, then whenever it changes.

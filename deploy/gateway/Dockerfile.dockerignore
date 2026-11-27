@@ -1,0 +1,7 @@
+# Everything the gateway build does not read. .git stays: Go records the commit from it.
+*
+!.git
+!go.mod
+!go.sum
+!cmd
+!internal

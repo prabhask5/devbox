@@ -1,0 +1,29 @@
+# The devbox gateway as a Compose application, for Dokploy (docs/deploy-gateway.md) or plain
+# `docker compose -f deploy/gateway/compose.yml up -d --build`.
+#
+# No domains and no published HTTP port: `devbox up` writes the Traefik routes to this
+# container over the Docker network. SSH is published on the host's loopback only, for the
+# owner's tunnel.
+services:
+  devbox-gateway:
+    build:
+      context: ../..
+      dockerfile: deploy/gateway/Dockerfile
+    container_name: devbox-gateway
+    restart: unless-stopped
+    # The gid that owns the Incus socket on the host (`stat -c %g /var/lib/incus/unix.socket`);
+    # `devbox up` prints it. Until it is set the gateway runs but cannot reach Incus.
+    group_add:
+      - "${DEVBOX_INCUS_GID:-65532}"
+    volumes:
+      - /etc/devbox:/etc/devbox:ro
+      - /var/lib/devbox/gateway:/var/lib/devbox/gateway
+      - /var/lib/incus/unix.socket:/var/lib/incus/unix.socket
+    ports:
+      - "127.0.0.1:2222:2222"
+    networks:
+      - dokploy-network
+
+networks:
+  dokploy-network:
+    external: true

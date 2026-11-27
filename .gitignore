@@ -9,3 +9,6 @@ playwright-report/
 *.local.toml
 .env
 .DS_Store
+# Visual baselines are per platform; CI compares against the Linux ones.
+tests/e2e/visual/*-darwin.png
+tests/e2e/visual/*-win32.png

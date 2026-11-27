@@ -1,0 +1,424 @@
+// Command harness runs the devbox stack for end-to-end tests (docs/spec/15-testing.md): a fake
+// Incus, the real gateway, and a fake VM (code-server, the hub, sshd), behind a TLS front that
+// plays Traefik. Browser tests reach the editor and the agents app on two HTTPS ports and steer
+// the fakes through a small control API.
+package main
+
+import (
+	"bufio"
+	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/base64"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"io"
+	"log/slog"
+	"math/big"
+	"net"
+	"net/http"
+	"net/http/httputil"
+	"net/url"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"strconv"
+	"sync"
+	"sync/atomic"
+	"syscall"
+	"time"
+
+	"golang.org/x/crypto/argon2"
+
+	"github.com/prabhask5/devbox/internal/gateway"
+	"github.com/prabhask5/devbox/internal/proto"
+	"github.com/prabhask5/devbox/internal/sys"
+	incusfake "github.com/prabhask5/devbox/tests/fakes/incus"
+	"github.com/prabhask5/devbox/tests/fakes/wsecho"
+)
+
+// What the tests know about the stack.
+const (
+	codeHost     = "code.example.com"
+	agentsHost   = "agents.example.com"
+	wakePassword = "FAKE-password"
+	hubToken     = "FAKE-hub-token"
+)
+
+func main() {
+	control := flag.String("control", "127.0.0.1:47100", "address of the control API (plain HTTP)")
+	code := flag.String("code", "127.0.0.1:47101", "HTTPS address that is the editor's host")
+	agents := flag.String("agents", "127.0.0.1:47102", "HTTPS address that is the agents app's host")
+	flag.Parse()
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	err := run(ctx, *control, *code, *agents)
+	stop()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "harness:", err)
+		os.Exit(1)
+	}
+}
+
+// vm is the fake VM. Its services answer only while the fake Incus says the instance runs.
+type vm struct {
+	incus *incusfake.Server
+
+	mu         sync.Mutex
+	codeUp     bool
+	hubUp      bool
+	syncHeld   bool // a repo sync, once started, runs until released
+	syncRun    int
+	syncActive bool
+}
+
+func (v *vm) up(service *bool) bool {
+	status, _ := v.incus.Instance("devbox")
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	return status == "Running" && *service
+}
+
+// refuse drops the connection, like a port nothing listens on.
+func refuse(w http.ResponseWriter) {
+	if conn, _, err := http.NewResponseController(w).Hijack(); err == nil {
+		_ = conn.Close()
+	}
+}
+
+func (v *vm) codeServer() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, `{"status":"alive"}`) })
+	mux.HandleFunc("GET /ws", wsecho.ServeEcho)
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		fmt.Fprintf(w, `<!doctype html><title>code-server</title><h1>code-server</h1><p id="url">%s</p><p id="host">%s</p>`,
+			r.URL.RequestURI(), r.Header.Get("X-Forwarded-Host"))
+	})
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !v.up(&v.codeUp) {
+			refuse(w)
+			return
+		}
+		mux.ServeHTTP(w, r)
+	})
+}
+
+func (v *vm) hub() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /devbox/status", func(w http.ResponseWriter, _ *http.Request) {
+		v.mu.Lock()
+		defer v.mu.Unlock()
+		status := proto.HubStatus{
+			V: proto.HubStatusVersion, Version: "e2e", Uptime: 60,
+			Idle: proto.HubIdle{Busy: true, Reasons: []string{"end-to-end tests are running"}},
+			Sync: proto.SyncState{State: proto.SyncStateStateIdle, Results: []proto.SyncResult{}},
+		}
+		if v.syncRun > 0 {
+			run, current := "s-"+strconv.Itoa(v.syncRun), "devbox"
+			status.Sync = proto.SyncState{
+				RunID: &run, State: proto.SyncStateStateRunning, Total: 3, Done: 2, Current: &current,
+				Results: []proto.SyncResult{
+					{Name: "dotfiles", Status: proto.SyncStatusCurrent, Detail: "up to date"},
+					{Name: "notes", Status: proto.SyncStatusUpdated, Detail: "pulled 3"},
+				},
+			}
+			if !v.syncHeld {
+				v.syncActive = false
+			}
+			if !v.syncActive {
+				status.Sync.State, status.Sync.Done, status.Sync.Current = proto.SyncStateStateDone, 3, nil
+				status.Sync.Results = append(status.Sync.Results, proto.SyncResult{Name: "devbox", Status: proto.SyncStatusCurrent, Detail: "up to date"})
+			}
+		}
+		_ = json.NewEncoder(w).Encode(status)
+	})
+	mux.HandleFunc("POST /devbox/wake", func(w http.ResponseWriter, _ *http.Request) {
+		v.mu.Lock()
+		defer v.mu.Unlock()
+		v.syncRun++
+		v.syncActive = true
+		_ = json.NewEncoder(w).Encode(proto.HubWakeResponse{V: proto.HubWakeResponseVersion, RunID: "s-" + strconv.Itoa(v.syncRun)})
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		fmt.Fprintf(w, `<!doctype html><title>Agents</title><h1>agents app</h1><p id="url">%s</p>`, r.URL.RequestURI())
+	})
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !v.up(&v.hubUp) {
+			refuse(w)
+			return
+		}
+		if len(r.URL.Path) >= 8 && r.URL.Path[:8] == "/devbox/" && r.Header.Get("Authorization") != "Bearer "+hubToken {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		mux.ServeHTTP(w, r)
+	})
+}
+
+// sshd sends a banner and echoes lines.
+func (v *vm) sshd(listener net.Listener) {
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		go func() {
+			defer conn.Close()
+			if status, _ := v.incus.Instance("devbox"); status != "Running" {
+				return
+			}
+			_, _ = io.WriteString(conn, "SSH-2.0-FakeSSH\r\n")
+			reader := bufio.NewReader(conn)
+			for {
+				line, err := reader.ReadString('\n')
+				if err != nil {
+					return
+				}
+				_, _ = io.WriteString(conn, "echo "+line)
+			}
+		}()
+	}
+}
+
+func listen(address string) (net.Listener, error) {
+	return (&net.ListenConfig{}).Listen(context.Background(), "tcp", address)
+}
+
+func portOf(listener net.Listener) int {
+	return listener.Addr().(*net.TCPAddr).Port
+}
+
+// selfSigned returns a certificate for 127.0.0.1 and localhost, valid for a day.
+func selfSigned() (tls.Certificate, error) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "devbox e2e"},
+		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(24 * time.Hour),
+		KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		IPAddresses: []net.IP{net.IPv4(127, 0, 0, 1)}, DNSNames: []string{"localhost"},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+	return tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}, nil
+}
+
+// front plays Traefik for one public host: it terminates TLS and forwards to the gateway with
+// the X-Forwarded-* headers set, as if the browser had asked for that host by name. gatewayAddr is read per request: a reset starts a new gateway.
+func front(gatewayAddr *atomic.Pointer[string], host string) http.Handler {
+	return &httputil.ReverseProxy{
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			pr.SetURL(&url.URL{Scheme: "http", Host: *gatewayAddr.Load()})
+			pr.Out.Host = host
+			pr.Out.Header.Set("X-Forwarded-Host", host)
+			pr.Out.Header.Set("X-Forwarded-Proto", "https")
+			pr.Out.Header.Set("X-Forwarded-For", "203.0.113.10")
+			// The browser knows this host by its loopback address; behind a real Traefik its
+			// Origin would name the public host.
+			if origin, err := url.Parse(pr.In.Header.Get("Origin")); err == nil && origin.Host == pr.In.Host {
+				pr.Out.Header.Set("Origin", "https://"+host)
+			}
+		},
+		FlushInterval: -1,
+	}
+}
+
+func run(ctx context.Context, controlAddr, codeAddr, agentsAddr string) error {
+	dir, err := os.MkdirTemp("", "dbx-e2e-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+	incus, err := incusfake.Start(filepath.Join(dir, "incus.sock"))
+	if err != nil {
+		return err
+	}
+	defer incus.Close()
+	machine := &vm{incus: incus}
+
+	codeListener, err := listen("127.0.0.1:0")
+	if err != nil {
+		return err
+	}
+	hubListener, err := listen("127.0.0.1:0")
+	if err != nil {
+		return err
+	}
+	sshListener, err := listen("127.0.0.1:0")
+	if err != nil {
+		return err
+	}
+	go http.Serve(codeListener, machine.codeServer()) // ends with the process
+	go http.Serve(hubListener, machine.hub())
+	go machine.sshd(sshListener)
+
+	salt := []byte("FAKEsaltFAKEsalt")
+	hash := fmt.Sprintf("$argon2id$v=19$m=64,t=1,p=1$%s$%s", base64.RawStdEncoding.EncodeToString(salt),
+		base64.RawStdEncoding.EncodeToString(argon2.IDKey([]byte(wakePassword), salt, 1, 64, 1, 32)))
+	config := fmt.Sprintf("version = 1\ndomain = \"example.com\"\n[vm]\naddress = \"127.0.0.1\"\ncode_port = %d\nhub_port = %d\nssh_port = %d\n",
+		portOf(codeListener), portOf(hubListener), portOf(sshListener))
+	secrets := fmt.Sprintf("version = 1\nwake_password_hash = '%s'\ncookie_secret = \"FAKE-cookie-secret\"\nhub_token = %q\n", hash, hubToken)
+	if err := os.MkdirAll(filepath.Join(dir, "etc"), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(dir, "etc", "devbox.toml"), []byte(config), 0o644); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(dir, "etc", "secrets.toml"), []byte(secrets), 0o600); err != nil {
+		return err
+	}
+
+	// Production behaviour at a pace tests can wait for.
+	timings := gateway.DefaultTimings()
+	timings.Poll = 100 * time.Millisecond
+	timings.ConfigPoll = 100 * time.Millisecond
+	timings.Probe = 50 * time.Millisecond
+	timings.ProbeTimeout = time.Second
+	timings.CodeTimeout = 3 * time.Second
+	timings.HubTimeout = 1500 * time.Millisecond
+	timings.SyncPoll = 50 * time.Millisecond
+	timings.SettleFor = 500 * time.Millisecond
+	timings.Shutdown = 2 * time.Second
+
+	// startGateway runs a fresh gateway with empty state and returns how to stop it.
+	var gatewayAddr atomic.Pointer[string]
+	generation := 0
+	startGateway := func() (stop func(), err error) {
+		generation++
+		httpListener, err := listen("127.0.0.1:0")
+		if err != nil {
+			return nil, err
+		}
+		sshProxy, err := listen("127.0.0.1:0")
+		if err != nil {
+			return nil, err
+		}
+		gw := gateway.New(gateway.Options{
+			ConfigDir: filepath.Join(dir, "etc"), StateDir: filepath.Join(dir, "state", strconv.Itoa(generation)),
+			IncusSocket: incus.Socket(), Version: "e2e", HTTP: httpListener, SSH: sshProxy,
+			FS: sys.OS(), Clock: sys.SystemClock(), Timings: timings, Log: slog.New(slog.NewTextHandler(os.Stderr, nil)),
+		})
+		gatewayCtx, cancel := context.WithCancel(ctx)
+		done := make(chan struct{})
+		go func() {
+			if err := gw.Run(gatewayCtx); err != nil {
+				fmt.Fprintln(os.Stderr, "harness: gateway:", err)
+			}
+			close(done)
+		}()
+		address := httpListener.Addr().String()
+		gatewayAddr.Store(&address)
+		return func() {
+			cancel()
+			<-done
+		}, nil
+	}
+
+	// reset puts everything back to "asleep with saved memory, all services fine" behind a
+	// gateway that remembers nothing.
+	var stopGateway func()
+	reset := func() error {
+		if stopGateway != nil {
+			stopGateway()
+		}
+		_ = incus.Resume()
+		for _, failure := range []incusfake.Failure{incusfake.FailStart, incusfake.FailRestore, incusfake.FailStop, incusfake.FailStatefulStop} {
+			incus.Fail(failure, "")
+		}
+		incus.SetDelays(1200*time.Millisecond, 0)
+		incus.SetInstance("devbox", "Stopped", true)
+		incus.ForgetRequests()
+		machine.mu.Lock()
+		machine.codeUp, machine.hubUp, machine.syncHeld, machine.syncRun, machine.syncActive = true, true, false, 0, false
+		machine.mu.Unlock()
+		var err error
+		stopGateway, err = startGateway()
+		return err
+	}
+	if err := reset(); err != nil {
+		return err
+	}
+
+	certificate, err := selfSigned()
+	if err != nil {
+		return err
+	}
+	for address, host := range map[string]string{codeAddr: codeHost, agentsAddr: agentsHost} {
+		listener, err := listen(address)
+		if err != nil {
+			return err
+		}
+		server := &http.Server{Handler: front(&gatewayAddr, host), ReadHeaderTimeout: time.Minute}
+		go server.Serve(tls.NewListener(listener, &tls.Config{Certificates: []tls.Certificate{certificate}, MinVersion: tls.VersionTLS12}))
+	}
+
+	control := http.NewServeMux()
+	control.HandleFunc("GET /ready", func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "ok") })
+	var resetting sync.Mutex
+	control.HandleFunc("POST /reset", func(w http.ResponseWriter, _ *http.Request) {
+		resetting.Lock()
+		defer resetting.Unlock()
+		if err := reset(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		_, _ = io.WriteString(w, "ok")
+	})
+	// POST /set?incus=down|up&code=down|up&hub=down|up&sync=hold|release&start=fail|ok&startMs=<n>
+	control.HandleFunc("POST /set", func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query()
+		machine.mu.Lock()
+		for name, target := range map[string]*bool{"code": &machine.codeUp, "hub": &machine.hubUp} {
+			if value := query.Get(name); value != "" {
+				*target = value == "up"
+			}
+		}
+		if value := query.Get("sync"); value != "" {
+			machine.syncHeld = value == "hold"
+		}
+		machine.mu.Unlock()
+		switch query.Get("incus") {
+		case "down":
+			incus.Pause()
+		case "up":
+			_ = incus.Resume()
+		}
+		switch query.Get("start") {
+		case "fail":
+			incus.Fail(incusfake.FailStart, "Failed to start device \"eth0\"")
+		case "ok":
+			incus.Fail(incusfake.FailStart, "")
+		}
+		if ms, err := strconv.Atoi(query.Get("startMs")); err == nil {
+			incus.SetDelays(time.Duration(ms)*time.Millisecond, 0)
+		}
+		_, _ = io.WriteString(w, "ok")
+	})
+	control.HandleFunc("GET /incus", func(w http.ResponseWriter, _ *http.Request) {
+		status, stateful := incus.Instance("devbox")
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": status, "stateful": stateful, "stateChanges": incus.StateChanges()})
+	})
+	controlListener, err := listen(controlAddr)
+	if err != nil {
+		return err
+	}
+	controlServer := &http.Server{Handler: control, ReadHeaderTimeout: time.Minute}
+	go controlServer.Serve(controlListener)
+	fmt.Fprintf(os.Stderr, "harness: control http://%s, code https://%s, agents https://%s\n", controlAddr, codeAddr, agentsAddr)
+
+	<-ctx.Done()
+	_ = controlServer.Close()
+	resetting.Lock()
+	stopGateway()
+	return nil
+}

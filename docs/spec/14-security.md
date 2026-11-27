@@ -52,6 +52,7 @@ Each dependency and why (keep current when adding one):
 | Rust (dev) | `proptest`, `insta` | property tests, golden files |
 | Web | `preact`, `vite`, `vitest`, `@playwright/test`, `typescript` | apps and tests |
 | Web (dev) | `eslint`, `@eslint/js`, `typescript-eslint`, `prettier`, `knip` | lint, format, unused files/exports/dependencies |
+| Web (dev) | `@testing-library/preact`, `happy-dom` | rendering components in unit tests |
 | Web (dev) | `json-schema-to-typescript`, `ajv`, `@types/node` | contracts → TypeScript types; checking the examples against the schemas in tests |
 
 Tools that are not dependencies of the code run at versions pinned in `scripts/ci.sh` (`golangci-lint`, `staticcheck`, `deadcode`, `govulncheck` through `go run pkg@version`; `cargo-deny`, `cargo-machete`) and in the workflows (`gitleaks`); the contract generators `go-jsonschema` and `cargo-typify` are pinned in `scripts/gen.sh`. Generated Rust and Go code depends only on `serde`/`serde_json` and the standard library.

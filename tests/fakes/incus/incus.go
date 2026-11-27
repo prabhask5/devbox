@@ -148,6 +148,13 @@ func (s *Server) Requests() []Request {
 	return append([]Request(nil), s.requests...)
 }
 
+// ForgetRequests empties the request log.
+func (s *Server) ForgetRequests() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.requests = nil
+}
+
 // StateChanges returns the bodies of the state-change requests received so far.
 func (s *Server) StateChanges() []map[string]any {
 	var bodies []map[string]any

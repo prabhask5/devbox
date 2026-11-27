@@ -1,0 +1,8 @@
+{
+  "boot": {
+    "host": "code.example.com",
+    "app": "code",
+    "needsAuth": true,
+    "error": "Wrong password."
+  }
+}

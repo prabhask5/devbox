@@ -456,8 +456,8 @@ func (r response) json(t *testing.T, into any) {
 func (r response) boot(t *testing.T) map[string]any {
 	t.Helper()
 	_, rest, found := strings.Cut(r.body, `<script id="devbox-boot" type="application/json">`)
-	if !found {
-		t.Fatalf("not a boot screen (HTTP %d): %s", r.code, r.body)
+	if !found || !strings.HasPrefix(r.body, "<!doctype html>") || r.header.Get("Content-Type") != "text/html; charset=utf-8" {
+		t.Fatalf("not a boot screen (HTTP %d, %s): %.300s", r.code, r.header.Get("Content-Type"), r.body)
 	}
 	data, _, _ := strings.Cut(rest, "</script>")
 	var boot map[string]any

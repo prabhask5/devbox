@@ -17,27 +17,16 @@ The owner creates one Dokploy **Compose** application (documented step by step i
 - **Auto Deploy: on.** **Watch paths**: `cmd/devbox-gateway/**`, `internal/gateway/**`, `internal/incus/**`, `internal/proto/**`, `internal/config/**`, `internal/schema/**`, `internal/secret/**`, `internal/password/**`, `internal/sys/**`, `web/gateway-ui/**`, `web/shared/**`, `deploy/gateway/**`, `go.mod`, `go.sum`. Pushes elsewhere do not redeploy the gateway.
 - **No domains** (routing is written by `devbox up`, spec 09) and **no preview deployments**.
 
-`deploy/gateway/compose.yml`:
+`deploy/gateway/compose.yml` builds `deploy/gateway/Dockerfile` with the repository root as context, names the container `devbox-gateway`, restarts it unless stopped, mounts `/etc/devbox` (read-only), `/var/lib/devbox/gateway` and `/var/lib/incus/unix.socket`, adds the group that owns the Incus socket (`DEVBOX_INCUS_GID`), publishes the SSH proxy on the host's loopback (`127.0.0.1:2222`) and joins the external `dokploy-network`. It sets no domains and publishes no HTTP port.
 
-```yaml
-services:
-  devbox-gateway:
-    build: { context: ../.., dockerfile: deploy/gateway/Dockerfile }
-    container_name: devbox-gateway
-    restart: unless-stopped
-    volumes:
-      - /etc/devbox:/etc/devbox:ro
-      - /var/lib/devbox/gateway:/var/lib/devbox/gateway
-      - /var/lib/incus/unix.socket:/var/lib/incus/unix.socket
-    networks: [dokploy-network]
-    healthcheck: { test: ["CMD", "/devbox-gateway", "healthcheck"], interval: 30s }
-networks:
-  dokploy-network: { external: true }
-```
+Dockerfile: two stages — build the Go binary (`CGO_ENABLED=0`, `-trimpath -ldflags "-s -w"`), final image `scratch` with only the binary and CA certificates, user `65532:65532`, and a `HEALTHCHECK` that runs `/devbox-gateway healthcheck`. The boot screen is a committed generated file (`internal/gateway/boot.gen.html`, 03), so the image build needs no Node. The builder image is pinned by digest. Image ≤ 15 MB. The binary reports its commit (`/__devbox/status.version`): Go records it from the checkout's `.git`, which is part of the build context (`deploy/gateway/Dockerfile.dockerignore` keeps `.git`, `go.mod`, `go.sum`, `cmd/` and `internal/` and nothing else); `--build-arg VERSION=…` overrides it.
 
-Dockerfile: multi-stage — build the gateway UI (pnpm), build the Go binary (`CGO_ENABLED=0`, `-trimpath -ldflags "-s -w -X …version=<sha>"`), final image `scratch` (or distroless static) with only the binary and CA certs. Image ≤ 15 MB. The binary reports its commit (`/__devbox/status.version`), so `devbox status` shows which commit is live.
+`devbox-gateway healthcheck` succeeds when the gateway answers `/__devbox/health` at all and prints its status: a gateway that reports problems (no config yet, the VM in trouble) is running, and restarting it would not help. `scripts/check-image.sh` (CI `build` and `budgets` jobs) builds the image and checks its size, its user, that it becomes healthy without a config, the health answer, the commit and a clean exit on SIGTERM.
 
-Open questions to settle in M3 (write the answers here): whether Dokploy accepts absolute host bind mounts in Compose apps (its docs steer toward `../files`); if not, fall back to Dokploy "Mounts" or an `/etc/devbox` symlink under the app's `files/`; and how Dokploy's GitHub integration surfaces deployments in GitHub (environment name, statuses). If Dokploy does not report to GitHub Deployments, add a small workflow that creates a deployment for the gateway paths and polls Dokploy's API (`compose.one` / deployments) to set its status.
+**Dokploy: what its documentation says, not yet verified on a real installation.**
+
+- *Bind mounts.* The Compose documentation warns: "Avoid using absolute host paths, as they will be cleaned up during deployments", and recommends `../files/…` (which Dokploy deletes with the service). The gateway needs `/etc/devbox`, its state directory and the Incus socket from fixed host paths that `devbox up` and Incus own, so `../files` cannot replace them. Whether Dokploy really touches absolute paths outside its own directories must be checked on the owner's Dokploy before the first deployment; until then use the plain Docker Compose path in `docs/deploy-gateway.md`.
+- *GitHub Deployments.* The documentation describes Auto Deploy through its GitHub App and Watch Paths for Compose applications, and mentions no reporting to GitHub (no Deployments, environments or commit statuses). Assume Dokploy does not report; a workflow that creates the deployment and follows Dokploy's API needs a Dokploy URL and token and is added with the first real deployment.
 
 A broken gateway deploy cuts access to code./agents.: Dokploy keeps the previous image for one-click rollback; `docs/deploy-gateway.md` explains it. The gateway's own tests and the e2e job (15) gate `main` first.
 
@@ -68,7 +57,7 @@ Tags `v*` run `release.yml`: all binaries for amd64/arm64 (gateway, hub, devbox)
 
 ## Acceptance
 
-- [ ] `deploy/gateway/compose.yml` + Dockerfile build in CI; image ≤ 15 MB; container starts unconfigured and reports health `problem: not configured`; `healthcheck` subcommand works in `scratch`.
+- [x] `deploy/gateway/compose.yml` + Dockerfile build in CI; image ≤ 15 MB; container starts unconfigured and reports health `problem: not configured`; `healthcheck` subcommand works in `scratch`. (`scripts/check-image.sh`, `TestBinary`)
 - [ ] `deploy-hub.yml`: path filter, waits for CI success, uploads the artifact + attestations and creates the deployment with the right payload, never touches Releases (tested with `act` or a dry-run mode against a fake GitHub API in tests).
 - [ ] Updater against a fake GitHub API + fake systemd (`sys`): no-op when current; checksum mismatch → failure status, nothing switched; selftest failure → failure; unhealthy new hub → rollback + failure; success → status with environment URL; asleep → stays queued; expired artifact (> 30 days asleep) → failure status explaining that a newer push or `devbox up` reinstalls.
 - [ ] Settled: Dokploy bind mounts and GitHub Deployments behaviour documented here with evidence (M3).

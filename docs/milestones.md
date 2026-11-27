@@ -15,7 +15,7 @@ Ordered. Each milestone lists the spec sections it implements; the acceptance cr
 
 ## M0 — Repository scaffold
 Specs: CLAUDE.md, 13, 14, 15
-- [x] Go module (`cmd/devbox-gateway`, `cmd/devbox-hub` with subcommands `serve|event|agent|update|selftest|healthcheck`), Cargo workspace (`devbox-cli` → binary `devbox` with every command; `devbox-core`, `devbox-sync`, `devbox-context`, `devbox-tests`), pnpm workspace (`web/gateway-ui`, `web/hub-app`, `web/shared`); every command prints "not implemented yet" and exits 3 — tests: [`tests/go/cmd/scaffold_test.go`](../tests/go/cmd/scaffold_test.go), [`tests/rust/tests/cli_scaffold.rs`](../tests/rust/tests/cli_scaffold.rs), [`tests/web/shared.test.ts`](../tests/web/shared.test.ts)
+- [x] Go module (`cmd/devbox-gateway`, `cmd/devbox-hub` with subcommands `serve|event|agent|update|selftest|healthcheck`), Cargo workspace (`devbox-cli` → binary `devbox` with every command; `devbox-core`, `devbox-sync`, `devbox-context`, `devbox-tests`), pnpm workspace (`web/gateway-ui`, `web/hub-app`, `web/shared`); every command prints "not implemented yet" and exits 3 — tests: [`tests/go/cmd/scaffold_test.go`](../tests/go/cmd/scaffold_test.go), [`tests/rust/tests/cli_scaffold.rs`](../tests/rust/tests/cli_scaffold.rs), [`tests/web/tokens.test.ts`](../tests/web/tokens.test.ts)
 - [x] Pinned toolchains; lint configs (`.golangci.yml`, `rustfmt.toml`, clippy lint set, `deny.toml`, eslint/prettier/tsconfig)
 - [x] `scripts/ci.sh` and the full CI (`static`, `go`, `rust`, `web`, `integration`, `e2e`, `build`, `budgets`, `required`) — jobs with nothing to test yet pass trivially; `budgets.sh` reports everything as pending — test: [`tests/go/scripts/budgets_test.go`](../tests/go/scripts/budgets_test.go)
 - [x] Dead-code and dependency hygiene in `static` from day one: `go mod tidy` diff, `staticcheck`, `deadcode`, `govulncheck`, `cargo machete`, `cargo deny`, `knip`, `pnpm audit --prod`; check for committed build outputs and stray executables (spec 17)
@@ -47,13 +47,13 @@ Specs: 02, 14, 15 (fake Incus)
 
 ## M3 — Gateway UI and Dokploy deployment
 Specs: 03, 11 (gateway part), 16
-- [ ] Boot screen in Preact matching `reference/design/boot-*.png`; embedded; all states from fixture streams
-- [ ] Visual regression baselines for the boot screen (spec 16)
-- [ ] `deploy/gateway/` Dockerfile (scratch, ≤ 15 MB) + compose.yml; `healthcheck` subcommand; non-root uid
-- [ ] **Spike, then decide in spec 11**: Dokploy Compose with absolute bind mounts; how Dokploy reports to GitHub Deployments (add the fallback workflow if it doesn't)
-- [ ] `docs/deploy-gateway.md`: Dokploy app step by step (provider, compose path, Auto Deploy, watch paths, no domains, no previews), rollback
-- [ ] e2e harness v1: fake Incus + real gateway + fake code-server; scenario 1 (without sync) and 7 (health faults) from spec 15
-- [ ] Cleanup pass; `scripts/check-hygiene.sh` green
+- [x] Boot screen in Preact matching `reference/design/boot-*.png`; embedded; all states from fixture streams — [`tests/web/gateway-ui/`](../tests/web/gateway-ui), [`tests/fixtures/boot/`](../tests/fixtures/boot)
+- [x] Visual regression baselines for the boot screen (spec 16) — [`tests/e2e/visual/`](../tests/e2e/visual)
+- [x] `deploy/gateway/` Dockerfile (scratch, ≤ 15 MB) + compose.yml; `healthcheck` subcommand; non-root uid — [`scripts/check-image.sh`](../scripts/check-image.sh), [`tests/go/gateway/endpoints_test.go`](../tests/go/gateway/endpoints_test.go) (`TestBinary`)
+- [ ] **Spike, then decide in spec 11**: Dokploy Compose with absolute bind mounts; how Dokploy reports to GitHub Deployments (add the fallback workflow if it doesn't) — needs a real Dokploy; spec 11 records what its documentation says
+- [ ] `docs/deploy-gateway.md`: Dokploy app step by step (provider, compose path, Auto Deploy, watch paths, no domains, no previews), rollback — written; the Dokploy steps wait for the spike above
+- [x] e2e harness v1: fake Incus + real gateway + fake code-server; scenario 1 (without sync) and 7 (health faults) from spec 15 — [`tests/e2e/harness`](../tests/e2e/harness), [`tests/e2e/wake.spec.ts`](../tests/e2e/wake.spec.ts), [`tests/e2e/health.spec.ts`](../tests/e2e/health.spec.ts)
+- [x] Cleanup pass; `scripts/check-hygiene.sh` green
 
 ## M4 — Hub core and agents
 Specs: 04, 05

@@ -13,7 +13,7 @@ import (
 func TestUnconfiguredModeThenSetup(t *testing.T) {
 	h := start(t, unconfigured(), stoppedVM(true))
 	resp := h.get(codeHost, "/", page)
-	if boot := resp.boot(t); resp.code != 503 || boot["unconfigured"] != true || !strings.Contains(resp.body, "devbox is not set up yet") || !strings.Contains(resp.body, "<code>devbox up</code>") {
+	if boot := resp.boot(t); resp.code != 503 || boot["unconfigured"] != true || !strings.Contains(resp.body, "devbox is not set up yet") || !strings.Contains(resp.body, "devbox up") {
 		t.Errorf("page: HTTP %d %s", resp.code, resp.body)
 	}
 	resp = h.get(agentsHost, "/api/state")

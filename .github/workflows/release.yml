@@ -1,8 +1,7 @@
 name: Release
 
 # Tags v* publish a release: static binaries for amd64 and arm64 with checksums and build provenance
-# attestations, and install.sh. The tag must pass release-mode hygiene and a full-history secret scan.
-# TODO(M3): the gateway container image on GHCR.
+# attestations, install.sh, and the gateway image on GHCR. The tag must pass release-mode hygiene and a full-history secret scan.
 # TODO(M12): publish the library crates to crates.io.
 
 on:
@@ -78,5 +77,26 @@ jobs:
           subject-checksums: dist/SHA256SUMS
       - name: Publish
         run: gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  image:
+    name: image
+    needs: [verify]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build, check and push the gateway image
+        run: |
+          scripts/check-image.sh
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/devbox-gateway"
+          echo "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker build -f deploy/gateway/Dockerfile --build-arg "VERSION=${GITHUB_REF_NAME#v}" \
+            -t "$image:${GITHUB_REF_NAME#v}" -t "$image:latest" .
+          docker push --all-tags "$image"
         env:
           GH_TOKEN: ${{ github.token }}
