@@ -71,8 +71,11 @@ test("Open now during the repo sync opens the editor at once", async ({ page, re
   await expect(page.locator("li.active .lbl")).toContainText("Syncing repos from GitHub", {
     timeout: 20_000,
   });
-  await expect(page.locator("li.active small")).toHaveText("2 of 3 repos · devbox");
-  await expect(page.locator(".chip")).toHaveText(["dotfiles", "notes ↓", "devbox…"]);
+  // The real `devbox sync` on three repositories: one current, one three commits behind, and
+  // the third held just as its turn begins.
+  await expect(page.locator("li.active small")).toHaveText("2 of 3 repos · website");
+  await expect(page.locator(".chip")).toHaveText(["devbox", "notes ↓", "website…"]);
+  await expect(page.locator(".chip").nth(1)).toHaveAttribute("title", "pulled 3 commits");
   await expect(page.locator("li.done")).toHaveCount(3);
 
   await page.getByRole("button", { name: "Open now" }).click();

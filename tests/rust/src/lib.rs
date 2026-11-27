@@ -1,4 +1,8 @@
-//! Helpers shared by the tests of the devbox Rust crates: access to the repository's fixtures.
+//! Helpers shared by the tests of the devbox Rust crates: access to the repository's fixtures,
+//! and a sandbox to run `devbox sync` in.
+
+pub mod github;
+pub mod sandbox;
 
 use std::path::{Path, PathBuf};
 

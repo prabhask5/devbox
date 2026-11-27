@@ -131,8 +131,12 @@ func TestWakeBootsAStoppedVMCold(t *testing.T) {
 }
 
 func TestWakeAttachesToARunningVM(t *testing.T) {
-	h := start(t, withTimings(func(t *gateway.Timings) { t.Poll = time.Hour })) // the poll would notice the VM first
-	<-h.gw.RequestWake("test")
+	// The VM runs but the editor does not answer yet, so the gateway cannot take the devbox
+	// for awake before the wake is asked for, however quick its first look at the VM is.
+	h := start(t, withCodeDown(), withTimings(func(t *gateway.Timings) { t.Poll = time.Hour }))
+	asked := h.gw.RequestWake("test")
+	h.vm.codeUp.Store(true)
+	<-asked
 	wake := h.wakeDone()
 	if !wake.Done || wake.Kind != proto.WakeKindAttach || !skipped(wake.Phases.Start) || !finished(wake.Phases.Code) {
 		t.Fatalf("wake: %+v", wake)

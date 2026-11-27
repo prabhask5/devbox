@@ -104,6 +104,9 @@ budgets() {
   step "measure the hub"
   go build -trimpath -ldflags "-s -w" -o target/budgets/devbox-hub ./cmd/devbox-hub
   go run ./tests/perf/hub -hub target/budgets/devbox-hub
+  step "measure the repo sync"
+  cargo build --release --locked -p devbox-cli
+  go run ./tests/perf/sync -devbox target/release/devbox
   if [[ ${DEVBOX_DOCKER:-} == 1 ]]; then step "measure the gateway image"; scripts/check-image.sh --measure; fi
   # Process start-up and scheduling differ too much elsewhere for the numbers to mean the same.
   step "budgets"; BUDGETS_REPORT_ONLY=$([[ $(uname -s) == Linux ]] || echo 1) scripts/budgets.sh

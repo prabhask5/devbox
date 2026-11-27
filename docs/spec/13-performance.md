@@ -18,7 +18,7 @@ The budgets are for Linux, where devbox runs, and are enforced there (CI). On an
 | Hub idle RSS / CPU (10 sessions, no viewers) | 30 MB / 0.3 % | 10-minute run with real tmux |
 | Hub event → SSE state update | 20 ms | event posted → frame received by a test client |
 | Screen frame latency (pane output → SSE frame) | 60 ms | real tmux, output burst |
-| `devbox sync`, 11 repos, nothing to pull, local remotes | 600 ms | fixture |
+| `devbox sync`, 11 repos, nothing to pull, local remotes | 600 ms | `tests/perf/sync`: the release binary, median of 9 runs |
 | `devbox context`, 11 repos, no network, no AI | 1.5 s | fixture |
 | `devbox --version` | 10 ms | |
 | `devbox status` (fakes) | 150 ms | |
@@ -31,5 +31,5 @@ Rules that make these achievable:
 - Gateway: `httputil.ReverseProxy` with a pooled, keep-alive `Transport` to the VM; no per-request allocation of large buffers (pooled 32 KB copy buffers); no logging on the hot path (structured logs at debug level only); state reads lock-free (atomic snapshot of the state struct).
 - Hub: tmux control mode instead of polling; one emulator per *viewed* session only; SQLite in WAL mode with prepared statements; SSE writes coalesced.
 - Relay: no config file parsing, no logging, one syscall-light write over a unix socket.
-- Rust CLIs: no async runtime unless a command needs concurrent network I/O; git fetches in parallel threads; read-only git queries via `gix` where faster.
+- Rust CLIs: no async runtime unless a command needs concurrent network I/O; git fetches in parallel threads; one `git for-each-ref` per repository instead of a query per question.
 - Web: Preact, no UI framework beyond it, code-split the session screen and settings, no web fonts.
