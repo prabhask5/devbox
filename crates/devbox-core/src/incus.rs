@@ -14,6 +14,9 @@ use crate::system::{HttpRequest, System};
 /// Where Incus listens unless told otherwise.
 pub const SOCKET: &str = "/var/lib/incus/unix.socket";
 
+/// Devices by name, each a map of its settings.
+pub type Devices = BTreeMap<String, BTreeMap<String, String>>;
+
 /// Why Incus did not do what was asked.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -42,11 +45,11 @@ pub struct Instance {
     /// Its own configuration.
     pub config: BTreeMap<String, String>,
     /// Its own devices.
-    pub devices: BTreeMap<String, BTreeMap<String, String>>,
+    pub devices: Devices,
     /// Its configuration with what its profiles add.
     pub expanded_config: BTreeMap<String, String>,
     /// Its devices with what its profiles add.
-    pub expanded_devices: BTreeMap<String, BTreeMap<String, String>>,
+    pub expanded_devices: Devices,
     /// Everything Incus said, for writing the instance back unchanged where devbox has no say.
     pub raw: Value,
 }
@@ -60,7 +63,7 @@ fn strings(value: &Value) -> BTreeMap<String, String> {
         .collect()
 }
 
-fn devices(value: &Value) -> BTreeMap<String, BTreeMap<String, String>> {
+fn devices(value: &Value) -> Devices {
     value
         .as_object()
         .into_iter()
@@ -282,7 +285,7 @@ impl<'a> Incus<'a> {
         &self,
         name: &str,
         config: &BTreeMap<String, String>,
-        devices: &BTreeMap<String, BTreeMap<String, String>>,
+        devices: &Devices,
     ) -> Result<(), Error> {
         let current = self
             .instance(name)?
@@ -400,6 +403,33 @@ impl<'a> Incus<'a> {
     pub fn pull_file(&self, name: &str, path: &str) -> Result<Option<Vec<u8>>, Error> {
         let target = format!("/1.0/instances/{name}/files?path={}", query(path));
         self.request("GET", &target, Vec::new(), Vec::new(), Duration::from_secs(120))
+    }
+
+    /// The devices a profile gives the instances that use it; `None` when there is no such
+    /// profile.
+    ///
+    /// # Errors
+    ///
+    /// When Incus cannot be reached or refuses.
+    pub fn profile_devices(&self, name: &str) -> Result<Option<Devices>, Error> {
+        let answer =
+            self.call("GET", &format!("/1.0/profiles/{name}"), None, Duration::from_secs(10))?;
+        Ok(answer.map(|answer| devices(&answer["metadata"]["devices"])))
+    }
+
+    /// The bytes still free in a storage pool; `None` when there is no such pool or it does
+    /// not say.
+    ///
+    /// # Errors
+    ///
+    /// When Incus cannot be reached or refuses.
+    pub fn pool_free(&self, pool: &str) -> Result<Option<u64>, Error> {
+        let path = format!("/1.0/storage-pools/{pool}/resources");
+        let answer = self.call("GET", &path, None, Duration::from_secs(10))?;
+        Ok(answer.and_then(|answer| {
+            let space = &answer["metadata"]["space"];
+            Some(space["total"].as_u64()?.saturating_sub(space["used"].as_u64()?))
+        }))
     }
 
     /// A managed network's configuration (`ipv4.address` is its gateway address with the prefix

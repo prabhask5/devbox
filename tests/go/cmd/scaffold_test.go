@@ -3,8 +3,8 @@ package cmd_test
 import (
 	"bytes"
 	"errors"
-	"os/exec"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"

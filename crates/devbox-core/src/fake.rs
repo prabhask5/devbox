@@ -102,6 +102,8 @@ pub struct FakeIncus {
     pub profile_devices: BTreeMap<String, BTreeMap<String, String>>,
     /// Managed networks: name to configuration.
     pub networks: BTreeMap<String, BTreeMap<String, String>>,
+    /// The storage pool's size and what is free of it, in bytes.
+    pub pool_bytes: (u64, u64),
     /// What programs run inside instances answer; without one, every program succeeds silently.
     pub inside: Option<InsideProgram>,
     /// Actions (`start`, `stop`, `create`, `exec`, `configure`) that fail, with the error.
@@ -133,6 +135,7 @@ impl FakeIncus {
                 ("eth0".to_owned(), device(&nic)),
             ]),
             networks,
+            pool_bytes: (100 << 30, 60 << 30),
             inside: None,
             failures: BTreeMap::new(),
             requests: Vec::new(),
@@ -216,6 +219,12 @@ impl FakeIncus {
                 Some(config) => ok(json!({"name": name, "managed": true, "config": config})),
                 None => error(404, "Network not found"),
             },
+            ("GET", ["1.0", "profiles", "default"]) => {
+                ok(json!({"name": "default", "devices": self.profile_devices}))
+            }
+            ("GET", ["1.0", "storage-pools", _, "resources"]) => ok(
+                json!({"space": {"total": self.pool_bytes.0, "used": self.pool_bytes.0 - self.pool_bytes.1}}),
+            ),
             ("GET", ["1.0", "operations", id, "wait"]) => match self.operations.get(*id) {
                 Some(operation) => ok(operation.clone()),
                 None => error(404, "Operation not found"),
