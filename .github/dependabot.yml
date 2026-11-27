@@ -1,0 +1,6 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+# M0 adds gomod, cargo and npm (web/).

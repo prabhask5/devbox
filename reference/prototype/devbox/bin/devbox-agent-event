@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Relays one agent lifecycle hook (Claude Code / Codex / opencode) to the devbox hub.
+# Usage (from a hook): devbox-agent-event <agent> <EventName>   (hook JSON on stdin)
+# Must be fast, print nothing (some hooks treat stdout as input), and never fail the agent.
+agent="${1:-unknown}"; event="${2:-unknown}"
+payload="$(cat 2>/dev/null || true)"
+body="$(jq -cn --arg agent "$agent" --arg event "$event" --arg sid "${DEVBOX_SESSION:-}" \
+  --arg pane "${TMUX_PANE:-}" --arg cwd "$PWD" --arg payload "$payload" \
+  '{agent:$agent,event:$event,devboxSession:$sid,tmuxPane:$pane,cwd:$cwd,payload:$payload}' 2>/dev/null)" || exit 0
+curl -fsS -m 2 -X POST -H 'content-type: application/json' --data-binary @- \
+  "http://127.0.0.1:${DEVBOX_HUB_PORT:-8090}/internal/event" <<<"$body" >/dev/null 2>&1 || true
+exit 0

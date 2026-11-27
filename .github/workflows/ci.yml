@@ -1,0 +1,51 @@
+name: CI
+
+# Every job here must pass before a pull request can merge. Branch protection requires only the
+# `required` job at the bottom, which fails unless all the others succeeded, so jobs can be added
+# or removed without changing repository settings (same pattern as prabhask5/stellar and prabhask5/moi).
+#
+# M0 adds the go, rust, web, integration, e2e, build and budgets jobs (docs/spec/15-testing.md).
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    name: static
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tests live in tests/
+        run: scripts/check-tests-location.sh
+      - name: No secrets committed
+        run: scripts/check-secrets.sh
+      - name: Repo hygiene
+        run: scripts/check-hygiene.sh
+      - name: Links in the docs
+        run: python3 scripts/check-links.py
+
+  required:
+    name: required
+    if: always()
+    needs: [static]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every job succeeded
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          echo "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          echo "$NEEDS" | jq -e 'all(.[]; .result == "success")' > /dev/null

@@ -1,0 +1,9 @@
+{
+  "name": "devbox-hub",
+  "private": true,
+  "description": "Agents hub for the devbox: tmux-backed agent sessions, hooks, web push, mobile PWA.",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=20" },
+  "dependencies": { "web-push": "^3.6.7" }
+}

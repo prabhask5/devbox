@@ -1,0 +1,15 @@
+[Unit]
+Description=tmux server for devbox agent sessions
+Documentation=file://%h/dotfiles/README.md
+
+[Service]
+Type=forking
+# The "main" session keeps the server alive; agent sessions live alongside it.
+ExecStart=/usr/bin/tmux new-session -d -s main -c %h
+ExecStop=/usr/bin/tmux kill-server
+# Only an explicit stop ends sessions (ExecStop); a crash of the unit does not kill agents.
+KillMode=process
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
