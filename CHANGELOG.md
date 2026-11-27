@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows [Kee
 ## Unreleased
 
 - Specification, milestones and agent workflow (spec-first start of the project).
+- Library: `devbox-core`, `devbox-sync` and `devbox-context` 0.1.0, built to be embedded by moi — every host command is a function that returns a report (`setup::{up, down, status, doctor, connect, password}`, rendered by `render::human` / `render::json`), prompts go through `Confirm` and `UpOptions`, all system access through `system::System`, the firewall through `firewall::Manager`; Rust 1.88.
 - Setup: `devbox up` plans and applies everything on the host — secrets, the Incus VM (new or adopted), provisioning, dotfiles, host config, Traefik routes, firewall — saving what it replaces, and `devbox down` puts it back. `devbox status`, `doctor`, `connect` and `password` look after a host that is set up.
 - Developer context: `devbox context` writes a factual, current description of how you work — environment, languages, git and agent habits, each repository, the last two weeks — into your dotfiles for every agent to read, with secrets redacted, optionally summarized by your own Claude Code, and committed.
 - Repo sync: `devbox sync` clones the repositories you own on GitHub and brings every repository in `~/code` up to date — fast-forwarding or rebasing with uncommitted changes carried over, or leaving a repository exactly as it was when anything conflicts.

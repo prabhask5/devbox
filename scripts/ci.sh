@@ -67,7 +67,7 @@ compat() {
   step "no async runtime, HTTP crate or TLS stack; moi's majors"
   python3 scripts/check-compat-deps.py
   step "cargo deny (moi's policy, next to moi's dependencies)"
-  cargo_tool deny "$CARGO_DENY" --manifest-path "$consumer/Cargo.toml" --config tests/compat/moi-deny.toml check licenses bans sources
+  cargo_tool deny "$CARGO_DENY" --log-level error --manifest-path "$consumer/Cargo.toml" --config tests/compat/moi-deny.toml check licenses bans sources
   # moi takes the crates from crates.io: they must package and build from the package alone.
   step "cargo publish (dry run)"; scripts/publish-crates.sh --dry-run
 }
