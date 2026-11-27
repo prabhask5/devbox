@@ -180,16 +180,15 @@ function Phases({ wake, now }: { wake: Wake; now: number }) {
 const MARKS: Partial<Record<string, string>> = { updated: " ↓", conflict: " ⚠", error: " ✕" };
 
 function Repos({ sync }: { sync: SyncState | undefined }) {
-  if (!sync) return null;
   return (
     <div class="repos">
-      {sync.results.map((repo) => (
+      {sync?.results.map((repo) => (
         <span key={repo.name} class={`chip ${repo.status}`} title={repo.detail}>
           {repo.name}
           {MARKS[repo.status] ?? ""}
         </span>
       ))}
-      {sync.current !== undefined && <span class="chip syncing">{sync.current}…</span>}
+      {sync?.current !== undefined && <span class="chip syncing">{sync.current}…</span>}
     </div>
   );
 }
@@ -278,11 +277,11 @@ export function App(props: AppProps) {
         </section>
       )}
       {wake && <WakeProgress {...props} wake={wake} />}
-      {lastStop && !boot.needsAuth && (
-        <footer>
-          Went to sleep {new Date(lastStop.at).toLocaleString()} ({lastStop.reason})
-        </footer>
-      )}
+      <footer>
+        {lastStop &&
+          !boot.needsAuth &&
+          `Went to sleep ${new Date(lastStop.at).toLocaleString()} (${lastStop.reason})`}
+      </footer>
     </>
   );
 }

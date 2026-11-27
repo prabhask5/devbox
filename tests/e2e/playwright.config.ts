@@ -1,6 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const ci = process.env["CI"] !== undefined;
+const ci = process.env.CI !== undefined;
 
 // One stack (tests/e2e/harness) serves every test and tests steer it, so they run one at a time.
 export default defineConfig({
@@ -12,7 +12,9 @@ export default defineConfig({
   retries: 0,
   reporter: ci ? [["list"], ["html", { open: "never" }]] : "list",
   snapshotPathTemplate: "{testDir}/visual/{arg}-{projectName}-{platform}{ext}",
-  expect: { toHaveScreenshot: { maxDiffPixelRatio: 0.02, animations: "disabled" } },
+  expect: {
+    toHaveScreenshot: { maxDiffPixelRatio: 0.02, animations: "disabled", scale: "device" },
+  },
   use: {
     ignoreHTTPSErrors: true, // the harness's TLS front has a self-signed certificate
     locale: "en-US",

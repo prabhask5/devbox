@@ -128,7 +128,7 @@ test("cold boot without history: says it is learning, for the agents app", () =>
   expect(text(".sub")).toEqual(["First wake — learning how long this takes"]);
   expect(text(".brand")).toEqual(["agents.example.com"]);
   expect(text("li small")).toEqual(["Fresh boot"]);
-  expect(document.querySelector("footer")).toBeNull();
+  expect(text("footer")).toEqual([""]);
 });
 
 test("a skipped phase is struck through", () => {

@@ -59,8 +59,10 @@ web() {
 # TODO(M2): the Go and Rust suites that need real tmux and git.
 integration() { step "integration"; echo "no integration suites yet"; }
 
-# TODO(M3): scripts/e2e.sh, the full-stack harness with Playwright.
-e2e() { step "e2e"; echo "no end-to-end scenarios yet"; }
+e2e() {
+  step "web install"; web_install
+  step "e2e";         scripts/e2e.sh
+}
 
 # Static release binaries in bin/. DEVBOX_RUST_TARGET (a linux musl triple, set per runner in CI) builds one
 # architecture; without it the Go binaries are cross-compiled for both and `devbox` is built for this machine.

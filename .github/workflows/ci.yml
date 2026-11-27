@@ -12,6 +12,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      update_baselines:
+        description: Rewrite the visual baselines (tests/e2e/visual) and upload them instead of comparing
+        type: boolean
+        default: false
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -84,7 +89,26 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
         with: { go: true, rust: true, web: true }
+      - name: Browsers
+        run: pnpm -C web install --frozen-lockfile && pnpm -C web --filter devbox-e2e exec playwright install --with-deps chromium webkit
+      - name: Update the visual baselines
+        if: inputs.update_baselines
+        run: scripts/e2e.sh --update-baselines
+      - if: inputs.update_baselines
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: visual-baselines
+          path: tests/e2e/visual/*-linux.png
+          if-no-files-found: error
       - run: scripts/ci.sh e2e
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-results
+          path: |
+            tests/e2e/test-results/
+            tests/e2e/playwright-report/
+          retention-days: 7
 
   build:
     name: build (${{ matrix.arch }})

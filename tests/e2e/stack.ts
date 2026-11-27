@@ -1,7 +1,7 @@
 import type { APIRequestContext } from "@playwright/test";
 
 /** The stack tests/e2e/harness runs: where it listens and what the tests know about it. */
-export const CONTROL = "http://127.0.0.1:47100";
+const CONTROL = "http://127.0.0.1:47100";
 export const CODE = "https://127.0.0.1:47101";
 export const AGENTS = "https://127.0.0.1:47102";
 export const WAKE_PASSWORD = "FAKE-password";
