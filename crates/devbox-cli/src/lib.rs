@@ -6,6 +6,9 @@ use std::io::Write;
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand, ValueEnum};
+use devbox_core::proto::{SyncProgress, SyncProgressType, SyncStatus, versions};
+use devbox_core::system::{Host, System};
+use devbox_sync::Event;
 
 /// Exit code of a command that exists but has no behaviour yet.
 pub const EXIT_NOT_IMPLEMENTED: u8 = 3;
@@ -36,7 +39,14 @@ enum Command {
         which: PasswordKind,
     },
     /// Clone and update every repository without losing local work
-    Sync,
+    Sync {
+        /// Print progress as one JSON object per line
+        #[arg(long)]
+        json: bool,
+        /// Sync only this repository of the code directory, and clone nothing
+        #[arg(long, value_name = "NAME")]
+        repo: Option<String>,
+    },
     /// Refresh the developer context for AI agents
     Context,
 }
@@ -59,14 +69,114 @@ impl Command {
             Self::Connect => "connect",
             Self::Password { which: PasswordKind::Wake } => "password wake",
             Self::Password { which: PasswordKind::App } => "password app",
-            Self::Sync => "sync",
+            Self::Sync { .. } => "sync",
             Self::Context => "context",
         }
     }
 }
 
-/// Runs `devbox` with `args` (the first is the program name), writing to `stdout` and `stderr`.
+/// Exit code of a command that could not do its work at all.
+pub const EXIT_FAILED: u8 = 2;
+
+/// One line of `devbox sync --json`.
+fn progress(event: &Event) -> SyncProgress {
+    let mut line = SyncProgress {
+        v: versions::SYNC_PROGRESS_VERSION,
+        type_: SyncProgressType::Done,
+        total: None,
+        name: None,
+        status: None,
+        detail: None,
+    };
+    match event {
+        Event::Start { local, new } => {
+            line.type_ = SyncProgressType::Start;
+            line.total = i64::try_from(local + new).ok();
+        }
+        Event::Begin(name) => {
+            line.type_ = SyncProgressType::Begin;
+            line.name = Some(name.clone());
+        }
+        Event::Repo(result) => {
+            line.type_ = SyncProgressType::Repo;
+            line.name = Some(result.name.clone());
+            line.status = Some(result.status);
+            line.detail = Some(result.detail.clone());
+        }
+        Event::Done => {}
+    }
+    line
+}
+
+/// `devbox sync`: every repository current, or exactly as it was. Repositories that could not
+/// be synced are reported, not failures of the command.
+fn sync(
+    system: &dyn System,
+    json: bool,
+    repo: Option<String>,
+    stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
+) -> ExitCode {
+    let mut options = devbox_sync::Options::from_env(system);
+    options.only = repo;
+    let code_dir = options.code_dir.display().to_string();
+    // Whoever reads the output may stop reading; the sync goes on and the log has it all.
+    let mut report = |event: &Event| {
+        let _ = if json {
+            match serde_json::to_string(&progress(event)) {
+                Ok(line) => writeln!(stdout, "{line}"),
+                Err(_) => Ok(()),
+            }
+        } else {
+            match event {
+                Event::Start { local, new } => {
+                    let repos =
+                        if *local == 1 { "1 repo".to_owned() } else { format!("{local} repos") };
+                    let cloning = if *new > 0 { format!(", cloning {new}") } else { String::new() };
+                    writeln!(stdout, "Syncing {repos} in {code_dir}{cloning}")
+                }
+                Event::Repo(result) => {
+                    let icon = match result.status {
+                        SyncStatus::Updated | SyncStatus::Cloned => '↓',
+                        SyncStatus::Conflict => '⚠',
+                        SyncStatus::Error => '✕',
+                        SyncStatus::Current => '✓',
+                        SyncStatus::Skipped => '·',
+                    };
+                    writeln!(stdout, "  {icon} {:<30} {}", result.name, result.detail)
+                }
+                Event::Begin(_) | Event::Done => Ok(()),
+            }
+        };
+        let _ = stdout.flush();
+    };
+    match devbox_sync::sync(system, &options, &mut report) {
+        Ok(_) => ExitCode::SUCCESS,
+        Err(error) => {
+            let _ = writeln!(stderr, "devbox sync: {error}");
+            ExitCode::from(EXIT_FAILED)
+        }
+    }
+}
+
+/// Runs `devbox` with `args` (the first is the program name) on this machine, writing to
+/// `stdout` and `stderr`.
 pub fn run<I, T>(args: I, stdout: &mut dyn Write, stderr: &mut dyn Write) -> ExitCode
+where
+    I: IntoIterator<Item = T>,
+    T: Into<OsString> + Clone,
+{
+    run_on(&Host::new(), args, stdout, stderr)
+}
+
+/// Runs `devbox` with `args` (the first is the program name) on `system`, writing to `stdout`
+/// and `stderr`.
+pub fn run_on<I, T>(
+    system: &dyn System,
+    args: I,
+    stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
+) -> ExitCode
 where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
@@ -85,6 +195,9 @@ where
             return ExitCode::from(u8::try_from(err.exit_code()).unwrap_or(1));
         }
     };
+    if let Command::Sync { json, repo } = cli.command {
+        return sync(system, json, repo, stdout, stderr);
+    }
     let _ = writeln!(stderr, "devbox {}: not implemented yet", cli.command.name());
     ExitCode::from(EXIT_NOT_IMPLEMENTED)
 }

@@ -606,3 +606,36 @@ func TestSyncProblemsAreAnnounced(t *testing.T) {
 		t.Errorf("titles: %v", got)
 	}
 }
+
+// The hub and `devbox sync` are written in two languages and meet in the lines the one prints
+// and the other reads: the golden output of the Rust tests must be what the hub understands.
+func TestTheHubUnderstandsWhatDevboxSyncPrints(t *testing.T) {
+	h := start(t)
+	golden, err := os.ReadFile("../../fixtures/sync/progress.ndjson")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.runner.Answer = func(string) (string, error) { return strings.TrimSpace(string(golden)), nil }
+	h.signIn().do("POST", "/api/sync", nil)
+	eventually(t, "the sync to finish", func() bool { return h.status().Sync.State == proto.SyncStateStateDone })
+	sync := h.status().Sync
+	var got []string
+	for _, result := range sync.Results {
+		got = append(got, result.Name+" "+string(result.Status)+": "+result.Detail)
+	}
+	want := []string{
+		"brand-new cloned: new on GitHub",
+		"current current: up to date on main",
+		"detached skipped: detached HEAD",
+		"dirty updated: pulled 1 commit, kept your uncommitted changes",
+		"diverged conflict: your 1 unpushed commit conflicts with 1 upstream commit; left exactly as it was",
+		"unpushed current: up to date; 1 local commit not pushed",
+		"updated updated: pulled 3 commits",
+	}
+	if !reflect.DeepEqual(got, want) || sync.Total != 7 || sync.Done != 7 || sync.Current != nil {
+		t.Errorf("sync: total %d, done %d, current %v\n%s", sync.Total, sync.Done, sync.Current, strings.Join(got, "\n"))
+	}
+	if strings.Contains(h.logs.String(), "sync output not understood") {
+		t.Errorf("the hub did not understand a line:\n%s", h.logs.String())
+	}
+}

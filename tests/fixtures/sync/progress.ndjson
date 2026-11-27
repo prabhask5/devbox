@@ -1,0 +1,17 @@
+{"total":7,"type":"start","v":1}
+{"name":"fetching","type":"begin","v":1}
+{"name":"brand-new","type":"begin","v":1}
+{"detail":"new on GitHub","name":"brand-new","status":"cloned","type":"repo","v":1}
+{"name":"current","type":"begin","v":1}
+{"detail":"up to date on main","name":"current","status":"current","type":"repo","v":1}
+{"name":"detached","type":"begin","v":1}
+{"detail":"detached HEAD","name":"detached","status":"skipped","type":"repo","v":1}
+{"name":"dirty","type":"begin","v":1}
+{"detail":"pulled 1 commit, kept your uncommitted changes","name":"dirty","status":"updated","type":"repo","v":1}
+{"name":"diverged","type":"begin","v":1}
+{"detail":"your 1 unpushed commit conflicts with 1 upstream commit; left exactly as it was","name":"diverged","status":"conflict","type":"repo","v":1}
+{"name":"unpushed","type":"begin","v":1}
+{"detail":"up to date; 1 local commit not pushed","name":"unpushed","status":"current","type":"repo","v":1}
+{"name":"updated","type":"begin","v":1}
+{"detail":"pulled 3 commits","name":"updated","status":"updated","type":"repo","v":1}
+{"type":"done","v":1}

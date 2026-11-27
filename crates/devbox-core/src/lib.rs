@@ -9,3 +9,4 @@ pub mod password;
 pub mod proto;
 pub mod schema;
 pub mod secret;
+pub mod system;

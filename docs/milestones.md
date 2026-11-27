@@ -77,11 +77,11 @@ Specs: 06, 16
 
 ## M6 — Repo sync (Rust)
 Specs: 07
-- [ ] `devbox-sync` crate + `devbox sync [--json]`: discovery, parallel fetch, update/restore algorithm, safety refs, clone missing via GitHub API
-- [ ] Prototype matrix ported; proptest "never lose work" property; golden outputs
-- [ ] Hub integration (progress → status → boot screen chips); e2e scenario 1 with real sync over local bare remotes
-- [ ] Budget measured
-- [ ] Cleanup pass; `scripts/check-hygiene.sh` green
+- [x] `devbox-sync` crate + `devbox sync [--json]`: discovery, parallel fetch, update/restore algorithm, safety refs, clone missing via GitHub API — [`crates/devbox-sync`](../crates/devbox-sync), [`tests/rust/tests/sync_clone.rs`](../tests/rust/tests/sync_clone.rs), [`tests/rust/tests/sync_system.rs`](../tests/rust/tests/sync_system.rs)
+- [x] Prototype matrix ported; proptest "never lose work" property; golden outputs — [`sync_matrix.rs`](../tests/rust/tests/sync_matrix.rs), [`sync_property.rs`](../tests/rust/tests/sync_property.rs), [`sync_output.rs`](../tests/rust/tests/sync_output.rs)
+- [x] Hub integration (progress → status → boot screen chips); e2e scenario 1 with real sync over local bare remotes — [`tests/go/hub/app_test.go`](../tests/go/hub/app_test.go) (`TestTheHubUnderstandsWhatDevboxSyncPrints`), [`tests/e2e/wake.spec.ts`](../tests/e2e/wake.spec.ts)
+- [x] Budget measured — [`tests/perf/sync`](../tests/perf/sync)
+- [x] Cleanup pass; `scripts/check-hygiene.sh` green
 
 ## M7 — Developer context (Rust)
 Specs: 08

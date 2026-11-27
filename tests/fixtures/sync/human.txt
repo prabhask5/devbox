@@ -1,0 +1,8 @@
+Syncing 6 repos in <sandbox>/home/code, cloning 1
+  ↓ brand-new                      new on GitHub
+  ✓ current                        up to date on main
+  · detached                       detached HEAD
+  ↓ dirty                          pulled 1 commit, kept your uncommitted changes
+  ⚠ diverged                       your 1 unpushed commit conflicts with 1 upstream commit; left exactly as it was
+  ✓ unpushed                       up to date; 1 local commit not pushed
+  ↓ updated                        pulled 3 commits

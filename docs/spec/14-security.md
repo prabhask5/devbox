@@ -47,9 +47,9 @@ Each dependency and why (keep current when adding one):
 | Go | `github.com/BurntSushi/toml` | config files |
 | Rust | `clap`, `serde`, `serde_json`, `toml`, `thiserror` | CLI, config, contracts (same as moi) |
 | Rust | `argon2`, `getrandom` | password hashing, salts |
-| Rust | `ureq` or a minimal HTTP/1.1 client over the Incus unix socket (decided in M6/M8) | Incus REST, GitHub API |
-| Rust | `gix` (minimal features) | fast read-only git queries |
-| Rust (dev) | `proptest`, `insta` | property tests, golden files |
+| Rust | none for HTTP: the Incus REST API is spoken over its unix socket with the standard library, and the GitHub API is asked with `curl` run through `System` | keeps TLS out of the `devbox` binary |
+| Rust | none for git: the `git` binary, run through `System` | the owner's hooks, credential helpers and config apply |
+| Rust (dev) | `proptest` | property tests |
 | Web | `preact`, `vite`, `vitest`, `@playwright/test`, `typescript` | apps and tests |
 | Web (dev) | `eslint`, `@eslint/js`, `typescript-eslint`, `prettier`, `knip` | lint, format, unused files/exports/dependencies |
 | Web (dev) | `@testing-library/preact`, `happy-dom` | rendering components in unit tests |

@@ -26,9 +26,11 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -137,10 +139,14 @@ func (quietHost) HasChildren(pid int) bool { return sys.Machine().HasChildren(pi
 func (quietHost) Load() (float64, int)     { return 0, 4 }
 func (quietHost) Uptime() time.Duration    { return 24 * time.Hour }
 
-// commands is what the hub runs on the VM. `devbox sync --json` is played by a script that the
-// tests can hold in the middle; everything else (setting the clock, starting units) succeeds
-// without doing anything.
-type commands struct{ vm *vm }
+// commands is what the hub runs on the VM. `devbox sync --json` is the real one, on the real
+// repositories of the temporary home; a test can hold it just before the last repository
+// (`POST /set?sync=hold`). Everything else (setting the clock, starting units) succeeds without
+// doing anything.
+type commands struct {
+	vm     *vm
+	devbox string
+}
 
 func (commands) Run(context.Context, string, ...string) ([]byte, error) { return nil, nil }
 
@@ -148,26 +154,33 @@ func (c commands) Stream(ctx context.Context, line func(string), name string, ar
 	if name != "devbox" || len(args) == 0 || args[0] != "sync" {
 		return nil
 	}
-	for _, progress := range []string{
-		`{"v": 1, "type": "start", "total": 3}`,
-		`{"v": 1, "type": "repo", "name": "dotfiles", "status": "current", "detail": "up to date"}`,
-		`{"v": 1, "type": "repo", "name": "notes", "status": "updated", "detail": "pulled 3"}`,
-		`{"v": 1, "type": "begin", "name": "devbox"}`,
-	} {
-		line(progress)
+	sync := exec.CommandContext(ctx, c.devbox, args...)
+	output, err := sync.StdoutPipe()
+	if err != nil {
+		return err
 	}
-	for {
-		c.vm.mu.Lock()
-		held := c.vm.syncHeld
-		c.vm.mu.Unlock()
-		if !held || ctx.Err() != nil {
-			break
+	sync.Stderr = os.Stderr
+	if err := sync.Start(); err != nil {
+		return err
+	}
+	lines := bufio.NewScanner(output)
+	for lines.Scan() {
+		if strings.Contains(lines.Text(), `"name":"website","type":"begin"`) {
+			line(lines.Text())
+			for {
+				c.vm.mu.Lock()
+				held := c.vm.syncHeld
+				c.vm.mu.Unlock()
+				if !held || ctx.Err() != nil {
+					break
+				}
+				time.Sleep(20 * time.Millisecond)
+			}
+			continue
 		}
-		time.Sleep(20 * time.Millisecond)
+		line(lines.Text())
 	}
-	line(`{"v": 1, "type": "repo", "name": "devbox", "status": "current", "detail": "up to date"}`)
-	line(`{"v": 1, "type": "done"}`)
-	return nil
+	return sync.Wait()
 }
 
 // sshd sends a banner and echoes lines.
@@ -342,6 +355,9 @@ func run(ctx context.Context, controlAddr, codeAddr, agentsAddr string) error {
 		_ = agents.tmux.KillServer(ctx)
 		_ = os.RemoveAll(filepath.Join(dir, "hub-state"))
 		_ = os.Remove(agents.socket)
+		if err := agents.rewind(); err != nil {
+			return nil, err
+		}
 		push.Swap(pushfake.Start()).Close()
 		tcp, err := listen("127.0.0.1:0")
 		if err != nil {
@@ -354,7 +370,7 @@ func run(ctx context.Context, controlAddr, codeAddr, agentsAddr string) error {
 		instance, err := hub.New(ctx, hub.Options{
 			Config: hubConfig, Secrets: hubSecrets, Home: agents.home, CodeDir: filepath.Join(agents.home, "code"),
 			StateDir: filepath.Join(dir, "hub-state"), Version: "e2e", TCP: tcp, Socket: socket, Tmux: agents.tmux,
-			Clock: sys.SystemClock(), Host: quietHost{}, Runner: commands{machine}, Timings: hubTimings,
+			Clock: sys.SystemClock(), Host: quietHost{}, Runner: commands{machine, agents.devbox}, Timings: hubTimings,
 			Log: slog.New(slog.NewTextHandler(os.Stderr, nil)),
 		})
 		if err != nil {

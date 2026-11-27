@@ -15,8 +15,12 @@ workspace = true
 test = false
 doctest = false
 
-[dev-dependencies]
+[dependencies]
 devbox-cli.workspace = true
 devbox-core.workspace = true
-serde.workspace = true
+devbox-sync.workspace = true
 serde_json.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+serde.workspace = true

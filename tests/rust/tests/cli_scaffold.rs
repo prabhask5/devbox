@@ -1,4 +1,4 @@
-//! Every `devbox` command exists and says it is not implemented yet.
+//! Every `devbox` command exists; those without behaviour yet say so.
 
 use std::process::ExitCode;
 
@@ -10,8 +10,8 @@ fn devbox(args: &[&str]) -> (ExitCode, String, String) {
 }
 
 #[test]
-fn every_command_is_not_implemented_yet() {
-    let commands: [&[&str]; 9] = [
+fn commands_without_behaviour_say_so() {
+    let commands: [&[&str]; 8] = [
         &["up"],
         &["down"],
         &["status"],
@@ -19,7 +19,6 @@ fn every_command_is_not_implemented_yet() {
         &["connect"],
         &["password", "wake"],
         &["password", "app"],
-        &["sync"],
         &["context"],
     ];
     for args in commands {

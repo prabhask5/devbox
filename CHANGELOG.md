@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows [Kee
 ## Unreleased
 
 - Specification, milestones and agent workflow (spec-first start of the project).
+- Repo sync: `devbox sync` clones the repositories you own on GitHub and brings every repository in `~/code` up to date — fast-forwarding or rebasing with uncommitted changes carried over, or leaving a repository exactly as it was when anything conflicts.
 - Agents app: an installable PWA to watch, answer and start agent sessions from a phone — live session list and terminal screen, one-tap answers, push notifications, wake from sleep, offline shell.
 - Agents hub: the app API with sign-in, live state and screen streams, and web push notifications when an agent needs you, finishes a long turn or fails.
 - Agents hub core: agent sessions in tmux that survive hub restarts, state from agent hooks through a fast relay, idle reporting to the gateway, repo sync on wake, the `devbox-hub agent` command and hook installers for Claude Code, Codex and opencode.
