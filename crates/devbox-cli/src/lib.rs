@@ -9,7 +9,11 @@ use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use devbox_core::proto::{SyncProgress, SyncProgressType, SyncStatus, versions};
-use devbox_core::setup::{self, Firewall, Passwords, Paths, Routing, UpOptions};
+use devbox_core::render;
+use devbox_core::setup::{
+    self, Confirm, DownOptions, PasswordOptions, Paths, Plan, Routing, SecretString, StatusOptions,
+    UpOptions, Yes,
+};
 use devbox_core::system::{Host, System};
 use devbox_sync::Event;
 
@@ -30,6 +34,9 @@ enum Command {
         /// Also delete the VM, if `devbox up` created it
         #[arg(long)]
         destroy: bool,
+        /// Show what would be undone and change nothing
+        #[arg(long)]
+        dry_run: bool,
         /// Do not ask before undoing
         #[arg(long)]
         yes: bool,
@@ -96,18 +103,18 @@ struct UpArgs {
     /// Use an instance that exists already; its disk and data are kept
     #[arg(long)]
     adopt: bool,
-    /// vCPUs of a new VM
-    #[arg(long, default_value_t = 3)]
-    cpu: u32,
-    /// Memory of a new VM
-    #[arg(long, default_value = "5GiB")]
-    memory: String,
-    /// Disk of a new VM
-    #[arg(long, default_value = "60GiB")]
-    disk: String,
-    /// Image of a new VM
-    #[arg(long, default_value = "images:ubuntu/26.04/cloud")]
-    image: String,
+    /// vCPUs of a new VM [default: 3]
+    #[arg(long)]
+    cpu: Option<u32>,
+    /// Memory of a new VM [default: 5GiB]
+    #[arg(long)]
+    memory: Option<String>,
+    /// Disk of a new VM [default: 60GiB]
+    #[arg(long)]
+    disk: Option<String>,
+    /// Image of a new VM [default: images:ubuntu/26.04/cloud]
+    #[arg(long)]
+    image: Option<String>,
     /// The user in the VM [default: the user who ran sudo]
     #[arg(long)]
     user: Option<String>,
@@ -126,9 +133,9 @@ struct UpArgs {
     /// The Traefik dynamic configuration file to write
     #[arg(long, value_name = "PATH")]
     traefik_file: Option<PathBuf>,
-    /// What manages this host's firewall
-    #[arg(long, default_value = "auto")]
-    firewall: FirewallKind,
+    /// What manages this host's firewall [default: found out; moi where moi is installed]
+    #[arg(long)]
+    firewall: Option<FirewallKind>,
     /// The Uptime Kuma monitor to point at the health URL
     #[arg(long, value_name = "NAME")]
     kuma_monitor: Option<String>,
@@ -168,8 +175,6 @@ enum RoutingKind {
 
 #[derive(Clone, Copy, ValueEnum)]
 enum FirewallKind {
-    /// Find out which
-    Auto,
     /// An iptables-restore rules file applied by host-firewall.service
     HostFirewall,
     Ufw,
@@ -311,14 +316,14 @@ fn password(
     file: Option<&PathBuf>,
     what: &str,
     may_ask: bool,
-) -> Result<Option<String>, String> {
+) -> Result<Option<SecretString>, String> {
     if let Some(file) = file {
         let text = system.read(file).map_err(|err| format!("{}: {err}", file.display()))?;
         let line = String::from_utf8_lossy(&text).lines().next().unwrap_or_default().to_owned();
         if line.is_empty() {
             return Err(format!("{} is empty", file.display()));
         }
-        return Ok(Some(line));
+        return Ok(Some(SecretString::new(line)));
     }
     if !may_ask {
         return Ok(None);
@@ -332,18 +337,38 @@ fn password(
     if ask(system, &format!("{what}, again: "), true).as_deref() != Some(first.as_str()) {
         return Err("the two do not match".to_owned());
     }
-    Ok(Some(first))
+    Ok(Some(SecretString::new(first)))
 }
 
-/// `devbox up`: the plan, a question, and its application.
-fn up(
-    system: &dyn System,
-    args: &UpArgs,
-    stdout: &mut dyn Write,
-    stderr: &mut dyn Write,
-) -> ExitCode {
-    let paths = Paths::from_env(system);
-    let mut options = UpOptions {
+fn agreed(system: &dyn System, question: &str) -> bool {
+    matches!(ask(system, question, false).unwrap_or_default().trim(), "y" | "Y" | "yes")
+}
+
+/// The answer to "apply this plan?" when it was given before `up` was called, and the steps
+/// printed as they are applied.
+struct Applying<'a> {
+    stdout: &'a mut dyn Write,
+    started: bool,
+}
+
+impl Confirm for Applying<'_> {
+    fn confirm(&mut self, _: &Plan) -> bool {
+        true
+    }
+
+    fn progress(&mut self, step: &str) {
+        if !self.started {
+            let _ = writeln!(self.stdout);
+            self.started = true;
+        }
+        let _ = writeln!(self.stdout, "{step}");
+        let _ = self.stdout.flush();
+    }
+}
+
+fn up_options(system: &dyn System, args: &UpArgs) -> UpOptions {
+    UpOptions {
+        paths: Paths::from_env(system),
         domain: args.domain.clone(),
         code_host: args.code_host.clone(),
         agents_host: args.agents_host.clone(),
@@ -362,102 +387,109 @@ fn up(
             RoutingKind::None => Routing::None,
         }),
         traefik_file: args.traefik_file.clone(),
-        firewall: match args.firewall {
-            FirewallKind::Auto => Firewall::Auto,
-            FirewallKind::HostFirewall => Firewall::HostFirewall,
-            FirewallKind::Ufw => Firewall::Ufw,
-            FirewallKind::Nftables => Firewall::Nftables,
-            FirewallKind::Moi => Firewall::Moi,
-            FirewallKind::None => Firewall::None,
-        },
+        firewall: args.firewall.map(|firewall| {
+            match firewall {
+                FirewallKind::HostFirewall => "host-firewall",
+                FirewallKind::Ufw => "ufw",
+                FirewallKind::Nftables => "nftables",
+                FirewallKind::Moi => "moi",
+                FirewallKind::None => "none",
+            }
+            .to_owned()
+        }),
+        firewall_manager: None,
+        wake_password: None,
+        app_password: None,
         kuma_monitor: args.kuma_monitor.clone(),
         github_token: args.github_token_from.is_some(),
         ssh_keys: args.ssh_keys.clone(),
         binaries: args.binaries.clone(),
         release: args.release.clone(),
         dry_run: true,
-    };
+    }
+}
+
+/// `devbox up`: the plan, a question, and its application. The library does the work; here
+/// the passwords are read or asked for, the question is put, and the report is printed.
+fn up(
+    system: &dyn System,
+    args: &UpArgs,
+    stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
+) -> ExitCode {
+    let mut options = up_options(system, args);
     let mut failed = |message: &str| {
         let _ = writeln!(stderr, "{message}");
         ExitCode::from(EXIT_FAILED)
     };
     let from_file = |file: Option<&PathBuf>, what: &str| password(system, file, what, false);
-    let mut passwords = match (
+    match (
         from_file(args.wake_password_file.as_ref(), "the wake password"),
         from_file(args.app_password_file.as_ref(), "the app password"),
     ) {
-        (Ok(wake), Ok(app)) => Passwords { wake, app },
+        (Ok(wake), Ok(app)) => (options.wake_password, options.app_password) = (wake, app),
         (Err(why), _) | (_, Err(why)) => return failed(&format!("devbox up: {why}")),
-    };
+    }
     // First the plan, which asks for nothing and changes nothing.
-    let plan = match setup::plan(system, &paths, &options, &passwords) {
-        Ok(plan) => plan,
+    let planned = match setup::up(system, &options, &mut Yes) {
+        Ok(report) => report,
         Err(error) => return failed(&error.to_string()),
     };
-    let _ = write!(stdout, "{}", plan.render());
-    if args.dry_run || plan.changes() == 0 {
-        if plan.changes() == 0 {
-            let _ = write!(stdout, "\n{}", plan.connect());
-        }
+    let _ = write!(stdout, "{}", render::human(&planned));
+    if args.dry_run {
         return ExitCode::SUCCESS;
     }
-    if !args.yes {
-        let answer = ask(system, "Apply? [y/N] ", false).unwrap_or_default();
-        if !matches!(answer.trim(), "y" | "Y" | "yes") {
-            let _ = writeln!(stdout, "Nothing was changed.");
-            return ExitCode::SUCCESS;
-        }
+    let (needs_wake, needs_app) =
+        (planned.plan.needs_wake_password, planned.plan.needs_app_password);
+    let changes = planned.changes > 0 || needs_wake || needs_app;
+    if changes && !args.yes && !agreed(system, "Apply? [y/N] ") {
+        let _ = writeln!(stdout, "Nothing was changed.");
+        return ExitCode::SUCCESS;
     }
     let asked = |needed: bool, what: &str| {
         if needed { password(system, None, what, !args.yes) } else { Ok(None) }
     };
     match (
-        asked(plan.needs_wake_password, "The password that wakes the VM"),
-        asked(plan.needs_app_password, "The password of the agents app"),
+        asked(needs_wake, "The password that wakes the VM"),
+        asked(needs_app, "The password of the agents app"),
     ) {
         (Ok(wake), Ok(app)) => {
-            passwords.wake = passwords.wake.or(wake);
-            passwords.app = passwords.app.or(app);
+            options.wake_password = options.wake_password.or(wake);
+            options.app_password = options.app_password.or(app);
         }
         (Err(why), _) | (_, Err(why)) => return failed(&format!("devbox up: {why}")),
     }
     options.dry_run = false;
-    let plan = match setup::plan(system, &paths, &options, &passwords) {
-        Ok(plan) => plan,
-        Err(error) => return failed(&error.to_string()),
-    };
-    let _ = writeln!(stdout);
-    let applied = setup::apply(system, &paths, &plan, &mut |step| {
-        let _ = writeln!(stdout, "{step}");
-        let _ = stdout.flush();
-    });
-    if let Err(error) = applied {
-        return failed(&format!("\ndevbox up stopped: {error}"));
+    let mut applying = Applying { stdout, started: false };
+    let applied = setup::up(system, &options, &mut applying);
+    let started = applying.started;
+    match applied {
+        Ok(report) => {
+            let _ = write!(stdout, "{}", render::outcome(&report));
+            ExitCode::SUCCESS
+        }
+        Err(error) if started => failed(&format!("\ndevbox up stopped: {error}")),
+        Err(error) => failed(&error.to_string()),
     }
-    let _ = write!(stdout, "\nDone.\n\n{}", plan.connect());
-    ExitCode::SUCCESS
 }
 
 /// `devbox down`: everything `up` changed on the host, back as it was.
 fn down(
     system: &dyn System,
-    destroy: bool,
-    yes: bool,
+    (destroy, dry_run, yes): (bool, bool, bool),
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
 ) -> ExitCode {
-    if !yes {
-        let question = "Undo what `devbox up` changed on this host (routing, firewall, config, Incus settings)? [y/N] ";
-        if !matches!(ask(system, question, false).unwrap_or_default().trim(), "y" | "Y" | "yes") {
-            let _ = writeln!(stdout, "Nothing was changed.");
-            return ExitCode::SUCCESS;
-        }
+    let question = "Undo what `devbox up` changed on this host (routing, firewall, config, Incus settings)? [y/N] ";
+    if !yes && !dry_run && !agreed(system, question) {
+        let _ = writeln!(stdout, "Nothing was changed.");
+        return ExitCode::SUCCESS;
     }
-    match setup::down(system, &Paths::from_env(system), destroy) {
-        Ok(done) => {
-            for line in done {
-                let _ = writeln!(stdout, "{line}");
-            }
+    let options =
+        DownOptions { paths: Paths::from_env(system), destroy, dry_run, firewall_manager: None };
+    match setup::down(system, &options) {
+        Ok(report) => {
+            let _ = write!(stdout, "{}", render::human(&report));
             ExitCode::SUCCESS
         }
         Err(error) => {
@@ -470,6 +502,10 @@ fn down(
 /// Exit code of `devbox doctor` when a check failed.
 pub const EXIT_UNHEALTHY: u8 = 1;
 
+fn shown(report: &impl render::Report, json: bool) -> String {
+    if json { render::json(report) } else { render::human(report) }
+}
+
 /// `devbox status`, `doctor`, `connect` and `password`: looking at a host that is set up, and
 /// changing a password on it.
 fn maintain(
@@ -478,48 +514,36 @@ fn maintain(
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
 ) -> ExitCode {
-    let paths = Paths::from_env(system);
-    let pretty =
-        |value: &serde_json::Value| serde_json::to_string_pretty(value).unwrap_or_default();
+    let options = StatusOptions { paths: Paths::from_env(system) };
     let outcome: Result<(String, u8), String> = match command {
-        Command::Status { json } => setup::status(system, &paths)
-            .map(|status| {
-                (if *json { pretty(&status) + "\n" } else { setup::render_status(&status) }, 0)
-            })
+        Command::Status { json } => setup::status(system, &options)
+            .map(|report| (shown(&report, *json), 0))
             .map_err(|error| error.to_string()),
         Command::Doctor { json } => {
-            let report = setup::doctor(system, &paths);
-            let code = if report["ok"] == true { 0 } else { EXIT_UNHEALTHY };
-            Ok((if *json { pretty(&report) + "\n" } else { setup::render_doctor(&report) }, code))
+            let report = setup::doctor(system, &options);
+            Ok((shown(&report, *json), if report.ok() { 0 } else { EXIT_UNHEALTHY }))
         }
-        Command::Connect => setup::status(system, &paths)
-            .map(|status| {
-                let text =
-                    |value: &serde_json::Value| value.as_str().unwrap_or("<user>").to_owned();
-                let hosts = &status["hosts"];
-                (
-                    setup::connect(
-                        &text(&hosts["code"]),
-                        &text(&hosts["agents"]),
-                        &text(&status["vm"]["user"]),
-                    ),
-                    0,
-                )
-            })
+        Command::Connect => setup::connect(system, &options)
+            .map(|report| (render::human(&report), 0))
             .map_err(|error| error.to_string()),
         Command::Password { which, password_file } => {
-            let what = match which {
-                PasswordKind::Wake => "The new password that wakes the VM",
-                PasswordKind::App => "The new password of the agents app",
+            let (kind, what) = match which {
+                PasswordKind::Wake => {
+                    (setup::PasswordKind::Wake, "The new password that wakes the VM")
+                }
+                PasswordKind::App => {
+                    (setup::PasswordKind::App, "The new password of the agents app")
+                }
             };
             password(system, password_file.as_ref(), what, true).and_then(|new| {
-                let new = new.unwrap_or_default();
-                let changed = match which {
-                    PasswordKind::Wake => setup::rotate::wake(system, &paths, &new),
-                    PasswordKind::App => setup::rotate::app(system, &paths, &new),
+                let options = PasswordOptions {
+                    paths: options.paths.clone(),
+                    kind,
+                    new: new.unwrap_or_else(|| SecretString::new("")),
                 };
-                let said = "The password is changed. Every device that was signed in has to sign in again.\n";
-                changed.map(|()| (said.to_owned(), 0)).map_err(|error| error.to_string())
+                setup::password(system, &options)
+                    .map(|report| (render::human(&report), 0))
+                    .map_err(|error| error.to_string())
             })
         }
         _ => Ok((String::new(), 0)),
@@ -615,7 +639,9 @@ where
     };
     match cli.command {
         Command::Up(args) => up(system, &args, stdout, stderr),
-        Command::Down { destroy, yes } => down(system, destroy, yes, stdout, stderr),
+        Command::Down { destroy, dry_run, yes } => {
+            down(system, (destroy, dry_run, yes), stdout, stderr)
+        }
         Command::Sync { json, repo } => sync(system, json, repo, stdout, stderr),
         Command::Context { commit, no_ai, print } => {
             context(system, (commit, no_ai, print), stdout, stderr)

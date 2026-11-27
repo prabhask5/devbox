@@ -51,7 +51,7 @@ pub(crate) struct Provision {
     pub hub_toml: String,
     /// The host's GitHub token, for `gh` in the VM and for the hub's deployments.
     pub github_token: Option<String>,
-    pub app_password: Option<String>,
+    pub app_password: Option<super::SecretString>,
     /// A fingerprint of all of the above and of the bundle.
     pub stamp: String,
 }
@@ -159,7 +159,7 @@ impl Inside<'_> {
             None => return fail(format!("there is no instance {}", self.instance)),
             Some("Running") => {}
             Some(_) => {
-                self.incus.change_state(self.instance, "start", false, Duration::from_mins(5))?;
+                self.incus.change_state(self.instance, "start", false, Duration::from_secs(300))?;
             }
         }
         for _ in 0..90 {
@@ -222,16 +222,19 @@ pub(crate) fn provision(
         .and_then(|bytes| String::from_utf8_lossy(&bytes).parse().ok())
         .unwrap_or_default();
     let kept = |key: &str| existing.get(key).and_then(toml::Value::as_str).map(str::to_owned);
-    let app_hash = match (&provision.app_password, kept("app_password_hash")) {
-        (Some(app_password), _) => password::hash(app_password)
+    let in_vm = kept("app_password_hash");
+    let app_hash = match (&provision.app_password, in_vm.or_else(|| desired.app_hash.clone())) {
+        (Some(app_password), _) => password::hash(app_password.expose())
             .map_err(|err| SetupError(format!("the app password could not be hashed: {err}")))?,
         (None, Some(hash)) => hash,
         (None, None) => {
             return fail(
-                "the VM has no password for the agents app yet: run `devbox up` with --app-password-file, or without --yes to be asked for it",
+                "neither the VM nor this host has a password for the agents app yet: run `devbox up` with --app-password-file, or without --yes to be asked for it",
             );
         }
     };
+    // The host keeps the hash too: a VM that is built again gets it back.
+    super::rotate::keep_app_hash(system, paths, &app_hash)?;
     let cookie_secret = match kept("cookie_secret") {
         Some(cookie_secret) => cookie_secret,
         None => secret(system)?,
@@ -290,7 +293,7 @@ pub(crate) fn provision(
         inside.push("github-token", token.as_bytes(), 0o600)?;
     }
     let installed =
-        inside.root(&["bash", &format!("{BUNDLE}/install.sh")], Duration::from_mins(40))?;
+        inside.root(&["bash", &format!("{BUNDLE}/install.sh")], Duration::from_secs(2400))?;
     if installed.code != 0 {
         return fail(format!(
             "installing into the VM failed (exit code {}). The end of what it printed:\n{}\nFix what it complains about and run `devbox up` again; what is installed already is not installed twice.",
@@ -341,7 +344,7 @@ pub(crate) fn dotfiles(
     inside.ready(system)?;
     let user = inside.find_user(&desired.user)?;
     let clone = format!("[ -d dotfiles/.git ] || git clone --quiet {} dotfiles", quoted(url));
-    let cloned = inside.user(&user, &clone, Duration::from_mins(10))?;
+    let cloned = inside.user(&user, &clone, Duration::from_secs(600))?;
     if cloned.code != 0 {
         return fail(format!(
             "the dotfiles could not be cloned into the VM:\n{}\nThe VM needs access to the repository: pass --github-token-from gh (or env) so that `gh` in the VM is signed in, or add the VM user's SSH key to GitHub.",
@@ -372,7 +375,7 @@ pub(crate) fn dotfiles(
     );
     inside.push("dotfiles.env", env.as_bytes(), 0o600)?;
     let applied =
-        inside.root(&["bash", &format!("{BUNDLE}/dotfiles.sh")], Duration::from_mins(40))?;
+        inside.root(&["bash", &format!("{BUNDLE}/dotfiles.sh")], Duration::from_secs(2400))?;
     if applied.code != 0 {
         return fail(format!(
             "applying the dotfiles failed (exit code {}). The end of what it printed:\n{}",

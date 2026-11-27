@@ -7,10 +7,13 @@
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::UNIX_EPOCH;
 
+use serde::Serialize;
 use serde_json::Value;
 
+use crate::firewall::{self, Manager, Rule};
 use crate::incus::{Devices, Incus};
 use crate::system::{Command, System};
 use crate::{config, password, time};
@@ -18,12 +21,19 @@ use crate::{config, password, time};
 mod backup;
 pub mod files;
 mod inspect;
-pub mod rotate;
+mod rotate;
 mod steps;
 mod vm;
 
-pub use backup::down;
-pub use inspect::{doctor, render_doctor, render_status, status};
+pub use backup::{DownOptions, DownReport, down};
+pub use inspect::{
+    ConnectReport, DoctorReport, StatusOptions, StatusReport, connect, doctor, status,
+};
+pub(crate) use inspect::{render_connect, render_doctor, render_status};
+pub use rotate::{PasswordKind, PasswordOptions, PasswordReport, password};
+
+/// A password on its way to being hashed: never printed, logged or serialized.
+pub type SecretString = crate::secret::Secret;
 
 /// The container the gateway runs in.
 pub const GATEWAY_CONTAINER: &str = "devbox-gateway";
@@ -31,7 +41,7 @@ pub const GATEWAY_CONTAINER: &str = "devbox-gateway";
 const GATEWAY_UID: (u32, u32) = (65532, 65532);
 
 /// Where devbox keeps its files on the host.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Paths {
     /// The config directory, `/etc/devbox`.
     pub etc: PathBuf,
@@ -39,6 +49,16 @@ pub struct Paths {
     pub state: PathBuf,
     /// Where Incus listens.
     pub incus_socket: PathBuf,
+}
+
+impl Default for Paths {
+    fn default() -> Self {
+        Self {
+            etc: PathBuf::from("/etc/devbox"),
+            state: PathBuf::from("/var/lib/devbox"),
+            incus_socket: PathBuf::from(crate::incus::SOCKET),
+        }
+    }
 }
 
 impl Paths {
@@ -89,39 +109,11 @@ pub enum Routing {
     None,
 }
 
-/// What manages the host's firewall.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Firewall {
-    /// Find out.
-    Auto,
-    /// An iptables-restore rules file applied by `host-firewall.service`.
-    HostFirewall,
-    /// ufw.
-    Ufw,
-    /// nftables.
-    Nftables,
-    /// moi.
-    Moi,
-    /// Nothing devbox should touch: say what to allow.
-    None,
-}
-
-impl Firewall {
-    fn name(self) -> &'static str {
-        match self {
-            Self::Auto => "auto",
-            Self::HostFirewall => "host-firewall",
-            Self::Ufw => "ufw",
-            Self::Nftables => "nftables",
-            Self::Moi => "moi",
-            Self::None => "none",
-        }
-    }
-}
-
 /// What `devbox up` was asked for. `None` is "as it is, or the default".
 #[derive(Clone, Debug)]
 pub struct UpOptions {
+    /// Where devbox keeps its files on this host.
+    pub paths: Paths,
     /// The domain the hosts are under; needed the first time.
     pub domain: Option<String>,
     /// The editor's host, when it is not `code.<domain>`.
@@ -133,13 +125,13 @@ pub struct UpOptions {
     /// Use an instance that exists already; it is never recreated.
     pub adopt: bool,
     /// vCPUs of a new instance.
-    pub cpu: u32,
+    pub cpu: Option<u32>,
     /// Memory of a new instance.
-    pub memory: String,
+    pub memory: Option<String>,
     /// Root disk of a new instance.
-    pub disk: String,
+    pub disk: Option<String>,
     /// Image of a new instance, as `remote:alias`.
-    pub image: String,
+    pub image: Option<String>,
     /// The user in the VM.
     pub user: Option<String>,
     /// The owner's dotfiles repository.
@@ -152,8 +144,16 @@ pub struct UpOptions {
     pub routing: Option<Routing>,
     /// The Traefik dynamic file to write.
     pub traefik_file: Option<PathBuf>,
-    /// The firewall manager.
-    pub firewall: Firewall,
+    /// The built-in firewall manager to use (`host-firewall`, `ufw`, `nftables`, `moi`,
+    /// `none`); `None` finds out which.
+    pub firewall: Option<String>,
+    /// The embedder's own firewall manager, used instead of a built-in one.
+    pub firewall_manager: Option<Arc<dyn Manager>>,
+    /// The password that wakes the VM. `None` keeps the hash that is stored; with none stored,
+    /// `up` fails and says that it needs one.
+    pub wake_password: Option<SecretString>,
+    /// The password of the agents app, likewise.
+    pub app_password: Option<SecretString>,
     /// The Uptime Kuma monitor to point at the health URL.
     pub kuma_monitor: Option<String>,
     /// Give the VM the host's GitHub token (`gh` or the environment).
@@ -164,29 +164,33 @@ pub struct UpOptions {
     pub binaries: Option<PathBuf>,
     /// The release to install, instead of the latest.
     pub release: Option<String>,
-    /// Only plan: passwords that would be needed are not asked for.
+    /// Only plan: nothing is changed, and nobody is asked anything.
     pub dry_run: bool,
 }
 
 impl Default for UpOptions {
     fn default() -> Self {
         Self {
+            paths: Paths::default(),
             domain: None,
             code_host: None,
             agents_host: None,
             instance: None,
             adopt: false,
-            cpu: 3,
-            memory: "5GiB".to_owned(),
-            disk: "60GiB".to_owned(),
-            image: "images:ubuntu/26.04/cloud".to_owned(),
+            cpu: None,
+            memory: None,
+            disk: None,
+            image: None,
             user: None,
             dotfiles: None,
             idle: None,
             no_agents: Vec::new(),
             routing: None,
             traefik_file: None,
-            firewall: Firewall::Auto,
+            firewall: None,
+            firewall_manager: None,
+            wake_password: None,
+            app_password: None,
             kuma_monitor: None,
             github_token: false,
             ssh_keys: None,
@@ -197,19 +201,36 @@ impl Default for UpOptions {
     }
 }
 
-/// The passwords, when they were given: to wake the VM, and to sign in to the agents app.
-#[derive(Clone, Debug, Default)]
-pub struct Passwords {
-    /// The wake password.
-    pub wake: Option<String>,
-    /// The app password.
-    pub app: Option<String>,
+/// Whoever is asked before a plan is applied. The library never prompts: the `devbox` binary
+/// asks on the terminal, an embedder answers as it sees fit.
+pub trait Confirm {
+    /// Whether to apply `plan`.
+    fn confirm(&mut self, plan: &Plan) -> bool;
+
+    /// Told each step as it starts being applied.
+    fn progress(&mut self, _step: &str) {}
+}
+
+/// Applies every plan without asking.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Yes;
+
+impl Confirm for Yes {
+    fn confirm(&mut self, _: &Plan) -> bool {
+        true
+    }
 }
 
 /// Why setting up could not go on: what is wrong and what to do about it.
 #[derive(Debug, thiserror::Error)]
 #[error("{0}")]
 pub struct SetupError(pub String);
+
+impl From<firewall::Error> for SetupError {
+    fn from(error: firewall::Error) -> Self {
+        Self(error.to_string())
+    }
+}
 
 impl From<crate::incus::Error> for SetupError {
     fn from(error: crate::incus::Error) -> Self {
@@ -226,9 +247,8 @@ fn fail<T>(message: impl Into<String>) -> Result<T, SetupError> {
 pub(crate) enum Action {
     /// Write a file, saving what was there.
     Write { path: PathBuf, content: Vec<u8>, mode: u32, owner: Option<(u32, u32)> },
-    /// Run a program on the host; `undo` is what `down` runs to take it back, `reload` what it
-    /// runs after restoring the files.
-    Host { command: Command, undo: Option<Vec<String>>, reload: bool },
+    /// Have the firewall manager put the rule in force.
+    Firewall(Rule),
     /// Create the instance.
     Create(Value),
     /// Set the instance's own configuration and devices.
@@ -242,7 +262,7 @@ pub(crate) enum Action {
 }
 
 /// A step of the plan.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Step {
     /// Its number, 1 to 10.
     pub number: u8,
@@ -250,6 +270,7 @@ pub struct Step {
     pub title: &'static str,
     /// What it found and what it will change, one line each.
     pub lines: Vec<String>,
+    #[serde(skip)]
     pub(crate) actions: Vec<Action>,
 }
 
@@ -280,10 +301,14 @@ pub(crate) struct Desired {
     /// The host config, resolved, as JSON.
     pub config: Value,
     pub hub_token: String,
+    /// The hash of the app password the host keeps, for a VM that has none.
+    pub app_hash: Option<String>,
+    /// What manages the firewall.
+    pub firewall: Arc<dyn Manager>,
 }
 
 /// The plan of an `up`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Plan {
     /// The steps, in order.
     pub steps: Vec<Step>,
@@ -291,6 +316,7 @@ pub struct Plan {
     pub needs_wake_password: bool,
     /// Whether applying needs the app password, which was not given.
     pub needs_app_password: bool,
+    #[serde(skip)]
     pub(crate) desired: Desired,
 }
 
@@ -302,30 +328,58 @@ impl Plan {
         self.steps.iter().map(|step| step.actions.iter().filter(counted).count()).sum()
     }
 
-    /// The plan as text: every step with what it found and what it will change.
+    /// How to reach what the plan sets up.
     #[must_use]
-    pub fn render(&self) -> String {
-        let mut out = String::new();
-        for step in &self.steps {
-            let _ = writeln!(out, "{:>2}. {}", step.number, step.title);
-            for line in &step.lines {
-                let _ = writeln!(out, "    {line}");
-            }
+    pub fn connect(&self) -> ConnectReport {
+        ConnectReport {
+            code_host: self.desired.code_host.clone(),
+            agents_host: self.desired.agents_host.clone(),
+            user: Some(self.desired.user.clone()),
         }
-        match self.changes() {
-            0 => out.push_str("\nEverything is already up to date.\n"),
-            1 => out.push_str("\n1 change.\n"),
-            n => {
-                let _ = writeln!(out, "\n{n} changes.");
-            }
-        }
-        out
     }
+}
 
-    /// How to reach what was set up: the URLs, SSH, the phone app.
-    #[must_use]
-    pub fn connect(&self) -> String {
-        connect(&self.desired.code_host, &self.desired.agents_host, &self.desired.user)
+/// What became of an `up`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Outcome {
+    /// A dry run: this is the plan, nothing was changed.
+    Planned,
+    /// There was nothing to change.
+    Unchanged,
+    /// The plan was not agreed to; nothing was changed.
+    Declined,
+    /// The plan was applied.
+    Applied,
+}
+
+/// What `up` found, planned and did.
+#[derive(Clone, Debug, Serialize)]
+pub struct UpReport {
+    /// The version of this report's shape.
+    pub v: u32,
+    /// What the owner should know before anything else, one line each.
+    pub notices: Vec<String>,
+    /// The plan.
+    pub plan: Plan,
+    /// How many things the plan changes.
+    pub changes: usize,
+    /// What became of it.
+    pub outcome: Outcome,
+    /// How to reach the devbox.
+    pub connect: ConnectReport,
+}
+
+/// What is said on a host that moi manages.
+pub const MOI_NOTICE: &str =
+    "moi manages this server; `moi devbox up` does the same and keeps moi's records current";
+
+/// The notices for a command that changes the host.
+pub(crate) fn notices(system: &dyn System, embedded: bool) -> Vec<String> {
+    if !embedded && firewall::moi_installed(system) {
+        vec![MOI_NOTICE.to_owned()]
+    } else {
+        Vec::new()
     }
 }
 
@@ -334,7 +388,6 @@ pub(crate) struct Context<'a> {
     pub system: &'a dyn System,
     pub paths: &'a Paths,
     pub options: &'a UpOptions,
-    pub passwords: &'a Passwords,
     pub incus: Incus<'a>,
 }
 
@@ -368,29 +421,67 @@ pub(crate) fn secret(system: &dyn System) -> Result<String, SetupError> {
 ///
 /// When the host is not ready (the message says what to do), or the options do not make a
 /// valid configuration.
-pub fn plan(
-    system: &dyn System,
-    paths: &Paths,
-    options: &UpOptions,
-    passwords: &Passwords,
-) -> Result<Plan, SetupError> {
+pub fn plan(system: &dyn System, options: &UpOptions) -> Result<Plan, SetupError> {
     let context = Context {
         system,
-        paths,
+        paths: &options.paths,
         options,
-        passwords,
-        incus: Incus::new(system, &paths.incus_socket),
+        incus: Incus::new(system, &options.paths.incus_socket),
     };
     steps::plan(&context)
 }
 
-/// Does what the plan says, step by step, telling `progress` each step as it starts. Whatever
-/// is replaced is saved under the state directory's `backup/`, for `down`.
+/// `devbox up`: plans, asks `confirm`, and applies. With `dry_run` it only plans. On a host
+/// whose config and secrets are there already it needs no password and, with [`Yes`], no
+/// answer from anybody.
 ///
 /// # Errors
 ///
-/// When a step fails; the steps before it stay done, and running `up` again goes on from there.
-pub fn apply(
+/// When the host is not ready, a password is needed and none was given, or a step fails; the
+/// steps before it stay done, and running `up` again goes on from there.
+pub fn up(
+    system: &dyn System,
+    options: &UpOptions,
+    confirm: &mut dyn Confirm,
+) -> Result<UpReport, SetupError> {
+    let plan = plan(system, options)?;
+    let mut report = UpReport {
+        v: 1,
+        notices: notices(system, options.firewall_manager.is_some()),
+        changes: plan.changes(),
+        outcome: Outcome::Planned,
+        connect: plan.connect(),
+        plan,
+    };
+    if options.dry_run {
+        return Ok(report);
+    }
+    if report.plan.needs_wake_password {
+        return fail(
+            "devbox up needs a password to wake the VM with: this host has none stored. Pass --wake-password-file <file>, or run without --yes to be asked for it.",
+        );
+    }
+    if report.plan.needs_app_password {
+        return fail(
+            "devbox up needs a password for the agents app: neither this host nor the VM has one stored. Pass --app-password-file <file>, or run without --yes to be asked for it.",
+        );
+    }
+    if report.changes == 0 {
+        report.outcome = Outcome::Unchanged;
+        return Ok(report);
+    }
+    if !confirm.confirm(&report.plan) {
+        report.outcome = Outcome::Declined;
+        return Ok(report);
+    }
+    apply(system, &options.paths, &report.plan, &mut |step| confirm.progress(step))?;
+    report.outcome = Outcome::Applied;
+    Ok(report)
+}
+
+/// Does what the plan says, step by step, telling `progress` each step as it starts. Whatever
+/// is replaced is saved under the state directory's `backup/`, for `down`.
+fn apply(
     system: &dyn System,
     paths: &Paths,
     plan: &Plan,
@@ -414,14 +505,16 @@ pub fn apply(
                     saved.file(path);
                     write(system, path, content, *mode, *owner)
                 }
-                Action::Host { command, undo, reload } => {
-                    if let Some(undo) = undo {
-                        saved.undo(undo);
-                    }
-                    if *reload {
-                        saved.reload(command);
-                    }
-                    host(system, command)
+                Action::Firewall(rule) => {
+                    let manager = &plan.desired.firewall;
+                    // Remembered before it is done: `down` asks the manager to take it back.
+                    saved.firewall(manager.describe(), rule);
+                    saved.store()?;
+                    manager.ensure(system, rule).map_err(SetupError::from).map(|change| {
+                        for restore in change.restore {
+                            saved.restore(restore);
+                        }
+                    })
                 }
                 Action::Create(definition) => {
                     saved.created(instance);
@@ -431,6 +524,8 @@ pub fn apply(
                     configure(&incus, &mut saved, instance, config, devices)
                 }
                 Action::Provision(provision) => {
+                    // Provisioning records the app password's hash in the host's secrets.
+                    saved.file(&paths.secrets());
                     vm::provision(system, paths, &incus, &plan.desired, provision)
                 }
                 Action::Dotfiles(url) => vm::dotfiles(system, paths, &incus, &plan.desired, url),
@@ -459,15 +554,6 @@ fn write(
     }
 }
 
-fn host(system: &dyn System, command: &Command) -> Result<(), SetupError> {
-    let line = format!("{} {}", command.program, command.args.join(" "));
-    match system.run(command) {
-        Ok(output) if output.success() => Ok(()),
-        Ok(output) => fail(format!("`{line}` failed: {}", output.error_text())),
-        Err(err) => fail(format!("`{line}` could not be run: {err}")),
-    }
-}
-
 /// Sets the instance's configuration. A running VM is shut down for it and started again:
 /// what changes (saving memory on stop, the size reserved for it) is read when it starts.
 fn configure(
@@ -483,11 +569,11 @@ fn configure(
     saved.instance(name, &current);
     let running = current.status == "Running";
     if running {
-        incus.change_state(name, "stop", false, std::time::Duration::from_mins(3))?;
+        incus.change_state(name, "stop", false, std::time::Duration::from_secs(180))?;
     }
     incus.configure(name, config, devices)?;
     if running {
-        incus.change_state(name, "start", false, std::time::Duration::from_mins(5))?;
+        incus.change_state(name, "start", false, std::time::Duration::from_secs(300))?;
     }
     Ok(())
 }
@@ -540,29 +626,31 @@ pub(crate) fn existing_secrets(system: &dyn System, paths: &Paths) -> Option<Val
     serde_json::to_value(table).ok()
 }
 
-/// The secrets file: the wake password's hash, the secret cookies are signed with, and the
-/// token the gateway and the hub know each other by.
+/// The secrets file: the wake password's hash, the secret cookies are signed with, the token
+/// the gateway and the hub know each other by and, once known, the app password's hash.
 pub(crate) fn secrets_file(
-    wake_password: &str,
+    wake_password: &SecretString,
     cookie_secret: &str,
     hub_token: &str,
+    app_hash: Option<&str>,
 ) -> Result<String, SetupError> {
-    let hash = password::hash(wake_password)
+    let hash = password::hash(wake_password.expose())
         .map_err(|err| SetupError(format!("the wake password could not be hashed: {err}")))?;
-    Ok(format!(
+    let mut text = format!(
         "# Written by `devbox up`. Rotate a password with `devbox password wake|app`.\nversion = 1\nwake_password_hash = '{hash}'\ncookie_secret = \"{cookie_secret}\"\nhub_token = \"{hub_token}\"\n"
-    ))
+    );
+    if let Some(app_hash) = app_hash {
+        let _ = writeln!(text, "app_password_hash = '{app_hash}'");
+    }
+    Ok(text)
+}
+
+/// The user in the VM: what the config's `[provision]` says, else what `up` remembers.
+pub(crate) fn vm_user(config: &Value, record: &Value) -> Option<String> {
+    config["provision"]["user"].as_str().or(record["user"].as_str()).map(str::to_owned)
 }
 
 /// The time as a name for a backup directory: `20260921T141320Z`.
 pub(crate) fn stamp(now: i64) -> String {
     time::rfc3339(now).replace(['-', ':'], "")
-}
-
-/// How to reach a devbox: the URLs, an SSH config snippet, and how to install the phone app.
-#[must_use]
-pub fn connect(code_host: &str, agents_host: &str, user: &str) -> String {
-    format!(
-        "Your devbox\n\n  Editor       https://{code_host}\n  Agents app   https://{agents_host}\n\nOn your phone: open https://{agents_host} in Safari, Share → Add to Home Screen, open it from\nthere, then Settings → Enable notifications.\n\nSSH goes through the gateway, which wakes the VM: it listens on port 2222 of this server's\nloopback. In ~/.ssh/config on your own machine:\n\n  Host devbox\n    HostName 127.0.0.1\n    Port 2222\n    User {user}\n    ProxyJump <this server>\n"
-    )
 }

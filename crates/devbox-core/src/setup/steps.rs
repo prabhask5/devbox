@@ -3,22 +3,20 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use serde_json::{Value, json};
 
 use super::vm::{CLOUD_INIT, Provision, Release, remembered};
 use super::{
-    Action, Context, Desired, Firewall, GATEWAY_CONTAINER, GATEWAY_UID, Plan, Routing, SetupError,
-    Step, existing_config, existing_secrets, fail, files, read, run, secret, secrets_file,
+    Action, Context, Desired, GATEWAY_CONTAINER, GATEWAY_UID, Plan, Routing, SetupError, Step,
+    existing_config, existing_secrets, fail, files, read, run, secret, secrets_file,
 };
 use crate::config;
+use crate::firewall::{self, Manager, Rule};
 use crate::incus::{Devices, Instance};
-use crate::system::Command;
 
 const DOKPLOY_TRAEFIK: &str = "/etc/dokploy/traefik/dynamic";
-const HOST_FIREWALL_RULES: &str = "/etc/host-firewall/rules4.txt";
-const NFTABLES_FILE: &str = "/etc/nftables.d/devbox.nft";
-const MOI_FIREWALL_FILE: &str = "/etc/moi/firewall.d/devbox.toml";
 const DEFAULT_REPO: &str = "prabhask5/devbox";
 const AGENTS: [&str; 3] = ["claude", "codex", "opencode"];
 
@@ -26,7 +24,7 @@ type Device = BTreeMap<String, String>;
 
 /// What the preflight found out, for the steps after it.
 struct Host {
-    firewall: Firewall,
+    firewall: Arc<dyn Manager>,
     routing: Routing,
     routing_file: PathBuf,
     instance: Option<Instance>,
@@ -41,23 +39,18 @@ fn version_at_least(version: &str, major: u32, minor: u32) -> bool {
     (parts.next().unwrap_or(0), parts.next().unwrap_or(0)) >= (major, minor)
 }
 
-fn detect_firewall(c: &Context) -> Firewall {
-    if c.options.firewall != Firewall::Auto {
-        return c.options.firewall;
+/// What manages the firewall: the embedder's manager, the one named, or the one found.
+fn firewall_manager(c: &Context) -> Result<Arc<dyn Manager>, String> {
+    if let Some(manager) = &c.options.firewall_manager {
+        return Ok(Arc::clone(manager));
     }
-    let active = |status: String| status.starts_with("Status: active");
-    if c.system.exists(Path::new("/etc/moi")) && run(c.system, "moi", &["--version"]).is_some() {
-        Firewall::Moi
-    } else if c.system.exists(Path::new(HOST_FIREWALL_RULES)) {
-        Firewall::HostFirewall
-    } else if run(c.system, "ufw", &["status"]).is_some_and(active) {
-        Firewall::Ufw
-    } else if c.system.exists(Path::new("/etc/nftables.conf"))
-        && run(c.system, "nft", &["--version"]).is_some()
-    {
-        Firewall::Nftables
-    } else {
-        Firewall::None
+    match &c.options.firewall {
+        None => Ok(firewall::detect(c.system)),
+        Some(name) => firewall::named(name).ok_or_else(|| {
+            format!(
+                "--firewall {name}: the managers are host-firewall, ufw, nftables, moi and none."
+            )
+        }),
     }
 }
 
@@ -119,10 +112,17 @@ fn preflight(c: &Context) -> Result<(Step, Host), SetupError> {
             Err(problem) => problems.push(problem),
         }
     }
-    if !problems.is_empty() {
+    let manager = match firewall_manager(c) {
+        Ok(manager) => Some(manager),
+        Err(problem) => {
+            problems.push(problem);
+            None
+        }
+    };
+    let (true, Some(manager)) = (problems.is_empty(), manager) else {
         let list: Vec<String> = problems.iter().map(|problem| format!("  ✗ {problem}")).collect();
         return fail(format!("devbox up cannot start:\n{}", list.join("\n")));
-    }
+    };
 
     let name = c
         .options
@@ -133,7 +133,7 @@ fn preflight(c: &Context) -> Result<(Step, Host), SetupError> {
         })
         .unwrap_or_else(|| "devbox".to_owned());
     let host = Host {
-        firewall: detect_firewall(c),
+        firewall: manager,
         routing,
         routing_file: file,
         instance: c.incus.instance(&name)?,
@@ -148,7 +148,7 @@ fn preflight(c: &Context) -> Result<(Step, Host), SetupError> {
     };
     step.say(format!(
         "ok: root, Incus {incus_version}, the gateway container runs, {routes}, firewall: {}",
-        host.firewall.name()
+        host.firewall.describe()
     ));
     Ok((step, host))
 }
@@ -230,7 +230,8 @@ fn desired(c: &Context, host: &Host) -> Result<Desired, SetupError> {
         .unwrap_or_else(|| "devbox".to_owned());
     let address = address(c, host, &instance)?;
     let invoking = c.system.env("SUDO_USER").filter(|user| !user.is_empty() && user != "root");
-    let remembered = host.remembered["user"].as_str().map(str::to_owned);
+    let remembered =
+        super::vm_user(host.existing.as_ref().unwrap_or(&Value::Null), &host.remembered);
     let Some(user) = c.options.user.clone().or(remembered).or(invoking) else {
         return fail(
             "which user in the VM? Pass --user <name>: the user your repositories and agent sessions belong to.",
@@ -268,6 +269,35 @@ fn desired(c: &Context, host: &Host) -> Result<Desired, SetupError> {
     } else {
         settings["routing"]["provider"] = json!("none");
     }
+    // How the VM is built, so that it can be built again without anybody being asked.
+    let provision = &mut settings["provision"];
+    provision["user"] = json!(user);
+    if let Some(cpu) = c.options.cpu {
+        provision["cpu"] = json!(cpu);
+    }
+    for (key, given) in
+        [("memory", &c.options.memory), ("disk", &c.options.disk), ("image", &c.options.image)]
+    {
+        if let Some(given) = given {
+            provision[key] = json!(given);
+        }
+    }
+    if let Some(unknown) =
+        c.options.no_agents.iter().find(|agent| !AGENTS.contains(&agent.as_str()))
+    {
+        return fail(format!("--no-agents {unknown}: the agents are claude, codex and opencode."));
+    }
+    if !c.options.no_agents.is_empty() {
+        let kept: Vec<&str> = AGENTS
+            .into_iter()
+            .filter(|agent| !c.options.no_agents.iter().any(|skipped| skipped == agent))
+            .collect();
+        provision["agents"] = json!(kept);
+    }
+    let remembered_dotfiles = host.remembered["dotfiles"].as_str().map(str::to_owned);
+    if let Some(dotfiles) = c.options.dotfiles.clone().or(remembered_dotfiles) {
+        provision["dotfiles"] = json!(dotfiles);
+    }
     let resolved = match config::host("devbox.toml", &files::host_config(&settings)) {
         Ok(parsed) => serde_json::to_value(parsed.value).unwrap_or(Value::Null),
         Err(error) => {
@@ -286,18 +316,21 @@ fn desired(c: &Context, host: &Host) -> Result<Desired, SetupError> {
         user,
         config: resolved,
         hub_token: String::new(),
+        app_hash: None,
+        firewall: Arc::clone(&host.firewall),
     })
 }
 
 /// Step 2: the host's secrets. What is there is kept; a password is changed with
-/// `devbox password`.
-fn secrets(c: &Context, desired: &mut Desired) -> Result<Step, SetupError> {
+/// `devbox password`. Returns whether the wake password is needed and was not given.
+fn secrets(c: &Context, desired: &mut Desired) -> Result<(Step, bool), SetupError> {
     let mut step = Step::new(2, "Secrets");
     let path = c.paths.secrets();
     if let Some(existing) = existing_secrets(c.system, c.paths) {
         existing["hub_token"].as_str().unwrap_or_default().clone_into(&mut desired.hub_token);
+        desired.app_hash = existing["app_password_hash"].as_str().map(str::to_owned);
         step.say(format!("up to date: {}", path.display()));
-        return Ok(step);
+        return Ok((step, false));
     }
     let line = format!(
         "+ write {}: wake password hash, cookie secret, gateway↔hub token (mode 0600, owner {})",
@@ -305,23 +338,14 @@ fn secrets(c: &Context, desired: &mut Desired) -> Result<Step, SetupError> {
         GATEWAY_UID.0
     );
     desired.hub_token = secret(c.system)?;
-    match &c.passwords.wake {
-        Some(wake) => {
-            let content = secrets_file(wake, &secret(c.system)?, &desired.hub_token)?;
-            let owner = Some(GATEWAY_UID);
-            step.act(
-                line,
-                Action::Write { path, content: content.into_bytes(), mode: 0o600, owner },
-            );
-        }
-        None if c.options.dry_run => step.say(line),
-        None => {
-            return fail(
-                "the wake password is needed: pass --wake-password-file <file>, or run without --yes to be asked for it.",
-            );
-        }
-    }
-    Ok(step)
+    let Some(wake) = &c.options.wake_password else {
+        step.say(line);
+        return Ok((step, true));
+    };
+    let content = secrets_file(wake, &secret(c.system)?, &desired.hub_token, None)?;
+    let owner = Some(GATEWAY_UID);
+    step.act(line, Action::Write { path, content: content.into_bytes(), mode: 0o600, owner });
+    Ok((step, false))
 }
 
 fn shown(device: &Device, key: &str) -> String {
@@ -375,10 +399,13 @@ fn ssh_keys(c: &Context) -> Result<Vec<String>, SetupError> {
 /// A new instance, as devbox wants it.
 fn create(c: &Context, host: &Host, desired: &Desired, step: &mut Step) -> Result<(), SetupError> {
     let name = &desired.instance;
-    let Some(state) = files::state_size(&c.options.memory) else {
+    let built = &desired.config["provision"];
+    let text = |key: &str| built[key].as_str().unwrap_or_default().to_owned();
+    let (cpu, memory, disk, image) =
+        (built["cpu"].as_u64().unwrap_or(1), text("memory"), text("disk"), text("image"));
+    let Some(state) = files::state_size(&memory) else {
         return fail(format!(
-            "--memory {} is not a size devbox understands: use whole GiB or MiB, like 5GiB.",
-            c.options.memory
+            "--memory {memory} is not a size devbox understands: use whole GiB or MiB, like 5GiB."
         ));
     };
     let (Some((root_name, root)), Some((nic_name, nic))) =
@@ -389,10 +416,9 @@ fn create(c: &Context, host: &Host, desired: &Desired, step: &mut Step) -> Resul
         );
     };
     check_space(c, root.get("pool").map_or("default", String::as_str), &state)?;
-    let Some((remote, alias)) = c.options.image.split_once(':') else {
+    let Some((remote, alias)) = image.split_once(':') else {
         return fail(format!(
-            "--image {} must be <remote>:<alias>, like images:ubuntu/26.04/cloud.",
-            c.options.image
+            "--image {image} must be <remote>:<alias>, like images:ubuntu/26.04/cloud."
         ));
     };
     if remote != "images" {
@@ -406,7 +432,7 @@ fn create(c: &Context, host: &Host, desired: &Desired, step: &mut Step) -> Resul
         .replace("{{user}}", &desired.user)
         .replace("{{ssh_keys}}", &key_lines.join("\n"));
     let (mut root, mut nic) = (root.clone(), nic.clone());
-    root.insert("size".to_owned(), c.options.disk.clone());
+    root.insert("size".to_owned(), disk.clone());
     root.insert("size.state".to_owned(), state.clone());
     nic.insert("ipv4.address".to_owned(), desired.address.clone());
     let bridge = nic.get("network").cloned().unwrap_or_else(|| "the bridge".to_owned());
@@ -417,7 +443,7 @@ fn create(c: &Context, host: &Host, desired: &Desired, step: &mut Step) -> Resul
             "server": "https://images.linuxcontainers.org", "alias": alias,
         },
         "config": {
-            "limits.cpu": c.options.cpu.to_string(), "limits.memory": c.options.memory,
+            "limits.cpu": cpu.to_string(), "limits.memory": memory,
             "migration.stateful": "true", "boot.autostart": "false",
             "cloud-init.user-data": cloud_init,
         },
@@ -425,11 +451,7 @@ fn create(c: &Context, host: &Host, desired: &Desired, step: &mut Step) -> Resul
     });
     step.act(
         format!(
-            "+ create {name}: {}, {} CPU, {} memory, {} disk, {} on {bridge}, memory saved on sleep ({state} of disk), not started with the host, user {} with {} SSH key(s)",
-            c.options.image,
-            c.options.cpu,
-            c.options.memory,
-            c.options.disk,
+            "+ create {name}: {image}, {cpu} CPU, {memory} memory, {disk} disk, {} on {bridge}, memory saved on sleep ({state} of disk), not started with the host, user {} with {} SSH key(s)",
             desired.address,
             desired.user,
             keys.len()
@@ -529,15 +551,11 @@ fn inside(
     created: bool,
 ) -> Result<(Step, Step), SetupError> {
     let mut step = Step::new(4, "Provision the VM");
-    if let Some(unknown) =
-        c.options.no_agents.iter().find(|agent| !AGENTS.contains(&agent.as_str()))
-    {
-        return fail(format!("--no-agents {unknown}: the agents are claude, codex and opencode."));
-    }
-    let agents: Vec<String> = AGENTS
+    let agents: Vec<String> = desired.config["provision"]["agents"]
+        .as_array()
         .into_iter()
-        .filter(|agent| !c.options.no_agents.iter().any(|skipped| skipped == agent))
-        .map(str::to_owned)
+        .flatten()
+        .filter_map(|agent| agent.as_str().map(str::to_owned))
         .collect();
     let release = match (&c.options.binaries, &c.options.release) {
         (Some(dir), _) => Release::Local(dir.clone()),
@@ -564,16 +582,10 @@ fn inside(
     let same_vm = !created
         && host.remembered["instance"] == json!(desired.instance)
         && host.remembered["user"] == json!(desired.user);
-    let remembered_url = host.remembered["dotfiles"].as_str().map(str::to_owned);
-    let dotfiles_url = c.options.dotfiles.clone().or(remembered_url);
+    let dotfiles_url = desired.config["provision"]["dotfiles"].as_str().map(str::to_owned);
     if same_vm && host.remembered["stamp"] == json!(stamp) {
         step.say(format!("up to date: installed as {} in {}", desired.user, desired.instance));
     } else {
-        if created && c.passwords.app.is_none() && !c.options.dry_run {
-            return fail(
-                "the password for the agents app is needed: pass --app-password-file <file>, or run without --yes to be asked for it.",
-            );
-        }
         let source = match &release {
             Release::Local(dir) => format!("from {}", dir.display()),
             Release::Tag(tag) => format!("release {tag} of {repo}"),
@@ -593,7 +605,7 @@ fn inside(
             repo,
             hub_toml,
             github_token,
-            app_password: c.passwords.app.clone(),
+            app_password: c.options.app_password.clone(),
             stamp,
         };
         step.act(line, Action::Provision(Box::new(provision)));
@@ -684,112 +696,28 @@ fn routing(c: &Context, host: &Host, desired: &Desired) -> Step {
     step
 }
 
-/// Step 8 with ufw: the rule is added with a command, and a rule of ours for other ports is
-/// replaced, not added to.
-fn ufw(c: &Context, step: &mut Step, address: &str, list: &str) {
-    let status = run(c.system, "ufw", &["status"]).unwrap_or_default();
-    let ours: Vec<&str> =
-        status.lines().filter(|line| line.contains(files::RULE_COMMENT)).collect();
-    let rule = |ports: &str| -> Vec<String> {
-        ["allow", "proto", "tcp", "from", files::DOCKER_SOURCE, "to", address, "port", ports]
-            .map(str::to_owned)
-            .to_vec()
-    };
-    let delete = |ports: &str| -> Vec<String> {
-        let mut words = vec!["route".to_owned(), "delete".to_owned()];
-        words.extend(rule(ports));
-        words
-    };
-    let wanted = format!("{address} {list}/tcp");
-    let normalized = |line: &&str| line.split_whitespace().collect::<Vec<_>>().join(" ");
-    if ours.iter().any(|line| normalized(line).starts_with(&wanted)) {
-        step.say(format!("up to date: ufw allows containers → {address} tcp {list}"));
-        return;
-    }
-    for line in ours {
-        let old = line
-            .split_whitespace()
-            .nth(1)
-            .and_then(|ports| ports.strip_suffix("/tcp"))
-            .unwrap_or_default();
-        step.act(
-            format!("- ufw: remove the rule for ports {old}"),
-            Action::Host { command: Command::new("ufw", delete(old)), undo: None, reload: false },
-        );
-    }
-    let mut add = vec!["route".to_owned()];
-    add.extend(rule(list));
-    add.extend(["comment".to_owned(), files::RULE_COMMENT.to_owned()]);
-    let mut undo = vec!["ufw".to_owned()];
-    undo.extend(delete(list));
-    step.act(
-        format!("+ ufw: allow containers → {address} tcp {list}"),
-        Action::Host { command: Command::new("ufw", add), undo: Some(undo), reload: false },
-    );
-}
-
-/// Step 8: the firewall lets the gateway's containers reach the VM on its three ports.
-fn firewall(c: &Context, host: &Host, desired: &Desired) -> Step {
+/// Step 8: the firewall lets the gateway's containers reach the VM on its three ports. The
+/// manager says whether that is so already; putting it in force is the manager's work too.
+fn firewall(c: &Context, host: &Host, desired: &Desired) -> Result<Step, SetupError> {
     let mut step = Step::new(8, "Firewall");
-    let (address, ports) = (desired.address.as_str(), desired.ports.as_slice());
-    let list = files::port_list(ports);
-    let what = format!("containers → {address} tcp {list}");
-    let reload = |program: &str, args: &[&str]| Action::Host {
-        command: Command::new(program, args.iter().copied()),
-        undo: None,
-        reload: true,
-    };
-    match host.firewall {
-        Firewall::Auto | Firewall::None => step.say(format!(
-            "left to you: allow tcp from {} to {address} ports {list}, and nothing else to the VM",
-            files::DOCKER_SOURCE
-        )),
-        Firewall::HostFirewall => {
-            let path = Path::new(HOST_FIREWALL_RULES);
-            let existing = read(c.system, path).unwrap_or_default();
-            let content = files::iptables_rules(&existing, address, ports);
-            if write_if_changed(c, &mut step, path, &content, &what) {
-                step.act(
-                    "  and apply it: systemctl restart host-firewall",
-                    reload("systemctl", &["restart", "host-firewall"]),
-                );
-            }
-        }
-        Firewall::Nftables => {
-            let path = Path::new(NFTABLES_FILE);
-            let content = files::nftables_table(address, ports);
-            if write_if_changed(c, &mut step, path, &content, &what) {
-                let undo = ["nft", "delete", "table", "inet", "devbox"].map(str::to_owned).to_vec();
-                step.act(
-                    format!("  and apply it: nft -f {NFTABLES_FILE}"),
-                    Action::Host {
-                        command: Command::new("nft", ["-f", NFTABLES_FILE]),
-                        undo: Some(undo),
-                        reload: false,
-                    },
-                );
-            }
-        }
-        Firewall::Moi => {
-            let path = Path::new(MOI_FIREWALL_FILE);
-            let content = files::moi_rule(address, ports);
-            if write_if_changed(c, &mut step, path, &content, &what) {
-                step.act(
-                    "  and apply it: moi firewall apply",
-                    reload("moi", &["firewall", "apply"]),
-                );
-            }
-        }
-        Firewall::Ufw => ufw(c, &mut step, address, &list),
+    let rule = Rule::new(&desired.address, &desired.ports);
+    let change = host.firewall.check(c.system, &rule)?;
+    let name = host.firewall.describe();
+    if change.changed {
+        step.act(format!("+ {name}: {}", change.summary), Action::Firewall(rule));
+    } else if name == "none" {
+        step.say(change.summary);
+    } else {
+        step.say(format!("up to date: {name}: {}", change.summary));
     }
-    step
+    Ok(step)
 }
 
 /// Works out the whole plan.
 pub(crate) fn plan(c: &Context) -> Result<Plan, SetupError> {
     let (preflight, host) = preflight(c)?;
     let mut desired = desired(c, &host)?;
-    let secrets = secrets(c, &mut desired)?;
+    let (secrets, needs_wake_password) = secrets(c, &mut desired)?;
     let (instance, created) = instance(c, &host, &desired)?;
     let (provision, dotfiles) = inside(c, &host, &desired, created)?;
 
@@ -798,7 +726,7 @@ pub(crate) fn plan(c: &Context) -> Result<Plan, SetupError> {
     let what = format!("{} → {} ({})", desired.code_host, desired.instance, desired.address);
     write_if_changed(c, &mut config, &c.paths.config(), &content, &what);
     let routing = routing(c, &host, &desired);
-    let firewall = firewall(c, &host, &desired);
+    let firewall = firewall(c, &host, &desired)?;
 
     let health = format!("https://{}/__devbox/health", desired.code_host);
     let mut monitor = Step::new(9, "Monitor");
@@ -818,12 +746,14 @@ pub(crate) fn plan(c: &Context) -> Result<Plan, SetupError> {
         verify,
     ];
     let planned = |step: &Step, wanted: fn(&Action) -> bool| step.actions.iter().any(wanted);
-    let writes_secrets = steps[1].lines.iter().any(|line| line.starts_with("+ write"));
+    // A VM that was provisioned before has the app password's hash in it; so may the host.
     let first_install = planned(&steps[3], |action| matches!(action, Action::Provision(_)))
         && host.remembered["stamp"].is_null();
     Ok(Plan {
-        needs_wake_password: writes_secrets && c.passwords.wake.is_none(),
-        needs_app_password: first_install && c.passwords.app.is_none(),
+        needs_wake_password,
+        needs_app_password: first_install
+            && c.options.app_password.is_none()
+            && desired.app_hash.is_none(),
         steps,
         desired,
     })

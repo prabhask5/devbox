@@ -17,6 +17,14 @@ sync_wait = "90s"
 agents = "agents.example.com"
 code = "code.example.com"
 
+[provision]
+agents = ["claude","codex","opencode"]
+cpu = 3
+disk = "60GiB"
+image = "images:ubuntu/26.04/cloud"
+memory = "5GiB"
+user = "dev"
+
 [routing]
 entrypoint = "websecure"
 file = "/etc/dokploy/traefik/dynamic/devbox.yml"

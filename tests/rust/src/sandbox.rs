@@ -12,7 +12,7 @@ use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime};
 
-use devbox_core::system::{self, Entry, Host, HttpRequest, HttpResponse, Output, System};
+use devbox_core::system::{self, Conn, Host, Metadata, Output, System};
 use devbox_sync::{Event, Options, RepoResult};
 
 /// A directory that is removed when dropped.
@@ -89,32 +89,41 @@ impl System for At {
     fn read(&self, path: &Path) -> io::Result<Vec<u8>> {
         self.host.read(&self.confined(path))
     }
-    fn write(&self, path: &Path, data: &[u8]) -> io::Result<()> {
-        self.host.write(&self.confined(path), data)
+    fn read_dir(&self, path: &Path) -> io::Result<Vec<String>> {
+        self.host.read_dir(&self.confined(path))
     }
-    fn append(&self, path: &Path, data: &[u8]) -> io::Result<()> {
-        self.host.append(&self.confined(path), data)
+    fn exists(&self, path: &Path) -> bool {
+        self.host.exists(&self.confined(path))
+    }
+    fn metadata(&self, path: &Path) -> io::Result<Metadata> {
+        self.host.metadata(&self.confined(path))
+    }
+    fn read_link(&self, path: &Path) -> io::Result<PathBuf> {
+        self.host.read_link(&self.confined(path))
+    }
+    fn write(&self, path: &Path, data: &[u8], mode: u32) -> io::Result<()> {
+        self.host.write(&self.confined(path), data, mode)
+    }
+    fn append(&self, path: &Path, data: &[u8], mode: u32) -> io::Result<()> {
+        self.host.append(&self.confined(path), data, mode)
+    }
+    fn create_dir_all(&self, path: &Path, mode: u32) -> io::Result<()> {
+        self.host.create_dir_all(&self.confined(path), mode)
     }
     fn remove_file(&self, path: &Path) -> io::Result<()> {
         self.host.remove_file(&self.confined(path))
     }
-    fn create_dir_all(&self, path: &Path) -> io::Result<()> {
-        self.host.create_dir_all(&self.confined(path))
-    }
-    fn read_dir(&self, path: &Path) -> io::Result<Vec<Entry>> {
-        self.host.read_dir(&self.confined(path))
+    fn symlink(&self, target: &Path, path: &Path) -> io::Result<()> {
+        self.host.symlink(target, &self.confined(path))
     }
     fn set_mode(&self, path: &Path, mode: u32) -> io::Result<()> {
         self.host.set_mode(&self.confined(path), mode)
     }
-    fn mode(&self, path: &Path) -> Option<u32> {
-        self.host.mode(&self.confined(path))
+    fn set_owner(&self, path: &Path, uid: u32, gid: u32) -> io::Result<()> {
+        self.host.set_owner(&self.confined(path), uid, gid)
     }
-    fn unix_http(&self, socket: &Path, request: &HttpRequest) -> io::Result<HttpResponse> {
-        self.host.unix_http(socket, request)
-    }
-    fn exists(&self, path: &Path) -> bool {
-        self.host.exists(&self.confined(path))
+    fn connect_unix(&self, path: &Path) -> io::Result<Box<dyn Conn>> {
+        self.host.connect_unix(path)
     }
     fn env(&self, name: &str) -> Option<String> {
         self.host.env(name)
@@ -122,11 +131,14 @@ impl System for At {
     fn now(&self) -> SystemTime {
         self.now
     }
+    fn monotonic(&self) -> Duration {
+        self.host.monotonic()
+    }
     fn sleep(&self, duration: Duration) {
         self.host.sleep(duration);
     }
-    fn random(&self, buffer: &mut [u8]) -> io::Result<()> {
-        self.host.random(buffer)
+    fn random_bytes(&self, count: usize) -> io::Result<Vec<u8>> {
+        self.host.random_bytes(count)
     }
 }
 

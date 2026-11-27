@@ -29,12 +29,65 @@ fn not_set_up<T>(paths: &Paths) -> Result<T, SetupError> {
     ))
 }
 
-/// What `devbox status` shows, as the JSON `--json` prints.
+/// Which host to look at.
+#[derive(Clone, Debug, Default)]
+pub struct StatusOptions {
+    /// Where devbox keeps its files on this host.
+    pub paths: Paths,
+}
+
+/// What `devbox status` shows; serialized, it is what `--json` prints.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(transparent)]
+pub struct StatusReport(pub Value);
+
+/// Every check of `devbox doctor`; serialized, it is what `--json` prints.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(transparent)]
+pub struct DoctorReport(pub Value);
+
+impl DoctorReport {
+    /// Whether no check failed.
+    #[must_use]
+    pub fn ok(&self) -> bool {
+        self.0["ok"] == true
+    }
+}
+
+/// How to reach a devbox.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct ConnectReport {
+    /// The editor's host.
+    pub code_host: String,
+    /// The agents app's host.
+    pub agents_host: String,
+    /// The user in the VM, once it is provisioned.
+    pub user: Option<String>,
+}
+
+/// `devbox connect`: how to reach the devbox of this host.
 ///
 /// # Errors
 ///
 /// When the host is not set up.
-pub fn status(system: &dyn System, paths: &Paths) -> Result<Value, SetupError> {
+pub fn connect(system: &dyn System, options: &StatusOptions) -> Result<ConnectReport, SetupError> {
+    let paths = &options.paths;
+    let Some(config) = existing_config(system, paths) else { return not_set_up(paths) };
+    let host = |key: &str| config["hosts"][key].as_str().unwrap_or_default().to_owned();
+    Ok(ConnectReport {
+        code_host: host("code"),
+        agents_host: host("agents"),
+        user: super::vm_user(&config, &remembered(system, paths)),
+    })
+}
+
+/// `devbox status`: the VM, the gateway, routing and health.
+///
+/// # Errors
+///
+/// When the host is not set up.
+pub fn status(system: &dyn System, options: &StatusOptions) -> Result<StatusReport, SetupError> {
+    let paths = &options.paths;
     let Some(config) = existing_config(system, paths) else { return not_set_up(paths) };
     let name = config["instance"].as_str().unwrap_or_default();
     let code_host = config["hosts"]["code"].as_str().unwrap_or_default();
@@ -57,11 +110,13 @@ pub fn status(system: &dyn System, paths: &Paths) -> Result<Value, SetupError> {
     let routed = config["routing"]["provider"] != json!("traefik-file")
         || system.exists(Path::new(routing_file));
     let record = remembered(system, paths);
-    Ok(json!({
+    let user = super::vm_user(&config, &record);
+    let dotfiles = config["provision"]["dotfiles"].as_str().or(record["dotfiles"].as_str());
+    Ok(StatusReport(json!({
         "v": 1,
         "domain": config["domain"],
         "hosts": config["hosts"],
-        "vm": {"name": vm["name"], "state": vm["state"], "memorySaved": vm["memorySaved"], "address": config["vm"]["address"], "user": record["user"]},
+        "vm": {"name": vm["name"], "state": vm["state"], "memorySaved": vm["memorySaved"], "address": config["vm"]["address"], "user": user},
         "gateway": {
             "container": container,
             "version": gateway["version"],
@@ -72,13 +127,12 @@ pub fn status(system: &dyn System, paths: &Paths) -> Result<Value, SetupError> {
         },
         "routing": {"provider": config["routing"]["provider"], "file": if routed { json!(routing_file) } else { Value::Null }},
         "sleep": {"idle": config["sleep"]["idle"], "mode": config["sleep"]["mode"]},
-        "dotfiles": record["dotfiles"],
-    }))
+        "dotfiles": dotfiles,
+    })))
 }
 
 /// A status as the one screen people read.
-#[must_use]
-pub fn render_status(status: &Value) -> String {
+pub(crate) fn render_status(status: &Value) -> String {
     let text = |value: &Value| value.as_str().unwrap_or("?").to_owned();
     let vm = &status["vm"];
     let state = match (vm["state"].as_str().unwrap_or("unknown"), vm["memorySaved"] == true) {
@@ -380,7 +434,8 @@ fn vm_checks(
         ),
     ];
     let record = remembered(system, paths);
-    let (name, user) = (config["instance"].as_str().unwrap_or_default(), record["user"].as_str());
+    let user = super::vm_user(config, &record);
+    let (name, user) = (config["instance"].as_str().unwrap_or_default(), user.as_deref());
     let (Some(user), true) = (user, instance.is_some_and(|found| found.status == "Running")) else {
         let why = if user.is_none() {
             "the VM was not provisioned by `devbox up`"
@@ -392,7 +447,7 @@ fn vm_checks(
     };
     let exec = Exec {
         command: ["sh", "-c", VM_CHECKS, "sh", user].map(str::to_owned).to_vec(),
-        timeout: Some(Duration::from_mins(1)),
+        timeout: Some(Duration::from_secs(60)),
         ..Exec::default()
     };
     let Ok(ran) = Incus::new(system, &paths.incus_socket).exec(name, &exec) else {
@@ -409,8 +464,12 @@ fn vm_checks(
     for (key, title, fix) in TITLES {
         checks.check(&key.replace('_', "-"), title, value(key) == "active", value(key), fix);
     }
-    let installed: Vec<&str> =
-        record["agents"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
+    let installed: Vec<&str> = config["provision"]["agents"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .collect();
     for agent in installed {
         checks.check(
             &format!("agent-{agent}"),
@@ -447,21 +506,48 @@ fn vm_checks(
     }
 }
 
-/// Every check of `devbox doctor`, as the JSON `--json` prints: `ok` is false when any failed.
+/// Whether the firewall lets the gateway reach the VM, as far as the host's manager can tell.
+fn firewall_check(system: &dyn System, config: &Value, checks: &mut Checks) {
+    let title = "The firewall lets the gateway reach the VM";
+    let port = |name: &str| {
+        config["vm"][name].as_u64().and_then(|port| u16::try_from(port).ok()).unwrap_or(0)
+    };
+    let rule = crate::firewall::Rule::new(
+        config["vm"]["address"].as_str().unwrap_or_default(),
+        &[port("code_port"), port("hub_port"), port("ssh_port")],
+    );
+    let manager = crate::firewall::detect(system);
+    match manager.check(system, &rule) {
+        _ if manager.describe() == "none" => {
+            checks.skip("firewall", title, "no firewall manager devbox knows on this host");
+        }
+        Ok(change) => checks.check(
+            "firewall",
+            title,
+            !change.changed,
+            format!("{}: {}", manager.describe(), change.summary),
+            "run `devbox up`: it puts the rule in force",
+        ),
+        Err(error) => checks.skip("firewall", title, &error.to_string()),
+    }
+}
+
+/// `devbox doctor`: every check, with the fix for each one that fails.
 #[must_use]
-pub fn doctor(system: &dyn System, paths: &Paths) -> Value {
+pub fn doctor(system: &dyn System, options: &StatusOptions) -> DoctorReport {
+    let paths = &options.paths;
     let mut checks = Checks(Vec::new());
     if let Some((config, instance)) = host_checks(system, paths, &mut checks) {
+        firewall_check(system, &config, &mut checks);
         public_checks(system, &config, &mut checks);
         vm_checks(system, paths, &config, instance.as_ref(), &mut checks);
     }
     let ok = !checks.0.iter().any(|check| check["result"] == json!("fail"));
-    json!({"v": 1, "ok": ok, "checks": checks.0})
+    DoctorReport(json!({"v": 1, "ok": ok, "checks": checks.0}))
 }
 
 /// The checks as a list people read: what passed, what failed and how to fix it.
-#[must_use]
-pub fn render_doctor(report: &Value) -> String {
+pub(crate) fn render_doctor(report: &Value) -> String {
     let mut out = String::new();
     let mut failed = 0;
     for check in report["checks"].as_array().into_iter().flatten() {
@@ -490,4 +576,13 @@ pub fn render_doctor(report: &Value) -> String {
         }
     }
     out
+}
+
+/// How to reach a devbox: the URLs, an SSH config snippet, and how to install the phone app.
+pub(crate) fn render_connect(report: &ConnectReport) -> String {
+    let (code_host, agents_host) = (&report.code_host, &report.agents_host);
+    let user = report.user.as_deref().unwrap_or("<user>");
+    format!(
+        "Your devbox\n\n  Editor       https://{code_host}\n  Agents app   https://{agents_host}\n\nOn your phone: open https://{agents_host} in Safari, Share → Add to Home Screen, open it from\nthere, then Settings → Enable notifications.\n\nSSH goes through the gateway, which wakes the VM: it listens on port 2222 of this server's\nloopback. In ~/.ssh/config on your own machine:\n\n  Host devbox\n    HostName 127.0.0.1\n    Port 2222\n    User {user}\n    ProxyJump <this server>\n"
+    )
 }

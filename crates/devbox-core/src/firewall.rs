@@ -8,6 +8,7 @@
 
 use std::fmt::Debug;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use crate::setup::files;
 use crate::system::{Command, System};
@@ -87,7 +88,9 @@ pub enum Error {
         source: std::io::Error,
     },
     /// A command of the manager failed.
-    #[error("`{line}` failed: {why}. The firewall rule is not in force; fix what it says and run this again")]
+    #[error(
+        "`{line}` failed: {why}. The firewall rule is not in force; fix what it says and run this again"
+    )]
     Command {
         /// The command.
         line: String,
@@ -125,7 +128,8 @@ pub trait Manager: Debug + Send + Sync {
 
 fn run(system: &dyn System, words: &[String]) -> Result<String, Error> {
     let line = words.join(" ");
-    let (program, args) = words.split_first().map_or(("", &[][..]), |(program, args)| (program.as_str(), args));
+    let (program, args) =
+        words.split_first().map_or(("", &[][..]), |(program, args)| (program.as_str(), args));
     match system.run(&Command::new(program, args.iter().cloned())) {
         Ok(output) if output.success() => Ok(output.text()),
         Ok(output) => Err(Error::Command { line, why: output.error_text() }),
@@ -165,8 +169,15 @@ impl Default for HostFirewall {
 impl HostFirewall {
     const RELOAD: [&'static str; 3] = ["systemctl", "restart", "host-firewall"];
 
-    fn put(&self, system: &dyn System, wanted: &str, summary: String, apply: bool) -> Result<Change, Error> {
-        let existing = system.read(&self.rules).map(|bytes| String::from_utf8_lossy(&bytes).into_owned());
+    fn put(
+        &self,
+        system: &dyn System,
+        wanted: &str,
+        summary: String,
+        apply: bool,
+    ) -> Result<Change, Error> {
+        let existing =
+            system.read(&self.rules).map(|bytes| String::from_utf8_lossy(&bytes).into_owned());
         if existing.as_deref().ok() == Some(wanted) {
             return Ok(Change { changed: false, summary, restore: Vec::new() });
         }
@@ -185,7 +196,11 @@ impl HostFirewall {
     }
 
     fn summary(&self, rule: &Rule) -> String {
-        format!("{} in {}, applied with `systemctl restart host-firewall`", rule.what(), self.rules.display())
+        format!(
+            "{} in {}, applied with `systemctl restart host-firewall`",
+            rule.what(),
+            self.rules.display()
+        )
     }
 }
 
@@ -210,7 +225,19 @@ impl Manager for HostFirewall {
             .filter(|line| !line.contains(COMMENT))
             .collect();
         let without = if kept.is_empty() { String::new() } else { kept.join("\n") + "\n" };
-        self.put(system, &without, format!("no rule for {} in {}", rule.address, self.rules.display()), true)
+        if existing.is_empty() {
+            return Ok(Change {
+                changed: false,
+                summary: format!("no rule for {}", rule.address),
+                restore: Vec::new(),
+            });
+        }
+        self.put(
+            system,
+            &without,
+            format!("no rule for {} in {}", rule.address, self.rules.display()),
+            true,
+        )
     }
 }
 
@@ -231,23 +258,42 @@ impl Ufw {
 
     /// The port lists of devbox's rules that ufw has now.
     fn present(system: &dyn System) -> Vec<String> {
-        let status = system.run(&Command::new("ufw", ["status"])).map(|output| output.text()).unwrap_or_default();
+        let status = system
+            .run(&Command::new("ufw", ["status"]))
+            .map(|output| output.text())
+            .unwrap_or_default();
         status
             .lines()
             .filter(|line| line.contains(COMMENT))
-            .filter_map(|line| line.split_whitespace().nth(1)?.strip_suffix("/tcp").map(str::to_owned))
+            .filter_map(|line| {
+                line.split_whitespace().nth(1)?.strip_suffix("/tcp").map(str::to_owned)
+            })
             .collect()
     }
 
-    fn put(system: &dyn System, rule: &Rule, wanted: Option<&str>, apply: bool) -> Result<Change, Error> {
+    fn put(
+        system: &dyn System,
+        rule: &Rule,
+        wanted: Option<&str>,
+        apply: bool,
+    ) -> Result<Change, Error> {
         let present = Self::present(system);
-        let summary = match wanted {
-            Some(_) => format!("ufw: allow {}", rule.what()),
-            None => format!("ufw: no rule for {}", rule.address),
+        let stale: Vec<&String> =
+            present.iter().filter(|ports| Some(ports.as_str()) != wanted).collect();
+        let replacing = match stale.first() {
+            Some(old) if wanted.is_some() => format!(", replacing the rule for ports {old}"),
+            _ => String::new(),
         };
-        let stale: Vec<&String> = present.iter().filter(|ports| Some(ports.as_str()) != wanted).collect();
+        let summary = match wanted {
+            Some(_) => format!("allow {}{replacing}", rule.what()),
+            None => format!("no rule for {}", rule.address),
+        };
         let missing = wanted.filter(|wanted| !present.iter().any(|ports| ports == wanted));
-        let mut change = Change { changed: !stale.is_empty() || missing.is_some(), summary, restore: Vec::new() };
+        let mut change = Change {
+            changed: !stale.is_empty() || missing.is_some(),
+            summary,
+            restore: Vec::new(),
+        };
         if !apply {
             return Ok(change);
         }
@@ -336,7 +382,7 @@ impl Manager for Nftables {
     }
 
     fn remove(&self, system: &dyn System, rule: &Rule) -> Result<Change, Error> {
-        let summary = format!("nftables: no table for {}", rule.address);
+        let summary = format!("no table for {}", rule.address);
         if !system.exists(&self.file) {
             return Ok(Change { changed: false, summary, restore: Vec::new() });
         }
@@ -346,17 +392,92 @@ impl Manager for Nftables {
     }
 }
 
-/// A host moi manages, when devbox is run by itself there: moi is asked, with its own command,
-/// to add the rule to the chains it manages. devbox edits none of moi's files.
+/// A host moi manages, when devbox is run by itself there. moi owns the chains: devbox puts its
+/// rule into moi's rules file and has moi apply it (`moi firewall apply`: atomic, with moi's
+/// rollback), and never touches the chains itself. Under `moi devbox`, moi passes a manager of
+/// its own instead of this one.
 #[derive(Clone, Debug)]
 pub struct Moi {
-    /// Where devbox remembers the rule it asked moi for, to know when nothing changed.
-    pub record: PathBuf,
+    /// moi's configuration, which says where its rules file is.
+    pub config: PathBuf,
 }
 
+impl Default for Moi {
+    fn default() -> Self {
+        Self { config: PathBuf::from(MOI_CONFIG) }
+    }
+}
+
+const MOI_CONFIG: &str = "/etc/moi/moi.toml";
+const MOI_RULES: &str = "/etc/moi/firewall/rules4.txt";
+
 impl Moi {
-    fn asked(&self, system: &dyn System) -> Option<Rule> {
-        serde_json::from_slice(&system.read(&self.record).ok()?).ok()
+    const APPLY: [&'static str; 3] = ["moi", "firewall", "apply"];
+
+    /// moi's IPv4 rules file: `firewall.rules_v4` of its configuration, or the usual place.
+    fn rules(&self, system: &dyn System) -> PathBuf {
+        let config: Option<toml::Table> = system
+            .read(&self.config)
+            .ok()
+            .and_then(|bytes| String::from_utf8_lossy(&bytes).parse().ok());
+        let named = config
+            .as_ref()
+            .and_then(|config| config.get("firewall")?.get("rules_v4")?.as_str())
+            .map(PathBuf::from);
+        named.unwrap_or_else(|| PathBuf::from(MOI_RULES))
+    }
+
+    /// moi's rules file holds the bodies of its chains only: no table header, no `COMMIT`.
+    fn with_rule(existing: &str, rule: &Rule) -> String {
+        let full =
+            files::iptables_rules(&format!("{existing}COMMIT\n"), &rule.address, &rule.ports);
+        let kept: Vec<&str> = full
+            .lines()
+            .filter(|line| *line != "COMMIT" && !line.starts_with(":DOCKER-USER "))
+            .collect();
+        kept.join("\n") + "\n"
+    }
+
+    fn put(
+        &self,
+        system: &dyn System,
+        wanted_of: impl Fn(&str) -> String,
+        summary: String,
+        apply: bool,
+    ) -> Result<Change, Error> {
+        let file = self.rules(system);
+        let existing = system
+            .read(&file)
+            .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+            .unwrap_or_default();
+        let wanted = wanted_of(&existing);
+        let in_file = existing == wanted;
+        let in_force = || {
+            system
+                .run(&Command::new("moi", ["firewall", "status"]))
+                .is_ok_and(|output| output.success())
+        };
+        if in_file && in_force() {
+            return Ok(Change { changed: false, summary, restore: Vec::new() });
+        }
+        let mut restore = Vec::new();
+        if apply {
+            if !in_file {
+                restore.push(replace(system, &file, Some(&wanted))?);
+            }
+            run(system, &words(&Self::APPLY)).map_err(|error| match error {
+                Error::Command { line, why } => Error::Command {
+                    line,
+                    why: format!(
+                        "{why}. The rule is in {}; over SSH moi asks you to confirm an apply, so run `moi firewall apply` yourself, answer it",
+                        file.display()
+                    ),
+                },
+                other => other,
+            })?;
+            restore.push(Restore::Reload(words(&Self::APPLY)));
+        }
+        Ok(Change { changed: true, summary, restore })
     }
 }
 
@@ -366,30 +487,30 @@ impl Manager for Moi {
     }
 
     fn check(&self, system: &dyn System, rule: &Rule) -> Result<Change, Error> {
-        let summary = format!("{}, added to moi's chains with `moi firewall allow`", rule.what());
-        Ok(Change { changed: self.asked(system).as_ref() != Some(rule), summary, restore: Vec::new() })
+        let summary = format!(
+            "{} in {}, applied with `moi firewall apply`",
+            rule.what(),
+            self.rules(system).display()
+        );
+        self.put(system, |existing| Self::with_rule(existing, rule), summary, false)
     }
 
     fn ensure(&self, system: &dyn System, rule: &Rule) -> Result<Change, Error> {
-        let mut change = self.check(system, rule)?;
-        if change.changed {
-            let ask = ["moi", "firewall", "allow", "devbox", "--from", &rule.source, "--to", &rule.address, "--proto", "tcp", "--ports", &rule.list(), "--comment", COMMENT];
-            run(system, &words(&ask))?;
-            let record = serde_json::to_vec(rule).unwrap_or_default();
-            system.write(&self.record, &record, 0o644).map_err(|source| Error::Io { path: self.record.clone(), source })?;
-            change.restore.push(Restore::Command(words(&["moi", "firewall", "revoke", "devbox"])));
-        }
-        Ok(change)
+        let summary = format!(
+            "{} in {}, applied with `moi firewall apply`",
+            rule.what(),
+            self.rules(system).display()
+        );
+        self.put(system, |existing| Self::with_rule(existing, rule), summary, true)
     }
 
     fn remove(&self, system: &dyn System, rule: &Rule) -> Result<Change, Error> {
-        let summary = format!("moi: no rule for {}", rule.address);
-        if self.asked(system).is_none() {
-            return Ok(Change { changed: false, summary, restore: Vec::new() });
-        }
-        run(system, &words(&["moi", "firewall", "revoke", "devbox"]))?;
-        system.remove_file(&self.record).map_err(|source| Error::Io { path: self.record.clone(), source })?;
-        Ok(Change { changed: true, summary, restore: Vec::new() })
+        let summary = format!("no rule for {}", rule.address);
+        let without = |existing: &str| {
+            let kept: Vec<&str> = existing.lines().filter(|line| !line.contains(COMMENT)).collect();
+            if kept.is_empty() { String::new() } else { kept.join("\n") + "\n" }
+        };
+        self.put(system, without, summary, true)
     }
 }
 
@@ -424,19 +545,18 @@ impl Manager for Manual {
 /// Whether moi manages this host.
 #[must_use]
 pub fn moi_installed(system: &dyn System) -> bool {
-    system.exists(Path::new("/etc/moi/moi.toml"))
+    system.exists(Path::new(MOI_CONFIG))
 }
 
-/// The built-in manager called `name` (`host-firewall`, `ufw`, `nftables`, `moi`, `none`);
-/// `state` is devbox's state directory on the host.
+/// The built-in manager called `name`: `host-firewall`, `ufw`, `nftables`, `moi` or `none`.
 #[must_use]
-pub fn named(name: &str, state: &Path) -> Option<Box<dyn Manager>> {
+pub fn named(name: &str) -> Option<Arc<dyn Manager>> {
     Some(match name {
-        "host-firewall" => Box::new(HostFirewall::default()),
-        "ufw" => Box::new(Ufw),
-        "nftables" => Box::new(Nftables::default()),
-        "moi" => Box::new(Moi { record: state.join("firewall-moi.json") }),
-        "none" => Box::new(Manual),
+        "host-firewall" => Arc::new(HostFirewall::default()),
+        "ufw" => Arc::new(Ufw),
+        "nftables" => Arc::new(Nftables::default()),
+        "moi" => Arc::new(Moi::default()),
+        "none" => Arc::new(Manual),
         _ => return None,
     })
 }
@@ -444,20 +564,27 @@ pub fn named(name: &str, state: &Path) -> Option<Box<dyn Manager>> {
 /// Finds out what manages this host's firewall: moi when it is installed, else a rules file of
 /// `host-firewall.service`, an active ufw, nftables — or nothing devbox knows.
 #[must_use]
-pub fn detect(system: &dyn System, state: &Path) -> Box<dyn Manager> {
+pub fn detect(system: &dyn System) -> Arc<dyn Manager> {
     let answers = |program: &str, args: &[&str]| {
-        system.run(&Command::new(program, args.iter().copied())).ok().filter(crate::system::Output::success).map(|output| output.text())
+        system
+            .run(&Command::new(program, args.iter().copied()))
+            .ok()
+            .filter(crate::system::Output::success)
+            .map(|output| output.text())
     };
     let name = if moi_installed(system) {
         "moi"
     } else if system.exists(&HostFirewall::default().rules) {
         "host-firewall"
-    } else if answers("ufw", &["status"]).is_some_and(|status| status.starts_with("Status: active")) {
+    } else if answers("ufw", &["status"]).is_some_and(|status| status.starts_with("Status: active"))
+    {
         "ufw"
-    } else if system.exists(Path::new("/etc/nftables.conf")) && answers("nft", &["--version"]).is_some() {
+    } else if system.exists(Path::new("/etc/nftables.conf"))
+        && answers("nft", &["--version"]).is_some()
+    {
         "nftables"
     } else {
         "none"
     };
-    named(name, state).unwrap_or_else(|| Box::new(Manual))
+    named(name).unwrap_or_else(|| Arc::new(Manual))
 }

@@ -1,7 +1,7 @@
  1. Preflight
     ok: root, Incus 6.0.5, the gateway container runs, routes in /etc/traefik/dynamic/devbox.yml, firewall: none
  2. Secrets
-    + write /etc/devbox/secrets.toml: wake password hash, cookie secret, gateway↔hub token (mode 0600, owner 65532:65532)
+    + write /etc/devbox/secrets.toml: wake password hash, cookie secret, gateway↔hub token (mode 0600, owner 65532)
  3. Incus instance
     + create devbox: images:ubuntu/26.04/cloud, 3 CPU, 5GiB memory, 60GiB disk, 10.77.0.10 on incusbr0, memory saved on sleep (6GiB of disk), not started with the host, user dev with 1 SSH key(s)
  4. Provision the VM

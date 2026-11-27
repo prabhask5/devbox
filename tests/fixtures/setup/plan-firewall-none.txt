@@ -1,7 +1,7 @@
  1. Preflight
     ok: root, Incus 6.0.5, the gateway container runs, routes in /etc/dokploy/traefik/dynamic/devbox.yml, firewall: none
  2. Secrets
-    + write /etc/devbox/secrets.toml: wake password hash, cookie secret, gateway↔hub token (mode 0600, owner 65532:65532)
+    + write /etc/devbox/secrets.toml: wake password hash, cookie secret, gateway↔hub token (mode 0600, owner 65532)
  3. Incus instance
     devbox is kept, with its disk and everything on it; it is shut down for the change and started again:
     ~ migration.stateful: (unset) → true

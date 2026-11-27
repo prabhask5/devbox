@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime};
 
-use devbox_core::system::{Command, Entry, Host, HttpRequest, HttpResponse, Output, System};
+use devbox_core::system::{Command, Conn, Host, Metadata, Output, System};
 use devbox_sync::{Options, SyncStatus};
 
 const TOKEN: &str = "FAKE-github-token";
@@ -63,35 +63,44 @@ impl System for Machine {
         let files = self.files.lock().unwrap();
         files.get(path).cloned().ok_or_else(|| io::Error::from(io::ErrorKind::NotFound))
     }
-    fn write(&self, path: &Path, data: &[u8]) -> io::Result<()> {
+    fn read_dir(&self, _: &Path) -> io::Result<Vec<String>> {
+        Ok(Vec::new())
+    }
+    fn exists(&self, path: &Path) -> bool {
+        self.files.lock().unwrap().contains_key(path)
+    }
+    fn metadata(&self, _: &Path) -> io::Result<Metadata> {
+        Err(io::Error::from(io::ErrorKind::NotFound))
+    }
+    fn read_link(&self, _: &Path) -> io::Result<PathBuf> {
+        Err(io::Error::from(io::ErrorKind::NotFound))
+    }
+    fn write(&self, path: &Path, data: &[u8], _: u32) -> io::Result<()> {
         self.files.lock().unwrap().insert(path.to_owned(), data.to_vec());
         Ok(())
     }
-    fn append(&self, path: &Path, data: &[u8]) -> io::Result<()> {
+    fn append(&self, path: &Path, data: &[u8], _: u32) -> io::Result<()> {
         self.files.lock().unwrap().entry(path.to_owned()).or_default().extend_from_slice(data);
+        Ok(())
+    }
+    fn create_dir_all(&self, _: &Path, _: u32) -> io::Result<()> {
         Ok(())
     }
     fn remove_file(&self, path: &Path) -> io::Result<()> {
         self.files.lock().unwrap().remove(path);
         Ok(())
     }
-    fn create_dir_all(&self, _: &Path) -> io::Result<()> {
+    fn symlink(&self, _: &Path, _: &Path) -> io::Result<()> {
         Ok(())
-    }
-    fn read_dir(&self, _: &Path) -> io::Result<Vec<Entry>> {
-        Ok(Vec::new())
     }
     fn set_mode(&self, _: &Path, _: u32) -> io::Result<()> {
         Ok(())
     }
-    fn mode(&self, _: &Path) -> Option<u32> {
-        None
+    fn set_owner(&self, _: &Path, _: u32, _: u32) -> io::Result<()> {
+        Ok(())
     }
-    fn unix_http(&self, _: &Path, _: &HttpRequest) -> io::Result<HttpResponse> {
+    fn connect_unix(&self, _: &Path) -> io::Result<Box<dyn Conn>> {
         Err(io::Error::from(io::ErrorKind::NotFound))
-    }
-    fn exists(&self, path: &Path) -> bool {
-        self.files.lock().unwrap().contains_key(path)
     }
     fn env(&self, name: &str) -> Option<String> {
         self.env.get(name).map(|value| (*value).to_owned())
@@ -99,9 +108,12 @@ impl System for Machine {
     fn now(&self) -> SystemTime {
         SystemTime::UNIX_EPOCH + Duration::from_secs(1_790_000_000)
     }
+    fn monotonic(&self) -> Duration {
+        Duration::ZERO
+    }
     fn sleep(&self, _: Duration) {}
-    fn random(&self, _: &mut [u8]) -> io::Result<()> {
-        Ok(())
+    fn random_bytes(&self, count: usize) -> io::Result<Vec<u8>> {
+        Ok(vec![0; count])
     }
 }
 

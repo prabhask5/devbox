@@ -176,7 +176,7 @@ fn the_plan_for_adopting_a_host_that_runs_a_vm_already() {
         "    ~ boot.autostart: true → false",
         "    ~ root disk size.state: (unset) → 6GiB (room for 5GiB of memory)",
         "    ~ replace /etc/dokploy/traefik/dynamic/devbox.yml: code.example.com and agents.example.com → http://devbox-gateway:8080 (what is there is saved for `devbox down`)",
-        "    ~ replace /etc/host-firewall/rules4.txt: containers → 10.77.0.10 tcp 22,8080,8090 (what is there is saved for `devbox down`)",
+        "    + host-firewall: containers → 10.77.0.10 tcp 22,8080,8090 in /etc/host-firewall/rules4.txt, applied with `systemctl restart host-firewall`",
     ] {
         assert!(out.contains(line), "{line}\n{out}");
     }
@@ -310,7 +310,7 @@ fn what_is_missing_or_in_the_way_is_said_with_what_to_do() {
         (code, err.as_str()),
         (
             ExitCode::from(2),
-            "the wake password is needed: pass --wake-password-file <file>, or run without --yes to be asked for it.\n"
+            "devbox up needs a password to wake the VM with: this host has none stored. Pass --wake-password-file <file>, or run without --yes to be asked for it.\n"
         )
     );
     let empty = dokploy();
@@ -393,8 +393,7 @@ fn a_fresh_host_is_set_up_and_a_second_run_changes_nothing() {
     );
     assert_eq!(parsed.hub_token.expose().len(), 64);
     assert_ne!(parsed.hub_token.expose(), parsed.cookie_secret.expose());
-    assert!(system.ran().iter().any(|command| command.program == "chown"
-        && command.args == ["65532:65532", "/etc/devbox/secrets.toml"]));
+    assert_eq!(system.owner("/etc/devbox/secrets.toml"), Some((65532, 65532)));
     let (mode, config_text) = &files["/etc/devbox/devbox.toml"];
     assert_eq!(*mode, 0o644);
     golden("devbox.toml", config_text);
@@ -434,11 +433,7 @@ fn a_fresh_host_is_set_up_and_a_second_run_changes_nothing() {
     assert_eq!((code, err.as_str()), (ExitCode::SUCCESS, ""));
     golden("plan-rerun.txt", &out);
     assert!(out.contains("\nEverything is already up to date.\n"), "{out}");
-    let chowns = |system: &FakeSystem| {
-        system.ran().iter().filter(|command| command.program == "chown").count()
-    };
     assert_eq!((system.files(), instance(&system, "devbox")), (before.0, before.1));
-    assert_eq!(chowns(&system), 1);
     // And without any option at all: what was set up is what is kept.
     let (_, out, _) = devbox(&system, &["up", "--yes"]);
     assert!(out.contains("\nEverything is already up to date.\n"), "{out}");
@@ -870,7 +865,7 @@ fn passwords_are_rotated_and_everybody_is_signed_out() {
     assert_eq!((code, err.as_str()), (ExitCode::SUCCESS, ""));
     assert_eq!(
         out,
-        "The password is changed. Every device that was signed in has to sign in again.\n"
+        "The password that wakes the VM is changed. Every device that was signed in has to sign in again.\n"
     );
     let after = secrets(&system);
     assert!(

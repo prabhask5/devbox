@@ -1,7 +1,9 @@
+moi manages this server; `moi devbox up` does the same and keeps moi's records current
+
  1. Preflight
     ok: root, Incus 6.0.5, the gateway container runs, routes in /etc/dokploy/traefik/dynamic/devbox.yml, firewall: moi
  2. Secrets
-    + write /etc/devbox/secrets.toml: wake password hash, cookie secret, gateway↔hub token (mode 0600, owner 65532:65532)
+    + write /etc/devbox/secrets.toml: wake password hash, cookie secret, gateway↔hub token (mode 0600, owner 65532)
  3. Incus instance
     + create devbox: images:ubuntu/26.04/cloud, 3 CPU, 5GiB memory, 60GiB disk, 10.77.0.10 on incusbr0, memory saved on sleep (6GiB of disk), not started with the host, user dev with 1 SSH key(s)
  4. Provision the VM
@@ -13,11 +15,10 @@
  7. Routing
     + write /etc/dokploy/traefik/dynamic/devbox.yml: code.example.com and agents.example.com → http://devbox-gateway:8080
  8. Firewall
-    + write /etc/moi/firewall.d/devbox.toml: containers → 10.77.0.10 tcp 22,8080,8090
-      and apply it: moi firewall apply
+    + moi: containers → 10.77.0.10 tcp 22,8080,8090 in /etc/moi/firewall/rules4.txt, applied with `moi firewall apply`
  9. Monitor
     the health URL for a monitor is https://code.example.com/__devbox/health
 10. Verify
     ask https://code.example.com/__devbox/health through the public path, as a browser would
 
-6 changes.
+5 changes.

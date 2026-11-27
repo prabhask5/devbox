@@ -110,6 +110,8 @@ pub struct FakeIncus {
     pub failures: BTreeMap<String, String>,
     /// Every request: method and path.
     pub requests: Vec<String>,
+    /// A recorded response (status and body) that answers every request, whatever it asks.
+    pub recorded: Option<(u16, String)>,
     operations: BTreeMap<String, Value>,
     outputs: BTreeMap<String, String>,
 }
@@ -139,6 +141,7 @@ impl FakeIncus {
             inside: None,
             failures: BTreeMap::new(),
             requests: Vec::new(),
+            recorded: None,
             operations: BTreeMap::new(),
             outputs: BTreeMap::new(),
         }
@@ -450,7 +453,10 @@ impl io::Read for FakeConn {
                 .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "not an HTTP request"))?;
             let mut state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
             state.incus.requests.push(format!("{} {}", request.method, request.path));
-            let (status, body) = state.incus.answer(&request);
+            let (status, body) = match &state.incus.recorded {
+                Some((status, body)) => (*status, body.clone().into_bytes()),
+                None => state.incus.answer(&request),
+            };
             let mut answer =
                 format!("HTTP/1.1 {status} X\r\nContent-Length: {}\r\n\r\n", body.len())
                     .into_bytes();

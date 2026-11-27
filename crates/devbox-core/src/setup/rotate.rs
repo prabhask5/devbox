@@ -4,7 +4,7 @@
 use std::time::Duration;
 
 use super::vm::remembered;
-use super::{Paths, SetupError, existing_config, fail, read, secret};
+use super::{Paths, SecretString, SetupError, existing_config, fail, read, secret};
 use crate::incus::{Exec, Incus};
 use crate::password;
 use crate::system::System;
@@ -31,12 +31,84 @@ fn hashed(new: &str) -> Result<String, SetupError> {
     }
 }
 
-/// Sets the password that wakes the VM. The gateway reads the file again by itself.
+/// Which password.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PasswordKind {
+    /// The password that wakes the VM.
+    Wake,
+    /// The password of the agents app.
+    App,
+}
+
+/// What `devbox password` was asked for.
+#[derive(Clone, Debug)]
+pub struct PasswordOptions {
+    /// Where devbox keeps its files on this host.
+    pub paths: Paths,
+    /// Which password to change.
+    pub kind: PasswordKind,
+    /// The new password.
+    pub new: SecretString,
+}
+
+/// That a password was changed.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct PasswordReport {
+    /// The version of this report's shape.
+    pub v: u32,
+    /// Which password was changed.
+    pub changed: PasswordKind,
+}
+
+/// `devbox password`: sets a password. Every device that was signed in with the old one has
+/// to sign in again.
 ///
 /// # Errors
 ///
-/// When the host has no secrets file to change, or it cannot be written.
-pub fn wake(system: &dyn System, paths: &Paths, new: &str) -> Result<(), SetupError> {
+/// When the host is not set up, the password is empty, or (for the app's) the VM is not
+/// running.
+pub fn password(
+    system: &dyn System,
+    options: &PasswordOptions,
+) -> Result<PasswordReport, SetupError> {
+    let new = options.new.expose();
+    if new.is_empty() {
+        return fail("the new password must not be empty.");
+    }
+    match options.kind {
+        PasswordKind::Wake => wake(system, &options.paths, new)?,
+        PasswordKind::App => app(system, &options.paths, new)?,
+    }
+    Ok(PasswordReport { v: 1, changed: options.kind })
+}
+
+/// Records the app password's hash in the host's secrets, when it is not there already: a VM
+/// that is built again gets it back.
+pub(crate) fn keep_app_hash(
+    system: &dyn System,
+    paths: &Paths,
+    hash: &str,
+) -> Result<(), SetupError> {
+    let path = paths.secrets();
+    let Some(text) = read(system, &path) else { return Ok(()) };
+    let line = format!("app_password_hash = '{hash}'");
+    if text.lines().any(|existing| existing == line) {
+        return Ok(());
+    }
+    let has = text.lines().any(|existing| existing.starts_with("app_password_hash"));
+    let new = if has {
+        replaced(&text, &[("app_password_hash", format!("'{hash}'"))])
+    } else {
+        format!("{}\n{line}\n", text.trim_end())
+    };
+    system
+        .write(&path, new.as_bytes(), 0o600)
+        .map_err(|err| SetupError(format!("{}: {err}", path.display())))
+}
+
+/// Sets the password that wakes the VM. The gateway reads the file again by itself.
+fn wake(system: &dyn System, paths: &Paths, new: &str) -> Result<(), SetupError> {
     let path = paths.secrets();
     let Some(text) = read(system, &path) else {
         return fail(format!("{} is missing: run `devbox up` first.", path.display()));
@@ -51,16 +123,12 @@ pub fn wake(system: &dyn System, paths: &Paths, new: &str) -> Result<(), SetupEr
 }
 
 /// Sets the password of the agents app, in the VM, and restarts the hub so it is in force.
-///
-/// # Errors
-///
-/// When the host is not set up, the VM is not running, or its hub secrets cannot be changed.
-pub fn app(system: &dyn System, paths: &Paths, new: &str) -> Result<(), SetupError> {
+fn app(system: &dyn System, paths: &Paths, new: &str) -> Result<(), SetupError> {
     let (Some(config), record) = (existing_config(system, paths), remembered(system, paths)) else {
         return fail("this host is not set up: run `devbox up` first.");
     };
-    let (name, Some(user)) =
-        (config["instance"].as_str().unwrap_or_default(), record["user"].as_str())
+    let user = super::vm_user(&config, &record);
+    let (name, Some(user)) = (config["instance"].as_str().unwrap_or_default(), user.as_deref())
     else {
         return fail("the VM was not provisioned by `devbox up`: run it first.");
     };
@@ -74,7 +142,7 @@ pub fn app(system: &dyn System, paths: &Paths, new: &str) -> Result<(), SetupErr
     let root = |script: &str| -> Result<String, SetupError> {
         let exec = Exec {
             command: ["sh", "-c", script, "sh", user].map(str::to_owned).to_vec(),
-            timeout: Some(Duration::from_mins(1)),
+            timeout: Some(Duration::from_secs(60)),
             ..Exec::default()
         };
         let ran = incus.exec(name, &exec)?;
@@ -96,10 +164,10 @@ pub fn app(system: &dyn System, paths: &Paths, new: &str) -> Result<(), SetupErr
     let Some(text) = incus.pull_file(name, &path)? else {
         return fail(format!("{path} is missing in the VM: run `devbox up` to provision it."));
     };
-    let values = [
-        ("app_password_hash", hashed(new)?),
-        ("cookie_secret", format!("\"{}\"", secret(system)?)),
-    ];
+    let hash = hashed(new)?;
+    keep_app_hash(system, paths, hash.trim_matches('\''))?;
+    let values =
+        [("app_password_hash", hash), ("cookie_secret", format!("\"{}\"", secret(system)?))];
     incus.push_file(
         name,
         &path,

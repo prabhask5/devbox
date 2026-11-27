@@ -1,7 +1,7 @@
  1. Preflight
     ok: root, Incus 6.0.5, the gateway container runs, routes in /etc/dokploy/traefik/dynamic/devbox.yml, firewall: host-firewall
  2. Secrets
-    + write /etc/devbox/secrets.toml: wake password hash, cookie secret, gateway↔hub token (mode 0600, owner 65532:65532)
+    + write /etc/devbox/secrets.toml: wake password hash, cookie secret, gateway↔hub token (mode 0600, owner 65532)
  3. Incus instance
     devbox is kept, with its disk and everything on it; it is shut down for the change and started again:
     ~ migration.stateful: (unset) → true
@@ -16,11 +16,10 @@
  7. Routing
     ~ replace /etc/dokploy/traefik/dynamic/devbox.yml: code.example.com and agents.example.com → http://devbox-gateway:8080 (what is there is saved for `devbox down`)
  8. Firewall
-    ~ replace /etc/host-firewall/rules4.txt: containers → 10.77.0.10 tcp 22,8080,8090 (what is there is saved for `devbox down`)
-      and apply it: systemctl restart host-firewall
+    + host-firewall: containers → 10.77.0.10 tcp 22,8080,8090 in /etc/host-firewall/rules4.txt, applied with `systemctl restart host-firewall`
  9. Monitor
     left to you: point the Uptime Kuma monitor "Devbox" at https://code.example.com/__devbox/health (HTTP, accepted status 200-299, every 60 s) and resume it. A sleeping devbox is healthy.
 10. Verify
     ask https://code.example.com/__devbox/health through the public path, as a browser would
 
-7 changes.
+6 changes.

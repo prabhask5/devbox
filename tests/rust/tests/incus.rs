@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use devbox_core::fake::{FakeInstance, FakeSystem};
 use devbox_core::incus::{Error, Exec, Incus, SOCKET};
-use devbox_core::system::{Host, HttpRequest, HttpResponse, System};
+use devbox_core::system::Host;
 use devbox_tests::sandbox::TempDir;
 use serde_json::{Value, json};
 
@@ -173,58 +173,11 @@ fn an_incus_that_is_not_there_is_said_with_its_socket() {
     );
 }
 
-/// A machine whose only ability is to answer for the Incus socket with a recorded response.
-struct Recorded(u16, String);
-
-impl System for Recorded {
-    fn unix_http(&self, _: &Path, _: &HttpRequest) -> std::io::Result<HttpResponse> {
-        Ok(HttpResponse { status: self.0, body: self.1.clone().into_bytes() })
-    }
-    fn run(
-        &self,
-        _: &devbox_core::system::Command,
-    ) -> std::io::Result<devbox_core::system::Output> {
-        unreachable!()
-    }
-    fn read(&self, _: &Path) -> std::io::Result<Vec<u8>> {
-        unreachable!()
-    }
-    fn write(&self, _: &Path, _: &[u8]) -> std::io::Result<()> {
-        unreachable!()
-    }
-    fn append(&self, _: &Path, _: &[u8]) -> std::io::Result<()> {
-        unreachable!()
-    }
-    fn remove_file(&self, _: &Path) -> std::io::Result<()> {
-        unreachable!()
-    }
-    fn create_dir_all(&self, _: &Path) -> std::io::Result<()> {
-        unreachable!()
-    }
-    fn set_mode(&self, _: &Path, _: u32) -> std::io::Result<()> {
-        unreachable!()
-    }
-    fn mode(&self, _: &Path) -> Option<u32> {
-        unreachable!()
-    }
-    fn read_dir(&self, _: &Path) -> std::io::Result<Vec<devbox_core::system::Entry>> {
-        unreachable!()
-    }
-    fn exists(&self, _: &Path) -> bool {
-        unreachable!()
-    }
-    fn env(&self, _: &str) -> Option<String> {
-        unreachable!()
-    }
-    fn now(&self) -> std::time::SystemTime {
-        unreachable!()
-    }
-    fn sleep(&self, _: Duration) {
-        unreachable!()
-    }
-    fn random(&self, _: &mut [u8]) -> std::io::Result<()> {
-        unreachable!()
-    }
+/// A machine whose Incus answers everything with a recorded response.
+fn recorded(status: u16, body: String) -> FakeSystem {
+    let system = FakeSystem::new();
+    system.incus(|incus| incus.recorded = Some((status, body)));
+    system
 }
 
 #[test]
@@ -232,7 +185,7 @@ fn the_reference_responses_of_a_real_incus_are_understood() {
     let fixture = |name: &str| devbox_tests::read(&format!("tests/fixtures/incus/{name}.json"));
     let socket = Path::new(SOCKET);
 
-    let system = Recorded(200, fixture("instance"));
+    let system = recorded(200, fixture("instance"));
     let instance = Incus::new(&system, socket).instance("devbox").unwrap().unwrap();
     assert_eq!(
         (instance.status.as_str(), instance.kind.as_str(), instance.stateful),
@@ -243,7 +196,7 @@ fn the_reference_responses_of_a_real_incus_are_understood() {
     assert_eq!(instance.expanded_devices["eth0"]["ipv4.address"], "10.77.0.10");
     assert_eq!(instance.raw["profiles"], json!(["default"]));
 
-    let system = Recorded(404, fixture("error-not-found"));
+    let system = recorded(404, fixture("error-not-found"));
     assert_eq!(Incus::new(&system, socket).instance("devbox").unwrap(), None);
 
     // The wait on an operation that failed: the operation's own error is what is said.
@@ -252,7 +205,7 @@ fn the_reference_responses_of_a_real_incus_are_understood() {
     let mut started = failure.clone();
     started["type"] = json!("async");
     started["operation"] = json!("/1.0/operations/x");
-    let system = Recorded(200, started.to_string());
+    let system = recorded(200, started.to_string());
     let error = Incus::new(&system, socket)
         .change_state("devbox", "start", false, Duration::from_secs(5))
         .unwrap_err();
@@ -308,21 +261,20 @@ fn the_real_host_speaks_http_over_a_unix_socket() {
     assert_eq!(Incus::new(&host, &socket).version().unwrap(), "6.0.5");
     assert_eq!(
         asked.recv().unwrap(),
-        "GET /1.0 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Length: 0\r\n\r\n"
+        "GET /1.0 HTTP/1.1\r\nHost: incus\r\nConnection: close\r\nContent-Length: 0\r\n\r\n"
     );
 
-    let request = HttpRequest {
-        method: "POST".to_owned(),
-        path: "/1.0/instances/devbox/files?path=/etc/x".to_owned(),
-        headers: vec![("X-Incus-mode".to_owned(), "0600".to_owned())],
-        body: b"content".to_vec(),
-        timeout: Some(Duration::from_secs(5)),
-    };
-    let _ = host.unix_http(&socket, &request).unwrap();
-    assert_eq!(
-        asked.recv().unwrap(),
-        "POST /1.0/instances/devbox/files?path=/etc/x HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Length: 7\r\nX-Incus-mode: 0600\r\n\r\ncontent"
+    let incus = Incus::new(&host, &socket);
+    let _ = incus.push_file("devbox", "/etc/x", b"content", 0o600, (0, 0));
+    let asked = asked.recv().unwrap();
+    assert!(
+        asked.starts_with("POST /1.0/instances/devbox/files?path=/etc/x HTTP/1.1\r\nHost: incus\r\nConnection: close\r\nContent-Length: 7\r\n"),
+        "{asked}"
+    );
+    assert!(
+        asked.contains("X-Incus-mode: 0600\r\n") && asked.ends_with("\r\n\r\ncontent"),
+        "{asked}"
     );
     let _ = std::fs::remove_file(&socket);
-    assert!(host.unix_http(&dir.path().join("nothing.sock"), &request).is_err());
+    assert!(Incus::new(&host, &dir.path().join("nothing.sock")).version().is_err());
 }

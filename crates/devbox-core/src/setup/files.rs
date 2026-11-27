@@ -224,15 +224,6 @@ pub fn nftables_table(address: &str, ports: &[u16]) -> String {
     )
 }
 
-/// devbox's rule in moi's firewall configuration: moi owns the chains and applies it.
-#[must_use]
-pub fn moi_rule(address: &str, ports: &[u16]) -> String {
-    let list = port_list(ports).replace(',', ", ");
-    format!(
-        "# Written by `devbox up`; applied by `moi firewall apply`.\n[[allow]]\ncomment = \"{RULE_COMMENT}\"\nfrom = \"{DOCKER_SOURCE}\"\nto = \"{address}\"\nproto = \"tcp\"\nports = [{list}]\n"
-    )
-}
-
 /// A size like `5GiB` plus one gibibyte: what a VM with that much memory needs to save its
 /// state. `None` when the size is not in whole GiB or MiB.
 #[must_use]
@@ -381,10 +372,6 @@ mod tests {
         assert!(
             nftables_table("10.77.0.10", &[22, 8080])
                 .contains("tcp dport { 22, 8080 } accept comment \"devbox: proxies to VM\"")
-        );
-        assert!(
-            moi_rule("10.77.0.10", &[22, 8080])
-                .contains("to = \"10.77.0.10\"\nproto = \"tcp\"\nports = [22, 8080]\n")
         );
     }
 }

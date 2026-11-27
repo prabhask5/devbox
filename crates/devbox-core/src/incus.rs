@@ -283,7 +283,7 @@ impl<'a> Incus<'a> {
     ///
     /// When Incus cannot be reached, refuses, or the creation fails.
     pub fn create(&self, definition: &Value) -> Result<(), Error> {
-        let limit = Duration::from_mins(15);
+        let limit = Duration::from_secs(900);
         let answer = self
             .call("POST", "/1.0/instances", Some(definition), Duration::from_secs(60))?
             .unwrap_or(Value::Null);

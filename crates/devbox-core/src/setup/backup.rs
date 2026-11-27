@@ -7,7 +7,10 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
 
-use super::{Paths, SetupError, fail, read};
+use std::sync::Arc;
+
+use super::{Paths, SetupError, fail, notices, read};
+use crate::firewall::{self, Manager, Restore, Rule};
 use crate::incus::{Incus, Instance};
 use crate::system::{Command, System};
 
@@ -49,7 +52,7 @@ impl<'a> Backup<'a> {
             }
         }
         let dir = paths.state.join("backup").join(super::stamp(now));
-        let manifest = json!({"v": 1, "files": [], "undo": [], "reload": [], "instance": null});
+        let manifest = json!({"v": 1, "files": [], "undo": [], "reload": [], "instance": null, "firewall": null});
         Self { system, dir, known, manifest, changed: false }
     }
 
@@ -64,31 +67,46 @@ impl<'a> Backup<'a> {
 
     /// Saves a file as it is now, unless an original of it is saved already.
     pub fn file(&mut self, path: &Path) {
+        let mode = self.system.metadata(path).map_or(0o644, |meta| meta.mode);
+        self.file_was(path, self.system.read(path).ok(), mode);
+    }
+
+    /// Saves what a file held before it was changed (`None`: it was not there), unless an
+    /// original of it is saved already.
+    fn file_was(&mut self, path: &Path, previous: Option<Vec<u8>>, mode: u32) {
         let name = path.to_string_lossy().into_owned();
         if !self.known.insert(name.clone()) {
             return;
         }
-        let entry = match self.system.read(path) {
-            Ok(content) => {
+        let entry = match previous {
+            Some(content) => {
                 // A copy that cannot be written is found out by `store`, before the file changes.
                 let _ = self.system.write(&copy_of(&self.dir, &name), &content, 0o600);
-                json!({"path": name, "existed": true, "mode": self.system.metadata(path).map_or(0o644, |meta| meta.mode)})
+                json!({"path": name, "existed": true, "mode": mode})
             }
-            Err(_) => json!({"path": name, "existed": false}),
+            None => json!({"path": name, "existed": false}),
         };
         self.push("files", entry);
+    }
+
+    /// Remembers which firewall manager was asked for which rule.
+    pub fn firewall(&mut self, manager: &str, rule: &Rule) {
+        self.manifest["firewall"] = json!({"manager": manager, "rule": rule});
+        self.changed = true;
+    }
+
+    /// Remembers how to take back what a firewall manager did.
+    pub fn restore(&mut self, restore: Restore) {
+        match restore {
+            Restore::File { path, previous, mode } => self.file_was(&path, previous, mode),
+            Restore::Command(command) => self.undo(&command),
+            Restore::Reload(command) => self.push("reload", json!(command)),
+        }
     }
 
     /// Remembers the command that takes back what a command of `up` did.
     pub fn undo(&mut self, command: &[String]) {
         self.push("undo", json!(command));
-    }
-
-    /// Remembers the command that makes a restored file take effect.
-    pub fn reload(&mut self, command: &Command) {
-        let mut line = vec![command.program.clone()];
-        line.extend(command.args.iter().cloned());
-        self.push("reload", json!(line));
     }
 
     /// Remembers that `up` created the instance.
@@ -128,16 +146,54 @@ fn command_of(value: &Value) -> Option<Command> {
     Some(Command::new(program, args.iter().copied()))
 }
 
+/// What `devbox down` was asked for.
+#[derive(Clone, Debug, Default)]
+pub struct DownOptions {
+    /// Where devbox keeps its files on this host.
+    pub paths: Paths,
+    /// Also delete the VM, if `up` created it.
+    pub destroy: bool,
+    /// Only say what would be undone.
+    pub dry_run: bool,
+    /// The embedder's own firewall manager: the one it gave `up`.
+    pub firewall_manager: Option<Arc<dyn Manager>>,
+}
+
+/// What `down` undid, or would undo.
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct DownReport {
+    /// The version of this report's shape.
+    pub v: u32,
+    /// What the owner should know before anything else, one line each.
+    pub notices: Vec<String>,
+    /// Whether this is only what would be done.
+    pub dry_run: bool,
+    /// What was done (or would be), one line each.
+    pub done: Vec<String>,
+}
+
 /// Undoes what `up` did to the host: every file is as it was before devbox first touched it
-/// (or gone, if devbox made it), commands are taken back, and the instance has its
-/// configuration back. An instance `up` created is kept unless `destroy`. Returns what was
-/// done, one line each.
+/// (or gone, if devbox made it), commands are taken back, the firewall rule is out of force,
+/// and the instance has its configuration back. An instance `up` created is kept unless
+/// `destroy`.
 ///
 /// # Errors
 ///
 /// When a file cannot be put back or Incus refuses; what was restored until then stays restored
 /// and `down` can be run again.
-pub fn down(system: &dyn System, paths: &Paths, destroy: bool) -> Result<Vec<String>, SetupError> {
+pub fn down(system: &dyn System, options: &DownOptions) -> Result<DownReport, SetupError> {
+    let done = undo(system, options)?;
+    Ok(DownReport {
+        v: 1,
+        notices: notices(system, options.firewall_manager.is_some()),
+        dry_run: options.dry_run,
+        done,
+    })
+}
+
+#[allow(clippy::too_many_lines)] // one pass over the manifests, in the order things are undone
+fn undo(system: &dyn System, options: &DownOptions) -> Result<Vec<String>, SetupError> {
+    let (paths, destroy, real) = (&options.paths, options.destroy, !options.dry_run);
     let manifests = manifests(system, paths);
     if manifests.is_empty() {
         return Ok(vec!["nothing to undo: `devbox up` has not changed this host".to_owned()]);
@@ -147,6 +203,8 @@ pub fn down(system: &dyn System, paths: &Paths, destroy: bool) -> Result<Vec<Str
         let path = path.to_owned();
         move |err: std::io::Error| SetupError(format!("{path}: {err}"))
     };
+    // What is said of each thing: that it was done, or that it would be.
+    let said = |did: &str, would: &str| if real { did.to_owned() } else { would.to_owned() };
 
     // Each file goes back to what the earliest run saved of it: the state before devbox.
     let mut restored = BTreeSet::new();
@@ -158,16 +216,20 @@ pub fn down(system: &dyn System, paths: &Paths, destroy: bool) -> Result<Vec<Str
                 continue;
             };
             if file["existed"] == true {
-                let content = system.read(&copy_of(dir, path)).map_err(failed(path))?;
-                let mode = file["mode"]
-                    .as_u64()
-                    .and_then(|mode| u32::try_from(mode).ok())
-                    .unwrap_or(0o644);
-                system.write(Path::new(path), &content, mode).map_err(failed(path))?;
-                done.push(format!("restored {path}"));
+                if real {
+                    let content = system.read(&copy_of(dir, path)).map_err(failed(path))?;
+                    let mode = file["mode"]
+                        .as_u64()
+                        .and_then(|mode| u32::try_from(mode).ok())
+                        .unwrap_or(0o644);
+                    system.write(Path::new(path), &content, mode).map_err(failed(path))?;
+                }
+                done.push(format!("{} {path}", said("restored", "restore")));
             } else {
-                system.remove_file(Path::new(path)).map_err(failed(path))?;
-                done.push(format!("removed {path}"));
+                if real {
+                    system.remove_file(Path::new(path)).map_err(failed(path))?;
+                }
+                done.push(format!("{} {path}", said("removed", "remove")));
             }
         }
     }
@@ -186,13 +248,44 @@ pub fn down(system: &dyn System, paths: &Paths, destroy: bool) -> Result<Vec<Str
     }
     for command in commands.into_iter().chain(reloads).filter_map(command_of) {
         let line = format!("{} {}", command.program, command.args.join(" "));
+        if !real {
+            done.push(format!("run {line}"));
+            continue;
+        }
         match system.run(&command) {
             Ok(output) if output.success() => done.push(format!("ran {line}")),
             Ok(output) => done.push(format!("`{line}` failed: {}", output.error_text())),
             Err(err) => done.push(format!("`{line}` could not be run: {err}")),
         }
     }
-
+    // A manager of the embedder's takes its rule back itself; the built-in ones were undone
+    // above, through the files and commands they said they changed.
+    let asked = manifests
+        .iter()
+        .rev()
+        .map(|(_, manifest)| &manifest["firewall"])
+        .find(|asked| asked.is_object());
+    if let Some(asked) = asked
+        && let Ok(rule) = serde_json::from_value::<Rule>(asked["rule"].clone())
+    {
+        let by = asked["manager"].as_str().unwrap_or_default();
+        match &options.firewall_manager {
+            Some(manager) if real => {
+                let change = manager.remove(system, &rule)?;
+                done.push(format!("{}: {}", manager.describe(), change.summary));
+            }
+            Some(manager) => done.push(format!(
+                "{}: take the rule for {} out of force",
+                manager.describe(),
+                rule.address
+            )),
+            None if firewall::named(by).is_none() => done.push(format!(
+                "the firewall rule for {} was put in force by {by}: take it out of force there",
+                rule.address
+            )),
+            None => {}
+        }
+    }
     let saved = manifests
         .iter()
         .map(|(_, manifest)| &manifest["instance"])
@@ -203,33 +296,40 @@ pub fn down(system: &dyn System, paths: &Paths, destroy: bool) -> Result<Vec<Str
         let current = incus.instance(name)?;
         let running = current.as_ref().is_some_and(|instance| instance.status == "Running");
         let stop = |incus: &Incus| {
-            incus.change_state(name, "stop", false, std::time::Duration::from_mins(3))
+            incus.change_state(name, "stop", false, std::time::Duration::from_secs(180))
         };
         match (current, saved["created"] == true) {
             (None, _) => done.push(format!("the instance {name} is gone already")),
             (Some(_), true) if destroy => {
-                if running {
-                    stop(&incus)?;
+                if real {
+                    if running {
+                        stop(&incus)?;
+                    }
+                    incus.delete(name)?;
                 }
-                incus.delete(name)?;
-                done.push(format!("deleted the instance {name}"));
+                done.push(format!("{} the instance {name}", said("deleted", "delete")));
             }
             (Some(_), true) => done.push(format!("kept the instance {name}, which `devbox up` created (delete it with `devbox down --destroy`)")),
             (Some(_), false) => {
                 let Ok(config) = serde_json::from_value(saved["config"].clone()) else { return fail("the saved Incus configuration cannot be read") };
                 let Ok(devices) = serde_json::from_value(saved["devices"].clone()) else { return fail("the saved Incus devices cannot be read") };
-                if running {
-                    stop(&incus)?;
+                if real {
+                    if running {
+                        stop(&incus)?;
+                    }
+                    incus.configure(name, &config, &devices)?;
+                    if running {
+                        incus.change_state(name, "start", false, std::time::Duration::from_secs(300))?;
+                    }
                 }
-                incus.configure(name, &config, &devices)?;
-                if running {
-                    incus.change_state(name, "start", false, std::time::Duration::from_mins(5))?;
-                }
-                done.push(format!("restored the Incus configuration of {name}"));
+                done.push(format!("{} the Incus configuration of {name}", said("restored", "restore")));
             }
         }
     }
 
+    if !real {
+        return Ok(done);
+    }
     // The saved copies stay where they are; without their manifests they are not applied again.
     let _ = system.remove_file(&paths.provisioned());
     for (dir, _) in &manifests {
