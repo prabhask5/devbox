@@ -125,6 +125,13 @@ pub trait System: Sync {
     /// As [`std::fs::read`].
     fn read(&self, path: &Path) -> io::Result<Vec<u8>>;
 
+    /// Writes a file, replacing what is there and creating its directories when missing.
+    ///
+    /// # Errors
+    ///
+    /// As [`std::fs::write`].
+    fn write(&self, path: &Path, data: &[u8]) -> io::Result<()>;
+
     /// Adds `data` to the end of a file, creating it and its directories when missing.
     ///
     /// # Errors
@@ -245,6 +252,13 @@ impl System for Host {
 
     fn read(&self, path: &Path) -> io::Result<Vec<u8>> {
         std::fs::read(path)
+    }
+
+    fn write(&self, path: &Path, data: &[u8]) -> io::Result<()> {
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        std::fs::write(path, data)
     }
 
     fn append(&self, path: &Path, data: &[u8]) -> io::Result<()> {

@@ -14,6 +14,7 @@ use devbox_core::config;
 use devbox_core::proto::DotfilesManifestSync;
 pub use devbox_core::proto::SyncStatus;
 use devbox_core::system::System;
+use devbox_core::time::rfc3339;
 
 mod git;
 mod github;
@@ -51,8 +52,7 @@ impl Options {
             code_dir: set("DEVBOX_CODE_DIR").map_or_else(|| home.join("code"), PathBuf::from),
             state_dir: set("DEVBOX_STATE_DIR").map_or_else(|| state.join("devbox"), PathBuf::from),
             only: None,
-            github_api: set("DEVBOX_GITHUB_API")
-                .unwrap_or_else(|| "https://api.github.com".to_owned()),
+            github_api: devbox_core::github::api(system),
             home,
         }
     }
@@ -134,7 +134,7 @@ fn rules(system: &dyn System, options: &Options) -> Result<DotfilesManifestSync,
 /// that does not answer is one, and nothing is cloned then.
 fn missing(system: &dyn System, options: &Options, have: &[String]) -> Missing {
     let mut found = Missing { remotes: Vec::new(), token: String::new(), problem: None };
-    let Some(token) = github::token(system) else { return found };
+    let Some(token) = devbox_core::github::token(system) else { return found };
     let problem = |name: &str, detail: String| {
         Some(RepoResult { name: name.to_owned(), status: SyncStatus::Error, detail })
     };
@@ -183,9 +183,12 @@ pub fn sync(
     system.create_dir_all(&options.code_dir).map_err(io(&options.code_dir))?;
     system.create_dir_all(&options.state_dir).map_err(io(&options.state_dir))?;
     let log_path = options.state_dir.join("sync.log");
-    let now = || system.now().duration_since(UNIX_EPOCH).map_or(0, |since| since.as_secs());
+    let now = || {
+        let since = system.now().duration_since(UNIX_EPOCH).map_or(0, |since| since.as_secs());
+        i64::try_from(since).unwrap_or(0)
+    };
     let log = |line: &str| {
-        let line = format!("{} {line}\n", text::rfc3339(now()));
+        let line = format!("{} {line}\n", rfc3339(now()));
         system.append(&log_path, line.as_bytes()).map_err(io(&log_path))
     };
 

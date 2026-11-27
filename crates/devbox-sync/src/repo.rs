@@ -9,10 +9,11 @@ use devbox_core::system::System;
 
 use crate::RepoResult;
 use crate::git::Git;
-use crate::text::{count, one_line, rfc3339};
+use crate::text::{count, one_line};
+use devbox_core::time::rfc3339;
 
 /// How long a safety ref to a stash is kept.
-const BACKUP_SECONDS: u64 = 30 * 86400;
+const BACKUP_SECONDS: i64 = 30 * 86400;
 const BACKUP_PREFIX: &str = "refs/devbox-sync/backup-";
 
 /// A local branch, as `git for-each-ref` describes it.
@@ -43,7 +44,7 @@ fn track(text: &str) -> (u64, u64) {
 }
 
 /// The local branches, and the safety refs that are older than they need to be.
-fn refs(git: Git, now: u64) -> Option<(Vec<Branch>, Vec<String>)> {
+fn refs(git: Git, now: i64) -> Option<(Vec<Branch>, Vec<String>)> {
     let format = "--format=%(HEAD)%00%(refname)%00%(objectname)%00%(upstream)%00%(upstream:track,nobracket)%00%(worktreepath)";
     let listing = git.text(&["for-each-ref", format, "refs/heads", "refs/devbox-sync"])?;
     let (mut branches, mut expired) = (Vec::new(), Vec::new());
@@ -51,7 +52,7 @@ fn refs(git: Git, now: u64) -> Option<(Vec<Branch>, Vec<String>)> {
         let fields: Vec<&str> = line.split('\0').collect();
         let [head, refname, commit, upstream, tracking, worktree] = fields[..] else { continue };
         if let Some(made) = refname.strip_prefix(BACKUP_PREFIX) {
-            if made.parse::<u64>().is_ok_and(|made| made + BACKUP_SECONDS < now) {
+            if made.parse::<i64>().is_ok_and(|made| made + BACKUP_SECONDS < now) {
                 expired.push(refname.to_owned());
             }
         } else if let Some(name) = refname.strip_prefix("refs/heads/") {
@@ -206,7 +207,7 @@ fn assess(
     git: Git,
     name: &str,
     fetch_error: Option<&str>,
-    now: u64,
+    now: i64,
 ) -> Result<Outdated, RepoResult> {
     let mut git_dir = git.dir.join(".git");
     if git.system.read_dir(&git_dir).is_err() {
@@ -287,7 +288,7 @@ struct Stash {
 /// Puts uncommitted changes, untracked files included, into a stash, and points a ref of our
 /// own at that stash commit so it survives whatever happens to the stash list. `Ok(None)` when
 /// there is nothing to stash.
-fn stash_changes(git: Git, name: &str, now: u64) -> Result<Option<Stash>, RepoResult> {
+fn stash_changes(git: Git, name: &str, now: i64) -> Result<Option<Stash>, RepoResult> {
     let clean = git
         .text(&["status", "--porcelain", "--untracked-files=normal"])
         .is_some_and(|status| status.is_empty());
@@ -320,7 +321,7 @@ pub(crate) fn update(
     dir: &Path,
     name: &str,
     fetch_error: Option<&str>,
-    now: u64,
+    now: i64,
 ) -> RepoResult {
     let git = Git { system, dir };
     let Outdated { before, ahead, behind, extra } = match assess(git, name, fetch_error, now) {

@@ -60,12 +60,26 @@ impl Drop for TempDir {
     }
 }
 
-/// The real machine at a time of the test's choosing.
+/// The real machine at a time of the test's choosing, with its files confined: a path outside
+/// `root` is looked for under `root/rootfs`, so `/etc/os-release` or `/proc/meminfo` are what
+/// the test put there and never what the machine running the test has.
 pub struct At {
     /// The machine.
     pub host: Host,
     /// What its clock says.
     pub now: SystemTime,
+    /// The directory files are confined to.
+    pub root: PathBuf,
+}
+
+impl At {
+    fn confined(&self, path: &Path) -> PathBuf {
+        if path.starts_with(&self.root) {
+            path.to_owned()
+        } else {
+            self.root.join("rootfs").join(path.strip_prefix("/").unwrap_or(path))
+        }
+    }
 }
 
 impl System for At {
@@ -73,22 +87,25 @@ impl System for At {
         self.host.run(command)
     }
     fn read(&self, path: &Path) -> io::Result<Vec<u8>> {
-        self.host.read(path)
+        self.host.read(&self.confined(path))
+    }
+    fn write(&self, path: &Path, data: &[u8]) -> io::Result<()> {
+        self.host.write(&self.confined(path), data)
     }
     fn append(&self, path: &Path, data: &[u8]) -> io::Result<()> {
-        self.host.append(path, data)
+        self.host.append(&self.confined(path), data)
     }
     fn remove_file(&self, path: &Path) -> io::Result<()> {
-        self.host.remove_file(path)
+        self.host.remove_file(&self.confined(path))
     }
     fn create_dir_all(&self, path: &Path) -> io::Result<()> {
-        self.host.create_dir_all(path)
+        self.host.create_dir_all(&self.confined(path))
     }
     fn read_dir(&self, path: &Path) -> io::Result<Vec<Entry>> {
-        self.host.read_dir(path)
+        self.host.read_dir(&self.confined(path))
     }
     fn exists(&self, path: &Path) -> bool {
-        self.host.exists(path)
+        self.host.exists(&self.confined(path))
     }
     fn env(&self, name: &str) -> Option<String> {
         self.host.env(name)
@@ -193,7 +210,8 @@ impl Sandbox {
             host = host.with_env(name, value);
         }
         let now = SystemTime::UNIX_EPOCH + Duration::from_secs(1_790_000_000);
-        Self { root, system: At { host, now } }
+        let confined = root.path().to_owned();
+        Self { root, system: At { host, now, root: confined } }
     }
 
     /// Sets a variable of the environment the sync and git see.
@@ -219,6 +237,42 @@ impl Sandbox {
     #[must_use]
     pub fn seed(&self, name: &str) -> PathBuf {
         self.root.path().join("seed").join(name)
+    }
+
+    /// Where the sandbox is.
+    #[must_use]
+    pub fn root(&self) -> &Path {
+        self.root.path()
+    }
+
+    /// Limits the programs the sandbox can run to `tools` (found on the real `PATH`) and what
+    /// the sandbox's own `bin` holds, so that what happens to be installed on the machine
+    /// running the test — a `node`, a `claude` — is not there unless the test puts it there.
+    pub fn only_tools(&mut self, tools: &[&str]) {
+        let bin = self.root.path().join("bin");
+        let path = std::env::var("PATH").unwrap_or_default();
+        for tool in tools {
+            let found = std::env::split_paths(&path)
+                .map(|dir| dir.join(tool))
+                .find(|candidate| candidate.is_file())
+                .unwrap_or_else(|| panic!("{tool} is not on PATH"));
+            let link = bin.join(tool);
+            let _ = std::fs::remove_file(&link);
+            std::os::unix::fs::symlink(&found, &link)
+                .unwrap_or_else(|err| panic!("{}: {err}", link.display()));
+        }
+        self.set_env("PATH", &bin.to_string_lossy());
+    }
+
+    /// Puts a program into the sandbox's `bin`: a shell script with this body.
+    pub fn program(&self, name: &str, body: &str) {
+        use std::os::unix::fs::PermissionsExt;
+        let path = self.root.path().join("bin").join(name);
+        let _ = std::fs::remove_file(&path);
+        std::fs::write(&path, format!("#!/bin/sh\n{body}\n"))
+            .unwrap_or_else(|err| panic!("{}: {err}", path.display()));
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))
+            .unwrap_or_else(|err| panic!("{}: {err}", path.display()));
     }
 
     /// The home directory.

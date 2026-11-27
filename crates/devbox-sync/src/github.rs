@@ -3,6 +3,7 @@
 use std::path::Path;
 use std::time::Duration;
 
+use devbox_core::github::get;
 use devbox_core::proto::DotfilesManifestSync;
 use devbox_core::system::{Command, System};
 
@@ -19,42 +20,6 @@ pub(crate) struct Remote {
 
 const PER_PAGE: usize = 100;
 const MAX_PAGES: usize = 50;
-
-/// The token to talk to GitHub with: from the environment, else from `gh`.
-pub(crate) fn token(system: &dyn System) -> Option<String> {
-    for name in ["GITHUB_TOKEN", "GH_TOKEN"] {
-        if let Some(value) = system.env(name).filter(|value| !value.trim().is_empty()) {
-            return Some(value.trim().to_owned());
-        }
-    }
-    let output = system.run(&Command::new("gh", ["auth", "token"])).ok()?;
-    Some(output.text()).filter(|token| output.success() && !token.is_empty())
-}
-
-/// One GET of the GitHub API. The token travels on curl's standard input, where no other
-/// process can see it.
-fn get(
-    system: &dyn System,
-    api: &str,
-    token: &str,
-    path: &str,
-) -> Result<serde_json::Value, String> {
-    let config = format!(
-        "header = \"Authorization: Bearer {token}\"\nheader = \"Accept: application/vnd.github+json\"\nheader = \"X-GitHub-Api-Version: 2022-11-28\"\nuser-agent = \"devbox-sync\"\n"
-    );
-    let url = format!("{}{path}", api.trim_end_matches('/'));
-    let curl = Command::new(
-        "curl",
-        ["--silent", "--show-error", "--fail", "--max-time", "30", "--config", "-", &url],
-    )
-    .stdin(config)
-    .timeout(Duration::from_secs(40));
-    let output = system.run(&curl).map_err(|error| format!("couldn't run curl: {error}"))?;
-    if !output.success() {
-        return Err(one_line(&output.error_text(), 200));
-    }
-    serde_json::from_slice(&output.stdout).map_err(|_| "GitHub's answer is not JSON".to_owned())
-}
 
 /// The repositories the manifest's rules select, in the order GitHub lists them.
 pub(crate) fn list(
