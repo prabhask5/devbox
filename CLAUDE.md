@@ -49,7 +49,7 @@ internal/             Go packages: gateway/, hub/, incus/, proto/ (generated), c
 crates/               Rust workspace members: devbox-cli (bin `devbox`), devbox-core, devbox-sync, devbox-context
 web/                  pnpm workspace: gateway-ui/, hub-app/, shared/ (generated types, design tokens)
 deploy/gateway/       Dockerfile + compose.yml for Dokploy (no domain, no previews)
-vm/                   What gets installed into the VM: systemd units, cloud-init template, agent hook configs, code-server defaults
+crates/devbox-core/vm/  What gets installed into the VM, embedded in the CLI: installer, systemd units, cloud-init template, code-server defaults
 docs/                 spec/, guides (dotfiles.md, deploy-gateway.md, …); milestones.md + agent-workflow.md until 1.0
 tests/                every test that is not a small pure-function unit test (spec 15)
 reference/            the working prototype and cestmoi's current setup; read-only input, deleted before 1.0
@@ -68,7 +68,8 @@ Host (written by `devbox up`, spec 09):
 | `/etc/devbox/devbox.toml` | host config (0644): instance, domain + hosts, idle, VM address, ports, deploy settings |
 | `/etc/devbox/secrets.toml` | host secrets (0600, owned by the gateway container's uid, spec 14): wake password hash, cookie secret, gateway↔hub token |
 | `/var/lib/devbox/gateway/` | gateway state: wake history, last stop, calibration log (bind-mounted into the container) |
-| `/var/lib/devbox/backup/` | everything `devbox up` replaced (Traefik file, firewall rules, Incus config) for `devbox down` |
+| `/var/lib/devbox/backup/<timestamp>/` | everything `devbox up` replaced (Traefik file, firewall rules, Incus config) with a manifest, for `devbox down` |
+| `/var/lib/devbox/provisioned.json` | what `devbox up` installed into the VM (user, agents, a fingerprint), so an unchanged run installs nothing |
 | Traefik dynamic file (e.g. `/etc/dokploy/traefik/dynamic/devbox.yml`) | routes for `code.` and `agents.` to the gateway |
 | Dokploy compose app `devbox-gateway` | the gateway container (`/etc/devbox` read-only, Incus socket, state dir) |
 

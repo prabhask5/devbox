@@ -59,7 +59,7 @@ Every key except `version` is optional; without a manifest devbox uses its defau
 
 ## Acceptance
 
-- [ ] Manifest schema (01) with golden validation errors.
-- [ ] Provisioning with a fixture dotfiles repo: packages, links, Claude settings merge, instructions, install hook run once per provisioning, context dir honoured.
-- [ ] No manifest → defaults; manifest with only some keys → the rest default.
-- [ ] `docs/dotfiles.md` (already written; keep it current) walks through creating a dotfiles repo from scratch and migrating an existing one (tested by the docs link checker and an example repo fixture under `tests/fixtures/dotfiles/`).
+- [x] Manifest schema (01) with golden validation errors. (`tests/fixtures/config/dotfiles.*`)
+- [x] Provisioning with a fixture dotfiles repo: packages, links, Claude settings merge, instructions, install hook run once per provisioning, context dir honoured. (`tests/rust/tests/vm_bundle.rs` runs the real `dotfiles.sh` on `tests/fixtures/dotfiles/`; `dotfiles_are_cloned_read_and_applied` in `setup.rs`; the hooks merge: `tests/go/hooks`; the context dir: `tests/rust/tests/context.rs`)
+- [x] No manifest → defaults; manifest with only some keys → the rest default. (`dotfiles_are_cloned_read_and_applied`; `tests/fixtures/config/dotfiles.*`)
+- [x] `docs/dotfiles.md` (kept current) walks through creating a dotfiles repo from scratch and migrating an existing one (tested by the docs link checker and an example repo fixture under `tests/fixtures/dotfiles/`).

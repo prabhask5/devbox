@@ -94,6 +94,7 @@ func (g *Gateway) runWake(reason string) {
 	g.markActivity()
 	g.update(func() {
 		g.wake, g.phase = w, proto.GatewayPhaseWaking
+		g.transitions++
 		w.eta = estimate(g.history, w.kind)
 	})
 
@@ -102,6 +103,7 @@ func (g *Gateway) runWake(reason string) {
 	g.update(func() {
 		w.current = nil
 		g.phase = proto.GatewayPhaseIdle
+		g.transitions++
 		if err != nil {
 			w.err = err.Error()
 			return
