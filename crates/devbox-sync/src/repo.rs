@@ -107,8 +107,10 @@ fn apply_stash(git: Git, base: &str, stash: &str) -> bool {
 fn restore(git: Git, before: &str, stash: Option<&str>) -> Result<(), ()> {
     git.ok(&["rebase", "--abort"]);
     git.ok(&["reset", "--hard", "--quiet", before]);
-    git.ok(&["clean", "-fdq"]);
+    // Untracked files are removed only when a stash holds every one of them: then all that is
+    // left to remove is what a failed attempt created. Without a stash nothing is cleaned.
     let Some(stash) = stash else { return Ok(()) };
+    git.ok(&["clean", "-fdq"]);
     if apply_stash(git, before, stash) {
         drop_stash(git, stash);
         Ok(())
