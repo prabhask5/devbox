@@ -64,8 +64,9 @@ e2e() { step "e2e"; echo "no end-to-end scenarios yet"; }
 
 # Static release binaries in bin/. DEVBOX_RUST_TARGET (a linux musl triple, set per runner in CI) builds one
 # architecture; without it the Go binaries are cross-compiled for both and `devbox` is built for this machine.
-# TODO(M3): the gateway container image.
+# DEVBOX_DOCKER=1 (set in CI) also builds and checks the gateway image.
 build() {
+  if [[ ${DEVBOX_DOCKER:-} == 1 ]]; then step "gateway image"; scripts/check-image.sh; fi
   local archs="amd64 arm64" target=${DEVBOX_RUST_TARGET:-} arch cmd
   case $target in
     "") ;;
@@ -98,6 +99,7 @@ budgets() {
   step "measure the gateway"
   go build -o target/budgets/devbox-gateway ./cmd/devbox-gateway
   go run ./tests/perf/gateway -gateway target/budgets/devbox-gateway
+  if [[ ${DEVBOX_DOCKER:-} == 1 ]]; then step "measure the gateway image"; scripts/check-image.sh --measure; fi
   step "budgets"; scripts/budgets.sh
 }
 

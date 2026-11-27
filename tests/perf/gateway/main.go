@@ -5,6 +5,8 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"compress/gzip"
 	"context"
 	"flag"
 	"fmt"
@@ -87,6 +89,16 @@ func measure(out, binary string, idleFor time.Duration) error {
 	}
 	results["wake_overhead_ms"] = median(wake)
 	env.close()
+
+	if page, err := os.ReadFile("internal/gateway/boot.gen.html"); err == nil {
+		var compressed bytes.Buffer
+		writer, _ := gzip.NewWriterLevel(&compressed, gzip.BestCompression)
+		_, _ = writer.Write(page)
+		_ = writer.Close()
+		results["boot_screen_kb_gzip"] = float64(compressed.Len()) / 1024
+	} else {
+		return err
+	}
 
 	if binary != "" {
 		rss, cpu, err := idle(binary, idleFor)

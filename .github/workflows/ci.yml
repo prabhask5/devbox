@@ -103,6 +103,7 @@ jobs:
       - run: scripts/ci.sh build
         env:
           DEVBOX_RUST_TARGET: ${{ matrix.target }}
+          DEVBOX_DOCKER: 1
       - name: Binaries are static
         run: |
           for f in bin/*; do file "$f"; file "$f" | grep -qE 'statically linked|static-pie linked'; done
@@ -116,6 +117,8 @@ jobs:
       - uses: ./.github/actions/setup
         with: { go: true, rust: true, web: true }
       - run: scripts/ci.sh budgets
+        env:
+          DEVBOX_DOCKER: 1
 
   required:
     name: required

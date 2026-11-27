@@ -362,6 +362,12 @@ func TestBinary(t *testing.T) {
 		t.Errorf("status: %+v", status)
 	}
 
+	// The container's health check: a gateway that answers is healthy, configured or not.
+	check := exec.Command(bin, "healthcheck", "--config-dir", filepath.Join(dir, "etc"), "--listen", address)
+	if out, err := check.CombinedOutput(); err != nil || string(out) != "problem\n" {
+		t.Errorf("healthcheck of a running gateway: %v: %s", err, out)
+	}
+
 	if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
 		t.Fatal(err)
 	}
@@ -370,6 +376,14 @@ func TestBinary(t *testing.T) {
 	}
 	if err := cmd.Wait(); err != nil || !strings.Contains(line, "devbox-gateway stopped") {
 		t.Errorf("exit: %v, last log line: %s", err, line)
+	}
+
+	check = exec.Command(bin, "healthcheck", "--listen", address)
+	if out, err := check.CombinedOutput(); check.ProcessState.ExitCode() != 1 || !strings.Contains(string(out), "devbox-gateway healthcheck: ") {
+		t.Errorf("healthcheck of a stopped gateway: exit %d, %v: %s", check.ProcessState.ExitCode(), err, out)
+	}
+	if extra := exec.Command(bin, "serve"); extra.Run() == nil || extra.ProcessState.ExitCode() != 2 {
+		t.Errorf("unknown command: exit %d", extra.ProcessState.ExitCode())
 	}
 
 	usage := exec.Command(bin, "--no-such-flag")
