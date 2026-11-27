@@ -12,6 +12,9 @@ use serde_json::{Value, json};
 
 const HEALTH_OK: &str = r#"{"v":1,"status":"ok","problems":[],"vm":"running","phase":"idle","checkedAt":1790000000000}"#;
 
+/// What the checks inside a VM print when everything is as it should be.
+const VM_FINE: &str = "code_server=active\nhub=active\ntmux=active\ncontext_timer=active\nagent_claude=yes\nagent_codex=yes\nagent_opencode=yes\nhooks_claude=yes\nhooks_codex=yes\nhooks_opencode=yes\nsync=2026-09-21T14:00:00Z\ncontext=2026-09-21T12:00:00Z\ndotfiles=0 0\n";
+
 #[allow(clippy::unnecessary_wraps)] // the shape a program handler answers in
 fn printed(text: &str) -> Option<Output> {
     Some(Output { code: Some(0), stdout: text.as_bytes().to_vec(), ..Output::default() })
@@ -28,6 +31,9 @@ fn host() -> FakeSystem {
         _ => printed("29.1.0\n"),
     });
     system.prints("chown", "");
+    system.program("getent", |command| {
+        printed(&format!("203.0.113.7 {}\n", command.args.last().map_or_default(String::as_str)))
+    });
     system.prints("systemctl", "");
     system.program("sh", |command| {
         let script = command.args.get(1).map_or_default(String::as_str);
@@ -37,6 +43,8 @@ fn host() -> FakeSystem {
         let url = command.args.last().map_or_default(String::as_str);
         if url.ends_with("/__devbox/health") {
             printed(HEALTH_OK)
+        } else if url.ends_with("/__devbox/status") {
+            printed(r#"{"v":1,"version":"3f9c2d1","phase":"idle","vm":"running","lastStop":{"at":1789990000000,"reason":"idle","mode":"stateful","ms":4200}}"#)
         } else if url.ends_with("/releases/latest") {
             printed(r#"{"tag_name": "v1.2.3"}"#)
         } else {
@@ -56,6 +64,8 @@ fn host() -> FakeSystem {
                 (0, "1000\n1000\n/home/dev\n".to_owned(), String::new())
             } else if script.starts_with("id -u") {
                 (1, String::new(), "id: no such user\n".to_owned())
+            } else if script.contains("echo \"code_server=") {
+                (0, VM_FINE.to_owned(), String::new())
             } else {
                 (0, "done\n".to_owned(), String::new())
             }
@@ -721,4 +731,216 @@ fn dotfiles_are_cloned_read_and_applied() {
         .unwrap()
     });
     assert!(hub.contains("app_password_hash = '$argon2id$"), "{hub}");
+}
+
+/// A fresh host after `devbox up`.
+fn set_up() -> FakeSystem {
+    let system = dokploy();
+    let mut args = vec!["up"];
+    args.extend(FRESH);
+    args.push("--yes");
+    let (code, out, err) = devbox(&system, &args);
+    assert_eq!(code, ExitCode::SUCCESS, "{out}{err}");
+    system
+}
+
+#[test]
+fn status_and_connect_on_a_host_that_is_set_up() {
+    let before = dokploy();
+    let (code, out, err) = devbox(&before, &["status"]);
+    assert_eq!((code, out.as_str()), (ExitCode::from(2), ""));
+    assert_eq!(
+        err,
+        "devbox status: this host is not set up: /etc/devbox/devbox.toml is missing or not valid. Run `devbox up --domain <your domain>`; `devbox doctor` says what is wrong with a file that is there.\n"
+    );
+
+    let system = set_up();
+    let files = system.files();
+    let (code, out, err) = devbox(&system, &["status"]);
+    assert_eq!((code, err.as_str()), (ExitCode::SUCCESS, ""));
+    golden("status.txt", &out);
+    let (code, out, _) = devbox(&system, &["status", "--json"]);
+    assert_eq!(code, ExitCode::SUCCESS);
+    golden("status.json", &out);
+    let (code, out, _) = devbox(&system, &["connect"]);
+    assert_eq!(code, ExitCode::SUCCESS);
+    golden("connect.txt", &out);
+    assert_eq!(system.files(), files, "looking changed something");
+
+    // Asleep with its memory saved, and a gateway that reports a problem.
+    system.incus(|incus| {
+        let vm = incus.instances.get_mut("devbox").unwrap();
+        "Stopped".clone_into(&mut vm.status);
+        vm.stateful = true;
+    });
+    system.program("curl", |command| {
+        command.args.last().is_some_and(|url| url.ends_with("/__devbox/health")).then(|| Output {
+            code: Some(0),
+            stdout: br#"{"v":1,"status":"problem","problems":["the last wake failed: incus: Failed to start device \"eth0\""],"vm":"stopped","phase":"idle","checkedAt":1}"#.to_vec(),
+            ..Output::default()
+        })
+    });
+    let (_, out, _) = devbox(&system, &["status"]);
+    assert!(out.contains("  VM          devbox: asleep, its memory saved, 10.77.0.10\n"), "{out}");
+    assert!(out.contains("  Health      problem\n              ✗ the last wake failed: incus: Failed to start device \"eth0\"\n"), "{out}");
+}
+
+#[test]
+fn doctor_checks_every_part_and_says_how_to_fix_what_fails() {
+    let system = set_up();
+    let (code, out, err) = devbox(&system, &["doctor"]);
+    assert_eq!((code, err.as_str()), (ExitCode::SUCCESS, ""), "{out}");
+    golden("doctor-healthy.txt", &out);
+    let (code, out, _) = devbox(&system, &["doctor", "--json"]);
+    assert_eq!(code, ExitCode::SUCCESS);
+    golden("doctor-healthy.json", &out);
+
+    // Things go wrong: the VM starts with the host again, the agents host has no DNS record,
+    // Codex lost its hooks, the dotfiles have work that is not pushed, the hub is down.
+    system.incus(|incus| {
+        let vm = incus.instances.get_mut("devbox").unwrap();
+        vm.config.insert("boot.autostart".to_owned(), "true".to_owned());
+        incus.inside = Some(Box::new(|_: &[String]| {
+            let report = VM_FINE
+                .replace("hooks_codex=yes", "hooks_codex=no")
+                .replace("dotfiles=0 0", "dotfiles=2 1")
+                .replace("hub=active", "hub=failed");
+            (0, report, String::new())
+        }));
+    });
+    system.program("getent", |command| {
+        let host = command.args.last().map_or_default(String::as_str);
+        Some(Output {
+            code: Some(if host.starts_with("agents.") { 2 } else { 0 }),
+            stdout: if host.starts_with("agents.") {
+                Vec::new()
+            } else {
+                b"203.0.113.7 x\n".to_vec()
+            },
+            ..Output::default()
+        })
+    });
+    system.set_mode_of("/etc/devbox/secrets.toml", 0o644);
+    let (code, out, _) = devbox(&system, &["doctor"]);
+    assert_eq!(code, ExitCode::from(1));
+    golden("doctor-problems.txt", &out);
+    let (code, json, _) = devbox(&system, &["doctor", "--json"]);
+    assert_eq!(code, ExitCode::from(1));
+    let report: Value = serde_json::from_str(&json).unwrap();
+    assert_eq!(report["ok"], false);
+    let failed: Vec<&str> = report["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|check| check["result"] == "fail")
+        .map(|check| check["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(failed, ["secrets", "autostart", "dns-agents", "hub", "hooks-codex", "dotfiles"]);
+
+    // Asleep: what is inside the VM cannot be looked at, which is said, and is not a failure.
+    let asleep = set_up();
+    asleep.incus(|incus| {
+        "Stopped".clone_into(&mut incus.instances.get_mut("devbox").unwrap().status);
+    });
+    let (code, out, _) = devbox(&asleep, &["doctor"]);
+    assert_eq!(code, ExitCode::SUCCESS, "{out}");
+    assert!(out.contains("  · Inside the VM: services, agents, hooks, sync, context, dotfiles — the VM is asleep: open the editor to wake it, then run `devbox doctor` again\n"), "{out}");
+
+    // Nothing set up at all: the two things to start with.
+    let (code, out, _) = devbox(&dokploy(), &["doctor"]);
+    assert_eq!(code, ExitCode::from(1));
+    assert!(out.contains("  ✗ The host config is valid — /etc/devbox/devbox.toml is missing\n      fix: run `devbox up --domain <your domain>`\n"), "{out}");
+}
+
+#[test]
+fn passwords_are_rotated_and_everybody_is_signed_out() {
+    let system = set_up();
+    system.put("/run/secrets/new", "FAKE-new-password\n");
+    let secrets = |system: &FakeSystem| {
+        devbox_core::config::host_secrets(
+            "secrets.toml",
+            &system.text("/etc/devbox/secrets.toml").unwrap(),
+        )
+        .unwrap()
+        .value
+    };
+    let before = secrets(&system);
+    let (code, out, err) =
+        devbox(&system, &["password", "wake", "--password-file", "/run/secrets/new"]);
+    assert_eq!((code, err.as_str()), (ExitCode::SUCCESS, ""));
+    assert_eq!(
+        out,
+        "The password is changed. Every device that was signed in has to sign in again.\n"
+    );
+    let after = secrets(&system);
+    assert!(
+        devbox_core::password::verify(after.wake_password_hash.expose(), "FAKE-new-password")
+            .unwrap()
+    );
+    assert!(
+        !devbox_core::password::verify(after.wake_password_hash.expose(), "FAKE-wake-password")
+            .unwrap()
+    );
+    assert_ne!(
+        after.cookie_secret.expose(),
+        before.cookie_secret.expose(),
+        "old cookies must stop working"
+    );
+    assert_eq!(after.hub_token.expose(), before.hub_token.expose());
+    assert_eq!(system.files()["/etc/devbox/secrets.toml"].0, 0o600);
+
+    // The app's password lives in the VM: its secrets file is rewritten there and the hub restarted.
+    system.incus(|incus| {
+        let vm = incus.instances.get_mut("devbox").unwrap();
+        let pushed = vm.files["/var/lib/devbox-install/hub.secrets.toml"].clone();
+        let with_keys = String::from_utf8(pushed.data).unwrap() + "\n# Web push keys, generated by devbox-hub.\nvapid_public_key = \"FAKE-public\"\nvapid_private_key = \"FAKE-private\"\n";
+        vm.files.insert("/home/dev/.config/devbox/hub.secrets.toml".to_owned(), devbox_core::fake::PushedFile { data: with_keys.into_bytes(), mode: 0o600, owner: (1000, 1000) });
+        incus.inside = Some(Box::new(|command: &[String]| {
+            let script = command.get(2).map_or_default(String::as_str);
+            if script.starts_with("id -u") { (0, "1000\n1000\n/home/dev\n".to_owned(), String::new()) } else { (0, String::new(), String::new()) }
+        }));
+    });
+    let (code, _, err) =
+        devbox(&system, &["password", "app", "--password-file", "/run/secrets/new"]);
+    assert_eq!((code, err.as_str()), (ExitCode::SUCCESS, ""));
+    system.incus(|incus| {
+        let vm = &incus.instances["devbox"];
+        let file = &vm.files["/home/dev/.config/devbox/hub.secrets.toml"];
+        assert_eq!((file.mode, file.owner), (0o600, (1000, 1000)));
+        let hub = devbox_core::config::hub_secrets(
+            "hub.secrets.toml",
+            &String::from_utf8(file.data.clone()).unwrap(),
+        )
+        .unwrap()
+        .value;
+        assert!(
+            devbox_core::password::verify(hub.app_password_hash.expose(), "FAKE-new-password")
+                .unwrap()
+        );
+        assert_eq!(
+            hub.vapid_public_key.as_deref(),
+            Some("FAKE-public"),
+            "the devices' subscriptions survive"
+        );
+        assert!(
+            vm.executed.last().unwrap().0[2]
+                .contains("systemctl --user restart devbox-hub.service")
+        );
+    });
+
+    // Asleep, the app's password cannot be reached; nothing wakes the VM for it.
+    system.incus(|incus| {
+        "Stopped".clone_into(&mut incus.instances.get_mut("devbox").unwrap().status);
+    });
+    let (code, _, err) =
+        devbox(&system, &["password", "app", "--password-file", "/run/secrets/new"]);
+    assert_eq!(code, ExitCode::from(2));
+    assert_eq!(
+        err,
+        "devbox password: the VM is not running, and the app's password is kept in it. Wake it (open https://code.example.com) and run this again.\n"
+    );
+    assert_eq!(
+        devbox(&dokploy(), &["password", "wake", "--password-file", "/run/secrets/wake"]).2,
+        "devbox password: /etc/devbox/secrets.toml is missing: run `devbox up` first.\n"
+    );
 }

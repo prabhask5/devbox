@@ -1,4 +1,4 @@
-//! Every `devbox` command exists; those without behaviour yet say so.
+//! The `devbox` command line itself: help, version, usage errors.
 
 use std::process::ExitCode;
 
@@ -7,18 +7,6 @@ fn devbox(args: &[&str]) -> (ExitCode, String, String) {
     let code =
         devbox_cli::run(std::iter::once("devbox").chain(args.iter().copied()), &mut out, &mut err);
     (code, String::from_utf8(out).unwrap(), String::from_utf8(err).unwrap())
-}
-
-#[test]
-fn commands_without_behaviour_say_so() {
-    let commands: [&[&str]; 5] =
-        [&["status"], &["doctor"], &["connect"], &["password", "wake"], &["password", "app"]];
-    for args in commands {
-        let (code, out, err) = devbox(args);
-        assert_eq!(code, ExitCode::from(3), "{args:?}");
-        assert_eq!(out, "", "{args:?}");
-        assert_eq!(err, format!("devbox {}: not implemented yet\n", args.join(" ")), "{args:?}");
-    }
 }
 
 #[test]

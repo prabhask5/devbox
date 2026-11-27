@@ -302,6 +302,7 @@ pub(crate) fn provision(
         record["instance"] = json!(desired.instance);
         record["user"] = json!(desired.user);
         record["stamp"] = json!(provision.stamp);
+        record["agents"] = json!(provision.agents);
     })
 }
 

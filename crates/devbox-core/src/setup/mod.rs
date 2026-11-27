@@ -17,10 +17,13 @@ use crate::{config, password, time};
 
 mod backup;
 pub mod files;
+mod inspect;
+pub mod rotate;
 mod steps;
 mod vm;
 
 pub use backup::down;
+pub use inspect::{doctor, render_doctor, render_status, status};
 
 /// The container the gateway runs in.
 pub const GATEWAY_CONTAINER: &str = "devbox-gateway";

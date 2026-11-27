@@ -447,6 +447,13 @@ impl FakeSystem {
             .insert(PathBuf::from(path), File { data: data.as_ref().to_vec(), mode: 0o644 });
     }
 
+    /// Sets the permission bits of a file that is there.
+    pub fn set_mode_of(&self, path: &str, mode: u32) {
+        if let Some(file) = self.state().files.get_mut(Path::new(path)) {
+            file.mode = mode;
+        }
+    }
+
     /// Sets a variable of the environment.
     pub fn set_env(&self, name: &str, value: &str) {
         self.state().env.insert(name.to_owned(), value.to_owned());

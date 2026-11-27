@@ -13,9 +13,6 @@ use devbox_core::setup::{self, Firewall, Passwords, Paths, Routing, UpOptions};
 use devbox_core::system::{Host, System};
 use devbox_sync::Event;
 
-/// Exit code of a command that exists but has no behaviour yet.
-pub const EXIT_NOT_IMPLEMENTED: u8 = 3;
-
 /// A personal development machine on your own server.
 #[derive(Parser)]
 #[command(name = "devbox", version, propagate_version = true)]
@@ -38,15 +35,26 @@ enum Command {
         yes: bool,
     },
     /// Show the VM, gateway, routing, hub and health on one screen
-    Status,
+    Status {
+        /// Print it as JSON
+        #[arg(long)]
+        json: bool,
+    },
     /// Run every check and print the fix for each failure
-    Doctor,
+    Doctor {
+        /// Print the checks as JSON
+        #[arg(long)]
+        json: bool,
+    },
     /// Print the URLs, an SSH config snippet and how to install the phone app
     Connect,
     /// Rotate a password
     Password {
         /// Which password to rotate
         which: PasswordKind,
+        /// A file with the new password, instead of being asked for it
+        #[arg(long, value_name = "FILE")]
+        password_file: Option<PathBuf>,
     },
     /// Clone and update every repository without losing local work
     Sync {
@@ -190,11 +198,10 @@ impl Command {
         match self {
             Self::Up(_) => "up",
             Self::Down { .. } => "down",
-            Self::Status => "status",
-            Self::Doctor => "doctor",
+            Self::Status { .. } => "status",
+            Self::Doctor { .. } => "doctor",
             Self::Connect => "connect",
-            Self::Password { which: PasswordKind::Wake } => "password wake",
-            Self::Password { which: PasswordKind::App } => "password app",
+            Self::Password { .. } => "password",
             Self::Sync { .. } => "sync",
             Self::Context { .. } => "context",
         }
@@ -460,6 +467,75 @@ fn down(
     }
 }
 
+/// Exit code of `devbox doctor` when a check failed.
+pub const EXIT_UNHEALTHY: u8 = 1;
+
+/// `devbox status`, `doctor`, `connect` and `password`: looking at a host that is set up, and
+/// changing a password on it.
+fn maintain(
+    system: &dyn System,
+    command: &Command,
+    stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
+) -> ExitCode {
+    let paths = Paths::from_env(system);
+    let pretty =
+        |value: &serde_json::Value| serde_json::to_string_pretty(value).unwrap_or_default();
+    let outcome: Result<(String, u8), String> = match command {
+        Command::Status { json } => setup::status(system, &paths)
+            .map(|status| {
+                (if *json { pretty(&status) + "\n" } else { setup::render_status(&status) }, 0)
+            })
+            .map_err(|error| error.to_string()),
+        Command::Doctor { json } => {
+            let report = setup::doctor(system, &paths);
+            let code = if report["ok"] == true { 0 } else { EXIT_UNHEALTHY };
+            Ok((if *json { pretty(&report) + "\n" } else { setup::render_doctor(&report) }, code))
+        }
+        Command::Connect => setup::status(system, &paths)
+            .map(|status| {
+                let text =
+                    |value: &serde_json::Value| value.as_str().unwrap_or("<user>").to_owned();
+                let hosts = &status["hosts"];
+                (
+                    setup::connect(
+                        &text(&hosts["code"]),
+                        &text(&hosts["agents"]),
+                        &text(&status["vm"]["user"]),
+                    ),
+                    0,
+                )
+            })
+            .map_err(|error| error.to_string()),
+        Command::Password { which, password_file } => {
+            let what = match which {
+                PasswordKind::Wake => "The new password that wakes the VM",
+                PasswordKind::App => "The new password of the agents app",
+            };
+            password(system, password_file.as_ref(), what, true).and_then(|new| {
+                let new = new.unwrap_or_default();
+                let changed = match which {
+                    PasswordKind::Wake => setup::rotate::wake(system, &paths, &new),
+                    PasswordKind::App => setup::rotate::app(system, &paths, &new),
+                };
+                let said = "The password is changed. Every device that was signed in has to sign in again.\n";
+                changed.map(|()| (said.to_owned(), 0)).map_err(|error| error.to_string())
+            })
+        }
+        _ => Ok((String::new(), 0)),
+    };
+    match outcome {
+        Ok((text, code)) => {
+            let _ = write!(stdout, "{text}");
+            ExitCode::from(code)
+        }
+        Err(why) => {
+            let _ = writeln!(stderr, "devbox {}: {why}", command.name());
+            ExitCode::from(EXIT_FAILED)
+        }
+    }
+}
+
 /// `devbox context`: the facts about how the owner works, written where agents read them.
 fn context(
     system: &dyn System,
@@ -538,14 +614,12 @@ where
         }
     };
     match cli.command {
-        Command::Sync { json, repo } => return sync(system, json, repo, stdout, stderr),
+        Command::Up(args) => up(system, &args, stdout, stderr),
+        Command::Down { destroy, yes } => down(system, destroy, yes, stdout, stderr),
+        Command::Sync { json, repo } => sync(system, json, repo, stdout, stderr),
         Command::Context { commit, no_ai, print } => {
-            return context(system, (commit, no_ai, print), stdout, stderr);
+            context(system, (commit, no_ai, print), stdout, stderr)
         }
-        Command::Up(args) => return up(system, &args, stdout, stderr),
-        Command::Down { destroy, yes } => return down(system, destroy, yes, stdout, stderr),
-        _ => {}
+        other => maintain(system, &other, stdout, stderr),
     }
-    let _ = writeln!(stderr, "devbox {}: not implemented yet", cli.command.name());
-    ExitCode::from(EXIT_NOT_IMPLEMENTED)
 }
