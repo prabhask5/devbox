@@ -10,10 +10,11 @@
     "build": "pnpm -r run build",
     "test": "pnpm -r run test",
     "typecheck": "pnpm -r run typecheck",
-    "lint": "cd .. && eslint --config web/eslint.config.js --max-warnings 0 web tests/web",
-    "format": "cd .. && prettier --config web/.prettierrc.json --ignore-path web/.prettierignore --write web tests/web",
-    "format:check": "cd .. && prettier --config web/.prettierrc.json --ignore-path web/.prettierignore --check web tests/web",
-    "knip": "knip && knip --directory ../tests/web"
+    "lint": "cd .. && eslint --config web/eslint.config.js --max-warnings 0 web tests/web tests/e2e",
+    "format": "cd .. && prettier --config web/.prettierrc.json --ignore-path web/.prettierignore --write web tests/web tests/e2e",
+    "format:check": "cd .. && prettier --config web/.prettierrc.json --ignore-path web/.prettierignore --check web tests/web tests/e2e",
+    "knip": "knip && knip --directory ../tests/web && knip --directory ../tests/e2e",
+    "e2e": "pnpm --filter devbox-e2e exec playwright test"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -20,6 +20,7 @@ type bootData struct {
 	App          string `json:"app"` // "code" or "agents"
 	NeedsAuth    bool   `json:"needsAuth"`
 	Error        string `json:"error,omitempty"`
+	Next         string `json:"next,omitempty"` // after a failed sign-in: the page still to return to
 	UpstreamDown bool   `json:"upstreamDown,omitempty"`
 	Unconfigured bool   `json:"unconfigured,omitempty"`
 }
@@ -141,12 +142,13 @@ func isJSON(r *http.Request) bool {
 // screen's form posts here and is redirected; the agents app posts JSON and gets a status.
 func (g *Gateway) serveLogin(w http.ResponseWriter, r *http.Request, s *settings) {
 	asJSON := isJSON(r)
+	next := "/"
 	fail := func(code int, message string) {
 		if asJSON {
 			writeJSON(w, code, map[string]string{"error": message})
 			return
 		}
-		g.serveBoot(w, r, s, bootData{NeedsAuth: true, Error: message}, code)
+		g.serveBoot(w, r, s, bootData{NeedsAuth: true, Error: message, Next: next}, code)
 	}
 	if s == nil {
 		fail(http.StatusServiceUnavailable, "devbox is not set up yet")
@@ -174,6 +176,7 @@ func (g *Gateway) serveLogin(w http.ResponseWriter, r *http.Request, s *settings
 		values, _ := url.ParseQuery(string(body))
 		form.Password, form.Next = values.Get("password"), values.Get("next")
 	}
+	next = safeNext(form.Next)
 
 	if !g.login.allow(clientAddress(r), g.now()) {
 		fail(http.StatusTooManyRequests, "Too many attempts, wait a minute.")
@@ -190,7 +193,7 @@ func (g *Gateway) serveLogin(w http.ResponseWriter, r *http.Request, s *settings
 		writeJSON(w, http.StatusAccepted, map[string]bool{"ok": true})
 		return
 	}
-	http.Redirect(w, r, safeNext(form.Next), http.StatusSeeOther)
+	http.Redirect(w, r, next, http.StatusSeeOther)
 }
 
 // serveEvents streams the gateway status: once at the start, then whenever it changes.

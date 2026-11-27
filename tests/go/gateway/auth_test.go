@@ -16,7 +16,7 @@ func TestLoginWithTheForm(t *testing.T) {
 	h := start(t, stoppedVM(true))
 	wrong := h.do("POST", codeHost, "/__devbox/login", url.Values{"password": {"FAKE-wrong"}, "next": {"/workspace?x=1"}}.Encode(), form)
 	boot := wrong.boot(t)
-	if wrong.code != 401 || boot["needsAuth"] != true || boot["error"] != "Wrong password." || wrong.header.Get("Set-Cookie") != "" {
+	if wrong.code != 401 || boot["needsAuth"] != true || boot["error"] != "Wrong password." || boot["next"] != "/workspace?x=1" || wrong.header.Get("Set-Cookie") != "" {
 		t.Errorf("wrong password: HTTP %d %v %v", wrong.code, boot, wrong.header)
 	}
 	never(t, "a wake after a wrong password", func() bool { return len(h.incus.StateChanges()) > 0 })

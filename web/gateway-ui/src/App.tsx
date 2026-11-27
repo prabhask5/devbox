@@ -8,6 +8,8 @@ export interface Boot {
   app: "code" | "agents";
   needsAuth: boolean;
   error?: string;
+  /** After a failed sign-in: the page the form should still return to. */
+  next?: string;
   upstreamDown?: boolean;
   unconfigured?: boolean;
 }

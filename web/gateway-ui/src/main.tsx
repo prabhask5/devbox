@@ -6,7 +6,7 @@ import "./styles.css";
 
 const boot = JSON.parse(document.getElementById("devbox-boot")?.textContent ?? "{}") as Boot;
 const root = document.getElementById("app");
-const next = location.pathname + location.search + location.hash;
+const next = boot.next ?? location.pathname + location.search + location.hash;
 document.title = `${boot.app === "agents" ? "Agents" : "Code"} · devbox`;
 
 let status: GatewayStatus | undefined;

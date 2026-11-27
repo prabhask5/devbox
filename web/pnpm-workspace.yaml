@@ -3,3 +3,4 @@ packages:
   - hub-app
   - shared
   - ../tests/web
+  - ../tests/e2e
