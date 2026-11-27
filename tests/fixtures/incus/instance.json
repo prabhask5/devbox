@@ -1,0 +1,45 @@
+{
+  "type": "sync",
+  "status": "Success",
+  "status_code": 200,
+  "operation": "",
+  "error_code": 0,
+  "error": "",
+  "metadata": {
+    "architecture": "x86_64",
+    "config": {
+      "image.architecture": "amd64",
+      "image.description": "Ubuntu noble amd64",
+      "image.os": "Ubuntu",
+      "image.release": "noble",
+      "limits.cpu": "3",
+      "limits.memory": "8GiB",
+      "migration.stateful": "true",
+      "volatile.uuid": "0b6f3a52-9d2c-4c2e-8a55-3f1b8a2f7c10"
+    },
+    "created_at": "2026-01-02T03:04:05.123456789Z",
+    "description": "",
+    "devices": {
+      "root": { "path": "/", "pool": "default", "size": "60GiB", "size.state": "9GiB", "type": "disk" }
+    },
+    "ephemeral": false,
+    "expanded_config": {
+      "limits.cpu": "3",
+      "limits.memory": "8GiB",
+      "migration.stateful": "true"
+    },
+    "expanded_devices": {
+      "eth0": { "ipv4.address": "10.77.0.10", "name": "eth0", "network": "incusbr0", "type": "nic" },
+      "root": { "path": "/", "pool": "default", "size": "60GiB", "size.state": "9GiB", "type": "disk" }
+    },
+    "last_used_at": "2026-02-03T04:05:06.123456789Z",
+    "location": "none",
+    "name": "devbox",
+    "profiles": ["default"],
+    "project": "default",
+    "stateful": true,
+    "status": "Stopped",
+    "status_code": 102,
+    "type": "virtual-machine"
+  }
+}

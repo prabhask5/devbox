@@ -1,0 +1,22 @@
+{
+  "type": "async",
+  "status": "Operation created",
+  "status_code": 100,
+  "operation": "/1.0/operations/6f2c1d5e-8a3b-4c7d-9e1f-2a3b4c5d6e7f",
+  "error_code": 0,
+  "error": "",
+  "metadata": {
+    "id": "6f2c1d5e-8a3b-4c7d-9e1f-2a3b4c5d6e7f",
+    "class": "task",
+    "description": "Starting instance",
+    "created_at": "2026-02-03T04:05:06.123456789Z",
+    "updated_at": "2026-02-03T04:05:06.123456789Z",
+    "status": "Running",
+    "status_code": 103,
+    "resources": { "instances": ["/1.0/instances/devbox"] },
+    "metadata": null,
+    "may_cancel": false,
+    "err": "",
+    "location": "none"
+  }
+}
