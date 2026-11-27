@@ -56,8 +56,9 @@ func main() {
 	agents := flag.String("agents", "127.0.0.1:47102", "HTTPS address that is the agents app's host")
 	flag.Parse()
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
-	defer stop()
-	if err := run(ctx, *control, *code, *agents); err != nil {
+	err := run(ctx, *control, *code, *agents)
+	stop()
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "harness:", err)
 		os.Exit(1)
 	}

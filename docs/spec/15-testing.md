@@ -28,7 +28,7 @@ Small pure-function unit tests may live next to the code (`*_test.go` in the sam
 
 ## The full-stack harness (`tests/e2e/harness`)
 
-One command (`scripts/e2e.sh`) starts: fake Incus → real gateway (with config in a temp `/etc/devbox`) → fake code-server → real hub (in a temp HOME with real tmux on a temp socket and fake agents on PATH) → fake push service. Scenarios (Playwright where a browser is involved, Go tests otherwise):
+One command (`scripts/e2e.sh`) starts: fake Incus → real gateway (with config in a temp `/etc/devbox`) → fake code-server → real hub (in a temp HOME with real tmux on a temp socket and fake agents on PATH) → fake push service. The harness is a Go program (`go run ./tests/e2e/harness`, started by Playwright): the gateway runs in-process with shortened timings behind a TLS front that plays Traefik — one HTTPS port per public host (`127.0.0.1:47101` is the editor, `:47102` the agents app), self-signed — and a control API (`:47100`: `POST /reset` for a fresh asleep stack, `POST /set` to inject faults, `GET /incus` for what Incus was asked to do). Until the hub exists its place is taken by a fake that answers the gateway API. Scenarios (Playwright where a browser is involved, Go tests otherwise):
 
 1. Asleep → visit code host → password → phases → sync (real `devbox sync` over local bare remotes) → proxied page.
 2. Agents app: sign in, start a fake Claude session, permission prompt → push delivered (fake service decrypts it) after the delay → tap the notification URL → Yes → session continues → Stop → finished push.

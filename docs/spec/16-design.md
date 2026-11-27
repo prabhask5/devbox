@@ -37,7 +37,13 @@ The prototype source (`reference/prototype/devbox/hub/public/app.css`, `referenc
 
 Large left-aligned page title with a status pill on the right; uppercase section labels with counts; inset-grouped list rows (badge · name · relative time · two-line subtitle · chips); floating accent **＋** button (56 px, 18 px radius, soft accent glow); bottom tab bar with blur (Sessions / Assistant / Settings, line icons); bottom sheets with a grab handle; segmented control; session header with back chevron and ⋯ menu; red "needs you" banner with the green primary answer button; monospace screen on near-black (`#090b0d`); horizontally scrolling quick-key chips; rounded composer with the accent send button; boot screen: brand dot (pulsing while live), 26 px title, phase list card with ring / spinner / green check icons, repo chips coloured by status. Icons: the prototype's inline SVG line set (no icon fonts, no emoji as UI icons except the notification titles 🔐 ✅ ❌ ⚠️). App icon: `reference/prototype/devbox/hub/public/icon.svg`.
 
+## Visual regression
+
+`tests/e2e/visual/` compares screenshots (390×844 @2x, clock stopped, animations off, fixture data from `tests/fixtures/boot/`) with baselines named `<screen>-<project>-<platform>.png`. The baselines **are the prototype**: `baseline.spec.ts` renders the prototype's page with the same data in the same browser and saves that as the baseline, so the comparison is new UI against approved design with nothing else different. More than 2 % differing pixels fails. States the prototype did not have (`unconfigured`) take their baseline from the new UI and need the owner's approval when they change.
+
+Baselines are per platform; the Linux ones are committed and compared in CI. `scripts/e2e.sh --update-baselines` rewrites them for the current platform; the CI workflow run by hand with `update_baselines` does it on Linux and uploads them as an artifact to commit.
+
 ## Acceptance
 
-- [ ] Visual regression: Playwright screenshots of every screen above (same viewport 390×844 @2x, same fixture data) compared against `reference/design/` re-captured from the prototype as baselines in `tests/e2e/visual/` — differences beyond a small threshold fail and need owner approval.
-- [ ] Tokens generated from `tokens.json` (unit test that CSS variables match the table).
+- [ ] Visual regression: Playwright screenshots of every screen above (same viewport 390×844 @2x, same fixture data) compared against the prototype as baselines in `tests/e2e/visual/` — differences beyond a small threshold fail and need owner approval. (Boot screen: `tests/e2e/visual/boot.spec.ts`; the app screens follow with the hub app.)
+- [x] Tokens generated from `tokens.json` (unit test that CSS variables match the table: `tests/web/tokens.test.ts`).
