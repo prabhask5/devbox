@@ -1,0 +1,8 @@
+{
+  "session_id": "__SESSION__",
+  "transcript_path": "/home/dev/.claude/projects/-home-dev-code-devbox/__SESSION__.jsonl",
+  "cwd": "__CWD__",
+  "permission_mode": "default",
+  "hook_event_name": "UserPromptSubmit",
+  "prompt": "__PROMPT__"
+}

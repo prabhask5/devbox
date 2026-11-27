@@ -203,6 +203,9 @@ func (s Server) EnsureServer(ctx context.Context, session string) error {
 		return nil
 	}
 	_, err := s.run(ctx, "new-session", "-d", "-s", session)
+	if err != nil && strings.Contains(err.Error(), "duplicate session") {
+		return nil // someone else created it between the two commands
+	}
 	return err
 }
 

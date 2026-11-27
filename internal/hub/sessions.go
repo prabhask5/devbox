@@ -235,6 +235,14 @@ func (h *Hub) Send(ctx context.Context, id string, input Input) error {
 		return invalid("%s has no terminal to type into", s.Name)
 	}
 	name := *s.Tmux
+	// The agent will say it is working; show it at once instead of after its hook arrives.
+	// This comes before the keys are sent, so whatever the agent reports next wins.
+	if adapter, _ := AdapterByID(s.Agent); adapter.Hooks && input.Text != "" &&
+		(s.State == proto.SessionStateIdle || s.State == proto.SessionStateNeedsInput) {
+		h.setState(s, proto.SessionStateWorking)
+		s.WaitingFor = nil
+		h.persist(s)
+	}
 	h.mu.Unlock()
 
 	if len(input.Keys) > 0 {
@@ -267,17 +275,6 @@ func (h *Hub) Send(ctx context.Context, id string, input Input) error {
 		}
 	}
 
-	// The agent will say it is working; show it at once instead of after its hook arrives.
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if s, err := h.find(id); err == nil {
-		adapter, _ := AdapterByID(s.Agent)
-		if adapter.Hooks && input.Text != "" && (s.State == proto.SessionStateIdle || s.State == proto.SessionStateNeedsInput) {
-			h.setState(s, proto.SessionStateWorking)
-			s.WaitingFor = nil
-			h.persist(s)
-		}
-	}
 	return nil
 }
 
