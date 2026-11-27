@@ -99,7 +99,10 @@ Specs: 09, 10, 12
 - [ ] Routing (traefik-file), firewall managers (host-firewall, ufw, nftables, moi), Kuma monitor step
 - [ ] `status`, `doctor`, `connect`, `password` with golden `--json`
 - [ ] cestmoi adoption fixture: golden plan, apply, down
-- [ ] moi `System`-adapter proof test; `cargo publish --dry-run` for the library crates
+- [ ] moi embedding contract (spec 12): commands as library functions returning reports + shared renderers; non-interactive `UpOptions` + `Confirm`; `System` extended to the 1:1 moi `host::Host` mapping (modes, `connect_unix`, `metadata`, `symlink`, `set_owner`, `monotonic`, `random_bytes`) with clippy `disallowed-methods` in the library crates; Incus client over `connect_unix`; `firewall::Manager` trait
+- [ ] Library crates' `rust-version` lowered to moi's MSRV (1.88 today) and kept there; shared dependency majors aligned with moi
+- [ ] `tests/compat/moi-consumer` + `compat` CI job (MSRV toolchain, moi's `deny.toml`, dry-run publish, consumer scenarios), part of `required`
+- [ ] `publish-crates.yml` (tags `crates-v*`); after this milestone merges, tag `crates-v0.1.0` so moi can start its devbox milestone
 - [ ] Nightly real-VM workflow (spec 15); it also checks `internal/incus` against a real Incus and replaces the hand-written `tests/fixtures/incus/` with recorded responses
 - [ ] Cleanup pass; `scripts/check-hygiene.sh` green
 

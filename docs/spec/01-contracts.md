@@ -96,6 +96,14 @@ provider = "traefik-file"           # traefik-file | none
 file = "/etc/dokploy/traefik/dynamic/devbox.yml"
 entrypoint = "websecure"
 service_url = "http://devbox-gateway:8080"
+[provision]                         # how `devbox up` built the VM, so it can rebuild it without input (moi restore)
+user = "dev"
+cpu = 3
+memory = "5GiB"
+disk = "60GiB"
+image = "images:ubuntu/26.04/cloud"
+agents = ["claude", "codex", "opencode"]
+dotfiles = "git@github.com:you/dotfiles"   # optional
 [deploy]
 repo = "you/devbox"                  # where GitHub Deployments for the hub are read from
 hub_environment = "agents-hub"
