@@ -67,6 +67,10 @@ impl System for Machine {
         self.files.lock().unwrap().entry(path.to_owned()).or_default().extend_from_slice(data);
         Ok(())
     }
+    fn remove_file(&self, path: &Path) -> io::Result<()> {
+        self.files.lock().unwrap().remove(path);
+        Ok(())
+    }
     fn create_dir_all(&self, _: &Path) -> io::Result<()> {
         Ok(())
     }

@@ -132,6 +132,13 @@ pub trait System: Sync {
     /// As [`std::fs::OpenOptions::open`] and [`std::io::Write::write_all`].
     fn append(&self, path: &Path, data: &[u8]) -> io::Result<()>;
 
+    /// Removes a file; one that is not there is not an error.
+    ///
+    /// # Errors
+    ///
+    /// As [`std::fs::remove_file`], except for a missing file.
+    fn remove_file(&self, path: &Path) -> io::Result<()>;
+
     /// Creates a directory and those above it.
     ///
     /// # Errors
@@ -245,6 +252,13 @@ impl System for Host {
             std::fs::create_dir_all(dir)?;
         }
         std::fs::OpenOptions::new().append(true).create(true).open(path)?.write_all(data)
+    }
+
+    fn remove_file(&self, path: &Path) -> io::Result<()> {
+        match std::fs::remove_file(path) {
+            Err(error) if error.kind() != io::ErrorKind::NotFound => Err(error),
+            _ => Ok(()),
+        }
     }
 
     fn create_dir_all(&self, path: &Path) -> io::Result<()> {

@@ -102,6 +102,32 @@ fn apply_stash(git: Git, base: &str, stash: &str) -> bool {
     false
 }
 
+/// Rebuilds, on top of the commit a stash was made on, exactly what the stash recorded: the
+/// working tree, the untracked files and the index, each from the commit the stash keeps it in.
+/// `git stash apply` cannot always do this — it refuses, for one, a path whose deletion is staged
+/// while an untracked file has taken its place — but the three trees say all there is to say.
+fn rebuild(git: Git, before: &str, stash: &str) -> bool {
+    let Some(git_dir) = git.text(&["rev-parse", "--absolute-git-dir"]) else { return false };
+    // The working tree is changed through an index of our own, so the real one can be set to
+    // what was staged without git comparing it with the files.
+    let scratch = Path::new(&git_dir).join("devbox-sync-index");
+    let untracked = format!("{stash}^3");
+    let has_untracked =
+        git.ok(&["rev-parse", "--quiet", "--verify", &format!("{untracked}^{{commit}}")]);
+    let rebuilt = git.ok(&["reset", "--hard", "--quiet", before])
+        && git.ok(&["clean", "-fdq"])
+        && git.ok_with_index(&scratch, &["read-tree", before])
+        && git.ok_with_index(&scratch, &["read-tree", "--reset", "-u", stash])
+        && (!has_untracked
+            || (git.ok_with_index(&scratch, &["read-tree", &untracked])
+                && git.ok_with_index(&scratch, &["checkout-index", "--all", "--force"])))
+        && git.ok(&["read-tree", &format!("{stash}^2")]);
+    // Left behind, the scratch index would only be a stray file inside `.git`.
+    let _ = git.system.remove_file(&scratch);
+    git.ok(&["update-index", "--quiet", "--refresh"]);
+    rebuilt
+}
+
 /// Puts the repository back exactly as it was before the update was tried. `Err` when the
 /// uncommitted changes could not be put back: they are then still in the stash.
 fn restore(git: Git, before: &str, stash: Option<&str>) -> Result<(), ()> {
@@ -111,7 +137,7 @@ fn restore(git: Git, before: &str, stash: Option<&str>) -> Result<(), ()> {
     // left to remove is what a failed attempt created. Without a stash nothing is cleaned.
     let Some(stash) = stash else { return Ok(()) };
     git.ok(&["clean", "-fdq"]);
-    if apply_stash(git, before, stash) {
+    if git.ok(&["stash", "apply", "--index", "--quiet", stash]) || rebuild(git, before, stash) {
         drop_stash(git, stash);
         Ok(())
     } else {

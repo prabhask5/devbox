@@ -391,3 +391,28 @@ fn every_repository_gets_a_result_and_one_failing_does_not_stop_the_others() {
         ]
     );
 }
+
+#[test]
+fn a_staged_deletion_with_an_untracked_file_in_its_place_is_put_back_exactly() {
+    // `git stash apply` refuses this stash ("already exists, no checkout"), on any commit.
+    let s = Sandbox::new();
+    let dir = s.repository("app");
+    s.push_upstream("app", "main", "new.txt", "new\n");
+    std::fs::remove_file(dir.join("src/lib.rs")).unwrap();
+    s.git(&dir, &["add", "--all", "--", "src/lib.rs"]);
+    s.write(&dir, "src/lib.rs", "written again, not tracked\n");
+    s.write(&dir, "README.md", "# app\nedited\n");
+    s.write(&dir, "staged.txt", "staged\n");
+    s.git(&dir, &["add", "staged.txt"]);
+    let before = s.snapshot(&dir);
+    assert!(before.index.contains("staged.txt") && !before.index.contains("src/lib.rs"));
+
+    let result = s.sync_one("app");
+    assert_eq!(result.status, SyncStatus::Conflict, "{}", result.detail);
+    assert_eq!(s.snapshot(&dir), before);
+    assert_eq!(
+        s.git(&dir, &["status", "--porcelain", "--untracked-files=all"]),
+        " M README.md\nD  src/lib.rs\nA  staged.txt\n?? src/lib.rs"
+    );
+    assert!(!dir.join(".git/devbox-sync-index").exists());
+}

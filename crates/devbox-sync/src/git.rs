@@ -33,6 +33,14 @@ impl Git<'_> {
         self.system.run(&command(args).in_dir(self.dir).timeout(limit))
     }
 
+    /// Whether `git`, reading and writing `index` instead of the repository's own index, ran
+    /// and exited with 0.
+    pub fn ok_with_index(&self, index: &Path, args: &[&str]) -> bool {
+        let command =
+            command(args).in_dir(self.dir).env("GIT_INDEX_FILE", &index.to_string_lossy());
+        self.system.run(&command).is_ok_and(|output| output.success())
+    }
+
     /// Whether `git` ran and exited with 0.
     pub fn ok(&self, args: &[&str]) -> bool {
         self.run(args).is_ok_and(|output| output.success())

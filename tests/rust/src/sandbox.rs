@@ -78,6 +78,9 @@ impl System for At {
     fn append(&self, path: &Path, data: &[u8]) -> io::Result<()> {
         self.host.append(path, data)
     }
+    fn remove_file(&self, path: &Path) -> io::Result<()> {
+        self.host.remove_file(path)
+    }
     fn create_dir_all(&self, path: &Path) -> io::Result<()> {
         self.host.create_dir_all(path)
     }
