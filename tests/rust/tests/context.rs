@@ -443,7 +443,7 @@ fn no_secret_reaches_any_file() {
         "API_PASSWORD",
         "code/site",
         "--workspace",
-        "-la",
+        "-Zq",
     ] {
         assert!(!me.contains(typed), "{typed} of the shell history is in me.md");
     }
