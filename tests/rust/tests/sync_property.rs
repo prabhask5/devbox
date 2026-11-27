@@ -67,14 +67,16 @@ fn tree(s: &Sandbox, dir: &std::path::Path, commit: &str) -> Files {
 
 /// One aspect of one file after an update, given what it was when the sides parted, here before
 /// the sync, and upstream: changed here, it is exactly that; untouched here, it is what upstream
-/// has. (Where both sides changed it and git could still merge, as with a file added here and
-/// added empty upstream, what was here wins in the working tree and upstream's is in the history.)
+/// has. Where both sides changed it and git could still merge, what was here wins in the working
+/// tree and upstream's is in the history — except that `nothing_here` (a new file that is empty,
+/// which to git's merge is no change at all) takes what upstream put there.
 fn kept_or_updated<T: PartialEq + std::fmt::Debug>(
     path: &str,
     aspect: &str,
     [was, mine, theirs, after]: &[T; 4],
+    nothing_here: bool,
 ) -> Result<(), TestCaseError> {
-    if mine == was {
+    if mine == was || (nothing_here && after == theirs) {
         prop_assert_eq!(after, theirs, "{} of {}", aspect, path);
     } else {
         prop_assert_eq!(after, mine, "{} of {}", aspect, path);
@@ -163,16 +165,11 @@ fn check(local_ops: &[Local], upstream_ops: &[Upstream]) -> Result<(), TestCaseE
                 // A file's content and whether it is executable are changed, and merged, apart.
                 let content = |files: &Files| files.get(path).map(|(_, content)| content.clone());
                 let executable = |files: &Files| files.get(path).map(|(executable, _)| *executable);
-                kept_or_updated(
-                    path,
-                    "content",
-                    &[&ours, &before.files, &theirs, &after.files].map(content),
-                )?;
-                kept_or_updated(
-                    path,
-                    "mode",
-                    &[&ours, &before.files, &theirs, &after.files].map(executable),
-                )?;
+                let states = [&ours, &before.files, &theirs, &after.files];
+                let new_and_empty = !ours.contains_key(path)
+                    && before.files.get(path).is_some_and(|(_, content)| content.is_empty());
+                kept_or_updated(path, "content", &states.map(content), new_and_empty)?;
+                kept_or_updated(path, "mode", &states.map(executable), new_and_empty)?;
             }
         }
         other => prop_assert!(false, "{other}: {}", result.detail),

@@ -289,6 +289,7 @@ type setup struct {
 	configured bool
 	timings    func(*gateway.Timings)
 	history    string // content of history.json before the gateway starts
+	codeDown   bool   // code-server does not answer until the test says so
 }
 
 type option func(*setup)
@@ -297,6 +298,7 @@ func stoppedVM(stateful bool) option {
 	return func(s *setup) { s.vmStatus, s.stateful = "Stopped", stateful }
 }
 func withConfig(toml string) option               { return func(s *setup) { s.config += toml + "\n" } }
+func withCodeDown() option                        { return func(s *setup) { s.codeDown = true } }
 func withFakeClock() option                       { return func(s *setup) { s.fakeClock = true } }
 func unconfigured() option                        { return func(s *setup) { s.configured = false } }
 func withHistory(json string) option              { return func(s *setup) { s.history = json } }
@@ -349,6 +351,7 @@ func start(t *testing.T, options ...option) *harness {
 	h := &harness{t: t, incus: incusfake.StartT(t), configDir: t.TempDir(), stateDir: t.TempDir(), logs: &syncBuffer{}}
 	h.incus.SetInstance("devbox", s.vmStatus, s.stateful)
 	h.vm = newFakeVM(t, h.incus)
+	h.vm.codeUp.Store(!s.codeDown)
 	if s.configured {
 		h.writeConfig(s.config)
 		h.writeSecrets(cheapHash, 0o600)

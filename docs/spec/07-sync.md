@@ -27,7 +27,7 @@ One `git for-each-ref` per repository answers everything the common case needs (
 
 Git operations use the `git` binary (matching the owner's config: hooks, credential helpers), invoked through `System` with `GIT_TERMINAL_PROMPT=0`, `ssh -o BatchMode=yes -o ConnectTimeout=15` and `LC_ALL=C`. No git library is linked.
 
-Git does not record empty directories: an untracked directory with nothing in it is not work and may be gone after a sync.
+Two things are not work, because git does not see them as content: an untracked directory with nothing in it may be gone after a sync, and a new, still empty file takes the content of a file upstream added under the same name.
 
 ## Where
 
