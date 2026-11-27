@@ -1,0 +1,25 @@
+# Performance budgets (docs/spec/13-performance.md). Checked by scripts/budgets.sh in CI (added in M0).
+# Metrics without a measurement yet are reported as "pending".
+[budgets]
+gateway_proxy_p50_ms = 0.3
+gateway_proxy_p99_ms = 2
+gateway_throughput_rps = 20000
+gateway_ws_p99_ms = 1
+gateway_idle_rss_mb = 20
+gateway_idle_cpu_percent = 0.1
+gateway_image_mb = 15
+wake_overhead_ms = 300
+relay_p50_ms = 5
+relay_p99_ms = 15
+hub_idle_rss_mb = 30
+hub_idle_cpu_percent = 0.3
+hub_event_to_sse_ms = 20
+screen_frame_latency_ms = 60
+sync_11_repos_ms = 600
+context_11_repos_ms = 1500
+devbox_version_ms = 10
+devbox_status_ms = 150
+boot_screen_kb_gzip = 15
+hub_app_js_kb_gzip = 60
+hub_app_css_kb_gzip = 10
+hub_app_first_render_ms = 1000

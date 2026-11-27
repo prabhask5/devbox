@@ -1,0 +1,76 @@
+#!/usr/bin/env node
+'use strict';
+// `agent` — terminal front-end for the devbox agents hub (same sessions you see on your phone).
+const { execFileSync, spawnSync } = require('node:child_process');
+const path = require('node:path');
+const http = require('node:http');
+const PORT = +(process.env.DEVBOX_HUB_PORT || 8090);
+const HUB = path.join(__dirname, '..', 'hub', 'server.js');
+
+function call(method, p, body) {
+  return new Promise((resolve, reject) => {
+    const data = body ? JSON.stringify(body) : null;
+    const req = http.request({ host: '127.0.0.1', port: PORT, method, path: p, headers: data ? { 'content-type': 'application/json' } : {} }, (res) => {
+      let b = ''; res.on('data', (c) => (b += c)); res.on('end', () => {
+        let j = {}; try { j = JSON.parse(b); } catch { /* empty */ }
+        res.statusCode >= 400 ? reject(new Error(j.error || `HTTP ${res.statusCode}`)) : resolve(j);
+      });
+    });
+    req.on('error', () => reject(new Error(`hub not running on :${PORT} (systemctl --user status devbox-hub)`)));
+    req.end(data);
+  });
+}
+const find = (sessions, key) => sessions.find((s) => s.id === key || s.tmux === key || s.name === key) || sessions.find((s) => (s.tmux || '').startsWith(key) || s.name.startsWith(key));
+const COLOR = { needs_input: 31, error: 31, working: 33, starting: 33, idle: 32 };
+const paint = (s, c) => (process.stdout.isTTY ? `\x1b[${c}m${s}\x1b[0m` : s);
+const ago = (t) => { const s = (Date.now() - t) / 1000; return s < 60 ? `${Math.round(s)}s` : s < 3600 ? `${Math.round(s / 60)}m` : `${Math.round(s / 3600)}h`; };
+
+const USAGE = `agent — devbox agent sessions (also at agents.prabhas.io)
+
+  agent                         list sessions
+  agent new <agent> [repo|dir] [prompt...]
+                                start claude | codex | opencode | shell in ~/code/<repo>
+  agent attach <name|id>        attach this terminal (detach: Ctrl-b d)
+  agent kill <name|id>          stop a session
+  agent status                  devbox idle + repo sync status
+  agent sync                    sync all repos now
+  agent passwd                  set the phone app password
+`;
+
+(async () => {
+  const [cmd, ...args] = process.argv.slice(2);
+  try {
+    if (!cmd || cmd === 'ls' || cmd === 'list') {
+      const { sessions } = await call('GET', '/api/state');
+      if (!sessions.length) return console.log('No sessions. Start one: agent new claude <repo> "prompt"');
+      for (const s of sessions) {
+        const st = paint((s.state || '').padEnd(11), COLOR[s.state] || 2);
+        console.log(`${st} ${s.agent.padEnd(8)} ${(s.tmux || s.name).padEnd(28)} ${String(s.repo || '').padEnd(22)} ${ago(s.stateSince).padStart(4)}  ${(s.waitingFor || s.lastTool || s.title || '').slice(0, 60)}`);
+      }
+    } else if (cmd === 'new') {
+      const [agent = 'claude', where, ...prompt] = args;
+      const s = await call('POST', '/api/sessions', { agent, cwd: where && where !== '.' ? where : where === '.' ? process.cwd() : undefined, prompt: prompt.join(' ') || undefined });
+      console.log(`started ${s.tmux}  (agent attach ${s.tmux})`);
+    } else if (cmd === 'attach' || cmd === 'a') {
+      const { sessions } = await call('GET', '/api/state');
+      const s = args[0] ? find(sessions, args[0]) : sessions.find((x) => x.kind === 'tmux' && x.state !== 'gone');
+      if (!s || s.kind !== 'tmux') throw new Error('no such tmux session');
+      const r = spawnSync('tmux', [process.env.TMUX ? 'switch-client' : 'attach', '-t', s.tmux], { stdio: 'inherit' });
+      process.exit(r.status || 0);
+    } else if (cmd === 'kill') {
+      const { sessions } = await call('GET', '/api/state');
+      const s = find(sessions, args[0] || ''); if (!s) throw new Error('no such session');
+      await call('DELETE', `/api/sessions/${s.id}`); console.log(`killed ${s.tmux || s.name}`);
+    } else if (cmd === 'status') {
+      const d = await call('GET', '/devbox/status');
+      console.log(d.idle.busy ? `busy: ${d.idle.reasons.join(', ')}` : `idle for ${d.idle.idleSeconds}s`);
+      console.log(`sync: ${d.sync.state}${d.sync.finishedAt ? ` (finished ${ago(d.sync.finishedAt)} ago)` : ''}`);
+      for (const r of d.sync.results || []) console.log(`  ${r.status.padEnd(9)} ${r.name.padEnd(28)} ${r.detail || ''}`);
+    } else if (cmd === 'sync') {
+      await call('POST', '/api/sync'); console.log('sync started — `agent status` to follow');
+    } else if (cmd === 'passwd') {
+      const r = spawnSync(process.execPath, [HUB, 'passwd'], { stdio: 'inherit' });
+      if (r.status === 0) try { execFileSync('systemctl', ['--user', 'restart', 'devbox-hub'], { stdio: 'inherit' }); console.log('hub restarted'); } catch { /* not under systemd */ }
+    } else { console.log(USAGE); }
+  } catch (e) { console.error(`agent: ${e.message}`); process.exit(1); }
+})();

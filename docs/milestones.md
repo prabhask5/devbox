@@ -1,0 +1,131 @@
+# Milestones
+
+Ordered. Each milestone lists the spec sections it implements; the acceptance criteria in those sections are the definition of done. `scripts/create-issues.sh` turns this file into GitHub issues (one per milestone, label `milestone`).
+
+**Every milestone ends clean** — the last box of each is the same cleanup pass, and `scripts/check-hygiene.sh` enforces most of it in CI:
+- remove the "not implemented yet" arm(s) of what it delivers, and any stub, shim or fallback it superseded;
+- no debug output, commented-out code, or untracked TODOs (allowed only as `TODO(M<n>)`/`TODO(#<issue>)`);
+- research spikes: conclusions go into the spec, scratch code is deleted;
+- fixtures and golden files: only what tests use, minimal, redacted;
+- unused dependencies removed; new ones listed in spec 14;
+- docs updated for what shipped (README for users, spec for behaviour).
+
+**Order rationale**: contracts first so the three languages agree from day one; then the gateway (it gates all access and is the riskiest), then the hub and app, then the Rust tools, then setup (which needs everything else to exist), then deployment, then cestmoi's cutover. Every milestone after M1 extends the end-to-end harness (spec 15) with its scenarios, so the whole system is tested together continuously, not only at the end.
+
+## M0 — Repository scaffold
+Specs: CLAUDE.md, 13, 14, 15
+- [ ] Go module (`cmd/devbox-gateway`, `cmd/devbox-hub` with subcommands `serve|event|agent|update|selftest|healthcheck`), Cargo workspace (`devbox-cli` → binary `devbox` with every command; `devbox-core`, `devbox-sync`, `devbox-context`, `devbox-tests`), pnpm workspace (`web/gateway-ui`, `web/hub-app`, `web/shared`); every command prints "not implemented yet" and exits 3
+- [ ] Pinned toolchains; lint configs (`.golangci.yml`, `rustfmt.toml`, clippy lint set, `deny.toml`, eslint/prettier/tsconfig)
+- [ ] `scripts/ci.sh` and the full CI (`static`, `go`, `rust`, `web`, `integration`, `e2e`, `build`, `budgets`, `required`) — jobs with nothing to test yet pass trivially; `budgets.sh` reports everything as pending
+- [ ] `tests/` layout, `check-tests-location.sh` covering Go/Rust/TS
+- [ ] Release workflow skeleton, `install.sh` skeleton, Dependabot for gomod/cargo/npm/actions, Actions pinned by SHA
+- [ ] crates.io name check for the library crates (record the chosen names in spec 12)
+- [ ] Branch protection on `main` requires `required` (already configured; verify it gates the M0 PR)
+- [ ] Cleanup pass; `scripts/check-hygiene.sh` green
+
+## M1 — Contracts and config
+Specs: 01, 14 (secrets types)
+- [ ] All schemas in `contracts/` with examples; `scripts/gen.sh` (Go, Rust, TS); `check-generated.sh` in CI
+- [ ] Round-trip tests in all three languages; version checks with actionable errors
+- [ ] Config loading + all-errors validation in Go (gateway, hub) and Rust (CLI) with golden error output; `Secret` types
+- [ ] argon2id PHC hashes interoperable between Go and Rust (cross-language test vectors)
+- [ ] Cleanup pass; `scripts/check-hygiene.sh` green
+
+## M2 — Gateway core
+Specs: 02, 14, 15 (fake Incus)
+- [ ] `tests/fakes/incus` (unix-socket REST, operations, injectable delays/failures, request log) + its tests against recorded real responses
+- [ ] `internal/incus` client with the endpoint allowlist; `internal/sys`
+- [ ] State machine (wake phases, restore→cold fallback, stop with fallback, single-flight), ETA from history, persistence
+- [ ] Reverse proxy (HTTP, SSE flush, duplicate headers, WebSocket), routing by host, boot-vs-503 rules, skip cookie
+- [ ] Activity accounting, idle decision with hub status, SSH proxy with banner wait
+- [ ] Wake auth (argon2id, HMAC cookies, rate limit, open-redirect guard), endpoints, health matrix with golden strings
+- [ ] Unconfigured mode, hot reload, graceful shutdown; budgets: proxy latency/throughput/RSS measured
+- [ ] Cleanup pass; `scripts/check-hygiene.sh` green
+
+## M3 — Gateway UI and Dokploy deployment
+Specs: 03, 11 (gateway part), 16
+- [ ] Boot screen in Preact matching `reference/design/boot-*.png`; embedded; all states from fixture streams
+- [ ] Visual regression baselines for the boot screen (spec 16)
+- [ ] `deploy/gateway/` Dockerfile (scratch, ≤ 15 MB) + compose.yml; `healthcheck` subcommand; non-root uid
+- [ ] **Spike, then decide in spec 11**: Dokploy Compose with absolute bind mounts; how Dokploy reports to GitHub Deployments (add the fallback workflow if it doesn't)
+- [ ] `docs/deploy-gateway.md`: Dokploy app step by step (provider, compose path, Auto Deploy, watch paths, no domains, no previews), rollback
+- [ ] e2e harness v1: fake Incus + real gateway + fake code-server; scenario 1 (without sync) and 7 (health faults) from spec 15
+- [ ] Cleanup pass; `scripts/check-hygiene.sh` green
+
+## M4 — Hub core and agents
+Specs: 04, 05
+- [ ] tmux layer: dedicated socket, control-mode client, create/adopt/rename/kill, resize/restore, exit detection via pane children
+- [ ] Sessions store (SQLite, WAL), state machine, event matching, idle report, wake hook (clock fix, sync run reuse)
+- [ ] Adapters (claude, codex, opencode, shell, `KindChat` reserved); hook relay `devbox-hub event` over the unix socket meeting its latency budget
+- [ ] Hook config installers (Claude settings merge, Codex hooks.json, opencode plugin) as Go code used by provisioning; golden files
+- [ ] Fake agents with captured real hook payloads; answer keys verified against recorded prompt screens
+- [ ] Gateway↔hub bearer auth; internal socket peer-cred check; `agent` CLI
+- [ ] e2e harness: real hub behind the gateway; scenarios 3 and 4
+- [ ] Cleanup pass; `scripts/check-hygiene.sh` green
+
+## M5 — Hub app and push
+Specs: 06, 16
+- [ ] PWA in Preact matching `reference/design/app-*.png`: sign-in, asleep/wake, sessions, new session, session screen with banner/keys/composer, settings, Assistant placeholder; service worker; update prompt
+- [ ] Screen streaming from control-mode output via a vt emulator (≤ 20 fps, no frames when idle)
+- [ ] `internal/webpush` (RFC 8291/8292) with test vectors; fake push service; notification rules (delay, viewer suppression, throttle, badge)
+- [ ] Visual regression baselines for every app screen (spec 16)
+- [ ] e2e: scenario 2 (permission → push → answer → finished push) on WebKit iPhone and Chromium
+- [ ] Cleanup pass; `scripts/check-hygiene.sh` green
+
+## M6 — Repo sync (Rust)
+Specs: 07
+- [ ] `devbox-sync` crate + `devbox sync [--json]`: discovery, parallel fetch, update/restore algorithm, safety refs, clone missing via GitHub API
+- [ ] Prototype matrix ported; proptest "never lose work" property; golden outputs
+- [ ] Hub integration (progress → status → boot screen chips); e2e scenario 1 with real sync over local bare remotes
+- [ ] Budget measured
+- [ ] Cleanup pass; `scripts/check-hygiene.sh` green
+
+## M7 — Developer context (Rust)
+Specs: 08
+- [ ] `devbox-context` crate + `devbox context`: sources (git, GitHub, hub events, transcripts, history, editor), all files, deterministic output
+- [ ] Redaction corpus test; commit behaviour; AI summary with a fake `claude`
+- [ ] Budget measured
+- [ ] Cleanup pass; `scripts/check-hygiene.sh` green
+
+## M8 — Setup CLI (Rust)
+Specs: 09, 10, 12
+- [ ] `devbox_core::system::System` + `FakeSystem`; Incus REST client (incl. exec and file push) shared with the fake Incus from M2
+- [ ] `devbox up` plan/confirm/apply with every step; backups; idempotency; `devbox down` byte-identical restore
+- [ ] Provisioning bundle (`vm/`): cloud-init template, installer, units, code-server config, agents, hook configs, hub config/secrets
+- [ ] Dotfiles manifest support + `docs/dotfiles.md` with a fixture dotfiles repo
+- [ ] Routing (traefik-file), firewall managers (host-firewall, ufw, nftables, moi), Kuma monitor step
+- [ ] `status`, `doctor`, `connect`, `password` with golden `--json`
+- [ ] cestmoi adoption fixture: golden plan, apply, down
+- [ ] moi `System`-adapter proof test; `cargo publish --dry-run` for the library crates
+- [ ] Nightly real-VM workflow (spec 15)
+- [ ] Cleanup pass; `scripts/check-hygiene.sh` green
+
+## M9 — Hub continuous deployment
+Specs: 11 (hub part)
+- [ ] `deploy-hub.yml`: path filter, after CI success, build + release + attestations + GitHub Deployment (`agents-hub`), prune
+- [ ] `devbox-hub update` + `devbox-update.{service,timer}`: poll, verify (checksums + attestation), install, selftest, switch, restart, health, rollback, statuses; asleep → queued; optional wake-to-deploy in the gateway
+- [ ] Fake GitHub API tests for every path; e2e scenario 6
+- [ ] App shows deployed version and "Updated — tap to reload"
+- [ ] Cleanup pass; `scripts/check-hygiene.sh` green
+
+## M10 — cestmoi cutover
+Specs: 09 (adoption), 10, `reference/cestmoi.md`
+- [ ] Runbook `docs/cutover-cestmoi.md`: deploy the gateway in Dokploy, `devbox up --adopt …`, DNS for agents., Kuma monitor, phone setup, rollback with `devbox down`
+- [ ] PR to `prabhask5/dotfiles` restructuring it to the contract (spec 10): `devbox.toml`, `install.sh`, `agents/AGENTS.md`, `context/`; remove what devbox now does
+- [ ] Owner runs the cutover; a week of real use; issues found are fixed with regression tests
+- [ ] Cleanup pass; `scripts/check-hygiene.sh` green
+
+## M11 — Performance and hardening
+Specs: 13, 14
+- [ ] Every budget measured and enforced (no "pending")
+- [ ] Fuzzing: config/TOML parsing (Rust `cargo fuzz`, Go native fuzzing for proxy header handling, agent-event parsing, sync-progress parsing)
+- [ ] Security review against spec 14 (Incus allowlist, auth boundaries, secrets never in output — a test greps every output surface for the fixture secrets)
+- [ ] Cleanup pass; `scripts/check-hygiene.sh` green
+
+## M12 — Public release readiness (v1.0.0)
+Specs: all
+- [ ] `reference/` deleted: prototype behaviour captured in specs and tests, design screenshots moved to `tests/e2e/visual/` baselines and `docs/`
+- [ ] No scaffolding: "not implemented" paths and exit code 3 removed; no `TODO(M…)` left; `scripts/check-hygiene.sh --release` green and default in CI
+- [ ] Docs for users: README (what/why, screenshots, quickstart, Dokploy guide, dotfiles guide, FAQ), `--help` texts, spec describes shipped behaviour only, milestones replaced by a roadmap
+- [ ] Community files current (CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, templates, CHANGELOG `1.0.0`); repo description, topics
+- [ ] Release `v1.0.0` via `release.yml`: binaries, gateway image on GHCR, `install.sh`; crates published; verified on a clean Ubuntu host with and without Dokploy

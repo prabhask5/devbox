@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go build:*)",
+      "Bash(go test:*)",
+      "Bash(go vet:*)",
+      "Bash(go run:*)",
+      "Bash(gofmt:*)",
+      "Bash(golangci-lint:*)",
+      "Bash(cargo build:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(cargo fmt:*)",
+      "Bash(cargo run:*)",
+      "Bash(pnpm:*)",
+      "Bash(scripts/ci.sh)",
+      "Bash(scripts/gen.sh)",
+      "Bash(scripts/e2e.sh)",
+      "Bash(git status)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)"
+    ],
+    "deny": [
+      "Bash(sudo:*)",
+      "Bash(systemctl:*)",
+      "Bash(iptables:*)",
+      "Bash(incus:*)",
+      "Bash(docker:*)"
+    ]
+  }
+}
