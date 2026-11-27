@@ -10,7 +10,7 @@ release=0; [[ ${1:-} == --release ]] && release=1
 fail=0
 problem() { echo "✗ $*"; fail=1; }
 files=$(git ls-files)
-self='^(scripts/check-hygiene\.sh|docs/spec/17-public-readiness\.md)$'   # these two describe the rules
+self='^(scripts/check-hygiene\.sh|docs/spec/17-public-readiness\.md|tests/go/scripts/hygiene_test\.go)$'   # these describe the rules
 src=$(echo "$files" | grep -E '\.(go|rs|ts|tsx|js|mjs|sh|py|toml|yml|yaml)$' | grep -vE "$self" | grep -v '^reference/' || true)
 
 # 1. debug and placeholder code
@@ -30,7 +30,7 @@ fi
 # 3. stray files and committed build outputs
 hits=$(echo "$files" | grep -vE '^tests/fixtures/' | grep -E '(\.orig|\.rej|\.bak|\.swp|~|\.tmp|\.log|\.DS_Store|Thumbs\.db)$|(^|/)(scratch|tmp|spike|notes-wip)/' || true)
 [[ -n $hits ]] && problem "stray files:"$'\n'"$hits"
-hits=$(echo "$files" | grep -E '(^|/)(node_modules|dist|target|coverage|test-results|playwright-report)/' || true)
+hits=$(echo "$files" | grep -E '(^|/)(node_modules|dist|target|coverage|test-results|playwright-report)/|^bin/' || true)
 [[ -n $hits ]] && problem "committed build output:"$'\n'"$hits"
 
 # 4. large files (fixtures minimal, binaries never) and stray executables
@@ -43,14 +43,19 @@ hits=$(git ls-files -s | awk '$1 == "100755" {print $4}' | grep -vE '^(scripts|v
 [[ -n $hits ]] && problem "executable files outside scripts/, vm/, deploy/:"$'\n'"$hits"
 
 # 5. skipped tests must say why
-hits=$(echo "$files" | grep -E '^tests/.*\.rs$' | xargs -r grep -nE '#\[ignore\]' || true)
+tests=$(echo "$files" | grep -E '^tests/' | grep -vE "$self" || true)
+hits=$(echo "$tests" | grep -E '\.rs$' | xargs -r grep -nE '#\[ignore\]' || true)
 [[ -n $hits ]] && problem "#[ignore] without a reason — use #[ignore = \"why\"]:"$'\n'"$hits"
-hits=$(echo "$files" | grep -E '^tests/.*\.go$' | xargs -r grep -nE 't\.Skip\(\)' || true)
+hits=$(echo "$tests" | grep -E '\.go$' | xargs -r grep -nE 't\.Skip\(\)' || true)
 [[ -n $hits ]] && problem "t.Skip() without a reason:"$'\n'"$hits"
-hits=$(echo "$files" | grep -E '^tests/.*\.(ts|tsx)$' | xargs -r grep -nE '\.(skip|only)\(' || true)
+hits=$(echo "$tests" | grep -E '\.(ts|tsx)$' | xargs -r grep -nE '\.(skip|only)\(' || true)
 [[ -n $hits ]] && problem "skipped or focused TS tests (.skip/.only):"$'\n'"$hits"
 
-# 6. release mode: the artifact-free end state (spec 17)
+# 6. GitHub Actions are pinned by commit SHA
+hits=$(echo "$files" | grep -E '^\.github/.*\.ya?ml$' | xargs -r grep -nE '^\s*(- )?uses:' | grep -vE 'uses: +(\./|[^ ]+@[0-9a-f]{40}( |$))' || true)
+[[ -n $hits ]] && problem "GitHub Actions not pinned by commit SHA:"$'\n'"$hits"
+
+# 7. release mode: the artifact-free end state (spec 17)
 if ((release)); then
   for p in reference .claude docs/milestones.md docs/agent-workflow.md scripts/create-issues.sh; do
     echo "$files" | grep -qE "^$p(/|$)" && problem "development artifact still present: $p"

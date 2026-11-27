@@ -1,0 +1,26 @@
+{
+  "name": "devbox-web",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.23.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "pnpm -r run build",
+    "test": "pnpm -r run test",
+    "typecheck": "pnpm -r run typecheck",
+    "lint": "cd .. && eslint --config web/eslint.config.js --max-warnings 0 web tests/web",
+    "format": "cd .. && prettier --config web/.prettierrc.json --ignore-path web/.prettierignore --write web tests/web",
+    "format:check": "cd .. && prettier --config web/.prettierrc.json --ignore-path web/.prettierignore --check web tests/web",
+    "knip": "knip && knip --directory ../tests/web"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.15.0",
+    "knip": "^6.48.0",
+    "prettier": "^3.10.1",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.74.0"
+  }
+}

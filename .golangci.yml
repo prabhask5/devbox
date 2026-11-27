@@ -1,0 +1,36 @@
+version: "2"
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - errorlint
+    - gocritic
+    - gosec
+    - misspell
+    - noctx
+    - nolintlint
+    - unconvert
+    - unparam
+  settings:
+    errcheck:
+      # A failed write to a terminal or a closed connection has nowhere to be reported.
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+  exclusions:
+    rules:
+      # Tests run the repository's own binaries and scripts in temp dirs.
+      - path: ^tests/
+        linters: [gosec, noctx]
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/prabhask5/devbox

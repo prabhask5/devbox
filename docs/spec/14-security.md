@@ -52,4 +52,7 @@ Each dependency and why (keep current when adding one):
 | Rust | `gix` (minimal features) | fast read-only git queries |
 | Rust | `typify` (build-time) | contracts → Rust types |
 | Rust (dev) | `proptest`, `insta` | property tests, golden files |
-| Web | `preact`, `vite`, `vitest`, `@playwright/test`, `typescript`, `eslint`, `prettier` | apps and tests |
+| Web | `preact`, `vite`, `vitest`, `@playwright/test`, `typescript` | apps and tests |
+| Web (dev) | `eslint`, `@eslint/js`, `typescript-eslint`, `prettier`, `knip` | lint, format, unused files/exports/dependencies |
+
+Tools that are not dependencies of the code run at versions pinned in `scripts/ci.sh` (`golangci-lint`, `staticcheck`, `deadcode`, `govulncheck` through `go run pkg@version`; `cargo-deny`, `cargo-machete`) and in the workflows (`gitleaks`).

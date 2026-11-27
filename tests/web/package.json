@@ -1,0 +1,14 @@
+{
+  "name": "devbox-web-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@devbox/shared": "workspace:*",
+    "typescript": "~6.0.3",
+    "vitest": "^5.1.2"
+  }
+}

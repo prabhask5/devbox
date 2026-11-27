@@ -2,6 +2,8 @@
 
 Speed is a product requirement. Budgets live in `budgets.toml` and are enforced by the `budgets` CI job (release builds, fixtures and fakes, median of 5 runs; fails when a metric exceeds its budget by more than 10 %). The job writes a table (metric, budget, measured, result) to the job summary. Metrics without a measurement yet are listed as "pending".
 
+`scripts/budgets.sh` does the comparison. The measurement suites in `tests/perf/` write their medians as `metric = value` lines (the names used in `budgets.toml`) to `target/budgets/measured.toml` (`$BUDGETS_MEASURED` overrides the path); a measurement without a budget is an error. Every metric is a maximum except those ending in `_rps`, which are minimums and fail when more than 10 % below the budget.
+
 | Metric | Budget | How it is measured |
 |---|---|---|
 | Gateway added latency, proxied GET (p50 / p99) | 0.3 ms / 2 ms | loopback benchmark: client → gateway → fake upstream vs. client → upstream |

@@ -87,7 +87,7 @@ VM (installed by `devbox up` provisioning, updated by the hub updater):
 ## 5. Development
 
 ```bash
-scripts/ci.sh                 # everything CI runs, locally
+scripts/ci.sh                 # everything CI runs, locally; `scripts/ci.sh go rust` runs only those stages
 go test ./...                 # Go unit + tests/go integration (fakes only)
 cargo test --workspace        # Rust
 pnpm -C web test              # TS unit tests; pnpm -C web e2e for Playwright

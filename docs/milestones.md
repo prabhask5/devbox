@@ -15,16 +15,16 @@ Ordered. Each milestone lists the spec sections it implements; the acceptance cr
 
 ## M0 — Repository scaffold
 Specs: CLAUDE.md, 13, 14, 15
-- [ ] Go module (`cmd/devbox-gateway`, `cmd/devbox-hub` with subcommands `serve|event|agent|update|selftest|healthcheck`), Cargo workspace (`devbox-cli` → binary `devbox` with every command; `devbox-core`, `devbox-sync`, `devbox-context`, `devbox-tests`), pnpm workspace (`web/gateway-ui`, `web/hub-app`, `web/shared`); every command prints "not implemented yet" and exits 3
-- [ ] Pinned toolchains; lint configs (`.golangci.yml`, `rustfmt.toml`, clippy lint set, `deny.toml`, eslint/prettier/tsconfig)
-- [ ] `scripts/ci.sh` and the full CI (`static`, `go`, `rust`, `web`, `integration`, `e2e`, `build`, `budgets`, `required`) — jobs with nothing to test yet pass trivially; `budgets.sh` reports everything as pending
-- [ ] Dead-code and dependency hygiene in `static` from day one: `go mod tidy` diff, `staticcheck`, `deadcode`, `govulncheck`, `cargo machete`, `cargo deny`, `knip`, `pnpm audit --prod`; check for committed build outputs and stray executables (spec 17)
-- [ ] `check-hygiene.sh --release` implements every spec-17 rule, tested against a fixture repo that violates each rule once (runs in normal mode until M12)
-- [ ] `tests/` layout, `check-tests-location.sh` covering Go/Rust/TS
-- [ ] Release workflow skeleton, `install.sh` skeleton, Dependabot for gomod/cargo/npm/actions, Actions pinned by SHA
-- [ ] crates.io name check for the library crates (record the chosen names in spec 12)
-- [ ] Repo settings per spec 17 (owner): ruleset on `main` requiring `required`, squash merge only, delete branches on merge, private vulnerability reporting; verify the ruleset gates the M0 PR
-- [ ] Cleanup pass; `scripts/check-hygiene.sh` green
+- [x] Go module (`cmd/devbox-gateway`, `cmd/devbox-hub` with subcommands `serve|event|agent|update|selftest|healthcheck`), Cargo workspace (`devbox-cli` → binary `devbox` with every command; `devbox-core`, `devbox-sync`, `devbox-context`, `devbox-tests`), pnpm workspace (`web/gateway-ui`, `web/hub-app`, `web/shared`); every command prints "not implemented yet" and exits 3 — tests: [`tests/go/cmd/scaffold_test.go`](../tests/go/cmd/scaffold_test.go), [`tests/rust/tests/cli_scaffold.rs`](../tests/rust/tests/cli_scaffold.rs), [`tests/web/shared.test.ts`](../tests/web/shared.test.ts)
+- [x] Pinned toolchains; lint configs (`.golangci.yml`, `rustfmt.toml`, clippy lint set, `deny.toml`, eslint/prettier/tsconfig)
+- [x] `scripts/ci.sh` and the full CI (`static`, `go`, `rust`, `web`, `integration`, `e2e`, `build`, `budgets`, `required`) — jobs with nothing to test yet pass trivially; `budgets.sh` reports everything as pending — test: [`tests/go/scripts/budgets_test.go`](../tests/go/scripts/budgets_test.go)
+- [x] Dead-code and dependency hygiene in `static` from day one: `go mod tidy` diff, `staticcheck`, `deadcode`, `govulncheck`, `cargo machete`, `cargo deny`, `knip`, `pnpm audit --prod`; check for committed build outputs and stray executables (spec 17)
+- [x] `check-hygiene.sh --release` implements every spec-17 rule, tested against a fixture repo that violates each rule once (runs in normal mode until M12) — test: [`tests/go/scripts/hygiene_test.go`](../tests/go/scripts/hygiene_test.go)
+- [x] `tests/` layout, `check-tests-location.sh` covering Go/Rust/TS — test: [`tests/go/scripts/tests_location_test.go`](../tests/go/scripts/tests_location_test.go)
+- [x] Release workflow skeleton, `install.sh` skeleton, Dependabot for gomod/cargo/npm/actions, Actions pinned by SHA — test: [`tests/go/scripts/install_test.go`](../tests/go/scripts/install_test.go)
+- [x] crates.io name check for the library crates (record the chosen names in spec 12)
+- [x] Repo settings per spec 17 (owner): ruleset on `main` requiring `required`, squash merge only, delete branches on merge, private vulnerability reporting; verify the ruleset gates the M0 PR
+- [x] Cleanup pass; `scripts/check-hygiene.sh` green
 
 ## M1 — Contracts and config
 Specs: 01, 14 (secrets types)
