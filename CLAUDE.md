@@ -45,7 +45,7 @@ Why this split: the long-running network services (gateway, hub) are Go — fast
 contracts/            JSON Schemas for every cross-component message and config file (+ generated-code check)
 cmd/devbox-gateway/   Go main for the gateway
 cmd/devbox-hub/       Go main for the hub (subcommands: serve, event, agent, update)
-internal/             Go packages: gateway/, hub/, incus/, proto/ (generated), config/, schema/, secret/, password/, sys/, webpush/, tmux/ ...
+internal/             Go packages: gateway/, hub/, incus/, proto/ (generated), config/, schema/, secret/, password/, sys/, httpx/, relay/, hooks/, webpush/, tmux/ ...
 crates/               Rust workspace members: devbox-cli (bin `devbox`), devbox-core, devbox-sync, devbox-context
 web/                  pnpm workspace: gateway-ui/, hub-app/, shared/ (generated types, design tokens)
 deploy/gateway/       Dockerfile + compose.yml for Dokploy (no domain, no previews)

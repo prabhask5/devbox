@@ -23,7 +23,7 @@ Small pure-function unit tests may live next to the code (`*_test.go` in the sam
 - **WebSocket echo** (`tests/fakes/wsecho`): a minimal RFC 6455 endpoint and frame codec, so tests push real frames through the gateway without a WebSocket library.
 - **Fake VM**: lightweight servers standing in for code-server (`/healthz`, pages, WebSocket echo), sshd (banner after a delay), and either a fake hub or the **real hub** binary.
 - **Fake GitHub**: repos list, deployments + statuses, releases + assets, attestations (or a stub verifier), rate-limit headers.
-- **Fake push service**: accepts RFC 8291 messages, decrypts with the subscription's private key, validates VAPID JWT, can answer 410.
+- **Fake push service** (`tests/fakes/push`): a push service and a browser in one. It creates subscriptions, accepts RFC 8291 messages, validates the VAPID token (signature, audience, expiry, subject), decrypts with the subscription's private key, and can answer 410.
 - **Fake agents** (`tests/fakes/agents/agent.sh`, put on `PATH` as `claude`, `codex` and `opencode`): they print a little of the agent's screen and emit its hook payloads (`tests/fixtures/hooks/payloads/`) through the real relay, driven by lines typed into their terminal (a prompt, `tool`, `ask` and then an answer key, `stop`, `error`, `quit`, `crash`).
 
 ## The full-stack harness (`tests/e2e/harness`)

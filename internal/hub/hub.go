@@ -13,9 +13,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prabhask5/devbox/internal/httpx"
 	"github.com/prabhask5/devbox/internal/proto"
 	"github.com/prabhask5/devbox/internal/sys"
 	"github.com/prabhask5/devbox/internal/tmux"
+	"github.com/prabhask5/devbox/internal/webpush"
 )
 
 // Timings are the intervals and thresholds of the hub. Tests shorten them.
@@ -32,6 +34,13 @@ type Timings struct {
 	SyncReuse      time.Duration // a wake reuses a sync that finished this recently
 	ColdBootWithin time.Duration // a hub starting this soon after boot syncs by itself
 	ContextMaxAge  time.Duration // a wake refreshes developer context older than this
+
+	NeedsInputDelay         time.Duration // an agent must wait this long for an answer before the owner is notified
+	NeedsInputDelayAttached time.Duration // the same while a terminal is attached to the session
+	NotifyThrottle          time.Duration // at most one notification per session and kind in this time
+	FrameInterval           time.Duration // the shortest time between two frames of a screen stream
+	StreamDebounce          time.Duration // changes this close together reach the app as one state
+	StreamPing              time.Duration // between keep-alive comments on the event streams
 }
 
 // DefaultTimings are the production values.
@@ -41,6 +50,8 @@ func DefaultTimings() Timings {
 		ShellActive: 6 * time.Second, ForgetAfter: 24 * time.Hour, ExternalStale: 30 * time.Minute,
 		EnterDelay: 150 * time.Millisecond, ClockSkew: 5 * time.Second, SyncReuse: time.Minute,
 		ColdBootWithin: 5 * time.Minute, ContextMaxAge: 6 * time.Hour,
+		NeedsInputDelay: 5 * time.Second, NeedsInputDelayAttached: time.Minute, NotifyThrottle: 15 * time.Second,
+		FrameInterval: 50 * time.Millisecond, StreamDebounce: 100 * time.Millisecond, StreamPing: 20 * time.Second,
 	}
 }
 
@@ -64,6 +75,11 @@ type Options struct {
 	Log     *slog.Logger
 	// Installed reports whether an agent's program is on the owner's PATH. Nil means all are.
 	Installed func(bin string) bool
+	// SaveVAPID stores the web push keys the hub generated on its first run, so they survive
+	// restarts. Nil keeps them for this run only.
+	SaveVAPID func(keys webpush.Keys) error
+	// PushClient sends to the push services. Nil is a client with a ten-second timeout.
+	PushClient *http.Client
 }
 
 // observed is the tmux session the hub watches the server through.
@@ -79,6 +95,12 @@ type Hub struct {
 
 	reconcileNow chan struct{}
 	background   sync.WaitGroup
+	closing      chan struct{} // closed when the hub stops, to end event streams
+	push         *webpush.Sender
+	login        *httpx.LoginLimiter
+
+	watchMu sync.Mutex
+	streams map[chan struct{}]struct{} // app state streams waiting for a change
 
 	mu       sync.Mutex
 	sessions map[string]*session
@@ -86,6 +108,9 @@ type Hub struct {
 	idle     proto.HubIdle
 	sync     proto.SyncState
 	syncSeq  int
+	viewers  map[string]int       // open screen streams per session
+	watches  map[string]*watch    // the tmux client following a viewed session's output
+	notified map[string]time.Time // when a session was last notified about, per kind
 }
 
 // session is what the hub keeps about one session: the record everyone sees, and what it last
@@ -109,7 +134,13 @@ func New(ctx context.Context, opt Options) (*Hub, error) {
 	h := &Hub{
 		opt: opt, t: opt.Timings, log: opt.Log, store: database, started: opt.Clock.Now(),
 		reconcileNow: make(chan struct{}, 1),
+		closing:      make(chan struct{}),
+		login:        httpx.NewLoginLimiter(),
+		streams:      map[chan struct{}]struct{}{},
 		sessions:     map[string]*session{},
+		viewers:      map[string]int{},
+		watches:      map[string]*watch{},
+		notified:     map[string]time.Time{},
 		lastBusy:     opt.Clock.Now(),
 		idle:         proto.HubIdle{Busy: true, Reasons: []string{"starting up"}},
 		sync:         proto.SyncState{State: proto.SyncStateStateIdle, Results: []proto.SyncResult{}},
@@ -122,6 +153,10 @@ func New(ctx context.Context, opt Options) (*Hub, error) {
 	for _, record := range saved {
 		record.Attached, record.Viewers, record.Size = false, 0, nil
 		h.sessions[record.ID] = &session{Session: record}
+	}
+	if err := h.setUpPush(); err != nil {
+		database.close()
+		return nil, err
 	}
 	return h, nil
 }
@@ -141,6 +176,7 @@ func (h *Hub) Run(ctx context.Context) error {
 	}
 
 	public := &http.Server{Handler: http.HandlerFunc(h.servePublic), ReadHeaderTimeout: 30 * time.Second}
+	public.RegisterOnShutdown(func() { close(h.closing) })
 	internal := &http.Server{Handler: http.HandlerFunc(h.serveInternal), ReadHeaderTimeout: 30 * time.Second}
 	served := make(chan error, 2)
 	go func() { served <- public.Serve(h.opt.TCP) }()
@@ -196,10 +232,23 @@ func (h *Hub) reconcileLoop(ctx context.Context) {
 	}
 }
 
-// persist writes a session to the database. The caller holds mu.
+// persist writes a session to the database and tells the app. The caller holds mu.
 func (h *Hub) persist(s *session) {
 	if err := h.store.save(context.Background(), &s.Session); err != nil {
 		h.log.Warn("session not saved", "session", s.ID, "error", err)
+	}
+	h.changed()
+}
+
+// changed tells every app state stream that there is something new to send.
+func (h *Hub) changed() {
+	h.watchMu.Lock()
+	defer h.watchMu.Unlock()
+	for stream := range h.streams {
+		select {
+		case stream <- struct{}{}:
+		default: // already has a change to pick up
+		}
 	}
 }
 

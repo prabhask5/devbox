@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prabhask5/devbox/internal/httpx"
 	"github.com/prabhask5/devbox/internal/proto"
 )
 
@@ -117,7 +118,7 @@ func (g *Gateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	forward, ready := g.toCode, false
-	toHub := requestHost(r) == *s.host.Hosts.Agents
+	toHub := httpx.RequestHost(r) == *s.host.Hosts.Agents
 	if toHub {
 		forward = g.toHub
 	}
@@ -135,7 +136,7 @@ func (g *Gateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	if isPage(r) && (!ready || v.phase == proto.GatewayPhaseWaking && !g.skips(r, v.wakeID)) {
 		authed := g.authed(r, s)
 		if authed {
-			g.RequestWake("page load " + requestHost(r))
+			g.RequestWake("page load " + httpx.RequestHost(r))
 		}
 		g.serveBoot(w, r, s, bootData{NeedsAuth: !authed}, http.StatusOK)
 		return

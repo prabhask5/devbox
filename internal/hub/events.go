@@ -198,6 +198,7 @@ func (h *Hub) HandleEvent(ctx context.Context, event proto.AgentEvent) {
 		s.WaitingFor = &what
 		if !again {
 			h.record("needs_input", map[string]any{"sessionId": s.ID, "agent": s.Agent, "repo": s.Repo, "what": what})
+			h.notifyNeedsInput(s)
 		}
 	case proto.AgentEventEventStop:
 		reply := text(payload, "last_assistant_message", "last-assistant-message")
@@ -215,6 +216,7 @@ func (h *Hub) HandleEvent(ctx context.Context, event proto.AgentEvent) {
 			s.LastReply = &reply
 		}
 		h.record("turn.done", map[string]any{"sessionId": s.ID, "agent": s.Agent, "repo": s.Repo, "seconds": seconds})
+		h.notifyFinished(s, seconds, reply)
 	case proto.AgentEventEventError:
 		what := text(payload, "error", "message")
 		if what == "" {
@@ -223,6 +225,7 @@ func (h *Hub) HandleEvent(ctx context.Context, event proto.AgentEvent) {
 		what = clip(what, 240)
 		h.setState(s, proto.SessionStateError)
 		s.WaitingFor = &what
+		h.notify(s, "error", "❌ "+label(s), what, true)
 	case proto.AgentEventEventSessionEnd:
 		if s.Kind == proto.SessionKindExternal {
 			h.setState(s, proto.SessionStateEnded)

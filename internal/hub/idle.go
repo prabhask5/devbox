@@ -80,6 +80,7 @@ func (h *Hub) startSync(reason string) string {
 	started := h.nowMs()
 	h.sync = proto.SyncState{RunID: &run, State: proto.SyncStateStateRunning, StartedAt: &started, Results: []proto.SyncResult{}, Reason: &reason}
 	h.mu.Unlock()
+	h.changed()
 
 	h.spawn(func() {
 		err := h.opt.Runner.Stream(context.Background(), h.syncLine, "devbox", "sync", "--json")
@@ -92,6 +93,8 @@ func (h *Hub) startSync(reason string) string {
 		results := append([]proto.SyncResult{}, h.sync.Results...)
 		h.mu.Unlock()
 		h.record("sync", map[string]any{"reason": reason, "results": results})
+		h.notifySync(results)
+		h.changed()
 	})
 	return run
 }
@@ -103,6 +106,7 @@ func (h *Hub) syncLine(line string) {
 		h.log.Warn("sync output not understood", "error", err)
 		return
 	}
+	defer h.changed()
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	switch progress.Type {
@@ -169,7 +173,7 @@ func (h *Hub) Wake(ctx context.Context, wake proto.HubWake) string {
 func (h *Hub) State() proto.HubState {
 	state := proto.HubState{
 		V: proto.HubStateVersion, ServerNow: h.nowMs(), Sessions: h.Sessions(), Devbox: h.Status(),
-		Adapters: []proto.AdapterInfo{}, CommonKeys: CommonKeys,
+		Adapters: []proto.AdapterInfo{}, CommonKeys: CommonKeys, VapidPublicKey: &h.push.Keys.Public, PushDevices: h.devices(),
 	}
 	for _, adapter := range Adapters {
 		available := adapter.Kind == proto.AdapterInfoKindTmux && (h.opt.Installed == nil || h.opt.Installed(adapter.Bin))
