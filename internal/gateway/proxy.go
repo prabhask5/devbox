@@ -259,7 +259,7 @@ func (c *trackedConn) goAway() {
 	if c.websocket {
 		c.writing.Lock()
 		if c.frames.betweenFrames() {
-			_ = c.Conn.SetWriteDeadline(time.Now().Add(time.Second))
+			_ = c.SetWriteDeadline(time.Now().Add(time.Second))
 			_, _ = c.Conn.Write([]byte{0x88, 0x02, 0x03, 0xe9})
 		}
 		c.writing.Unlock()

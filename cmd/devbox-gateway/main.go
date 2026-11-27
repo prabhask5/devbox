@@ -57,20 +57,22 @@ func run(args []string) int {
 		ConfigDir: *configDir, StateDir: *stateDir, IncusSocket: *incusSocket, Version: version,
 		FS: sys.OS(), Clock: sys.SystemClock(), Timings: gateway.DefaultTimings(), Log: log,
 	}
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
 	var err error
-	if options.HTTP, err = net.Listen("tcp", httpAddr); err != nil {
+	var listener net.ListenConfig
+	// The gateway runs in a container and is reached over the Docker network: ":8080" is meant.
+	if options.HTTP, err = listener.Listen(ctx, "tcp", httpAddr); err != nil {
 		fmt.Fprintln(os.Stderr, "devbox-gateway:", err)
 		return 1
 	}
 	if sshAddr != "" && sshAddr != "off" {
-		if options.SSH, err = net.Listen("tcp", sshAddr); err != nil {
+		if options.SSH, err = listener.Listen(ctx, "tcp", sshAddr); err != nil {
 			fmt.Fprintln(os.Stderr, "devbox-gateway:", err)
 			return 1
 		}
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
-	defer stop()
 	log.Info("devbox-gateway started", "version", version, "http", options.HTTP.Addr().String(), "ssh", sshAddr)
 	if err := gateway.New(options).Run(ctx); err != nil {
 		fmt.Fprintln(os.Stderr, "devbox-gateway:", err)

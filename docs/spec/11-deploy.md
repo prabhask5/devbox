@@ -14,7 +14,7 @@ A fork works the same way with its own repo, Dokploy app and environments (`depl
 The owner creates one Dokploy **Compose** application (documented step by step in `docs/deploy-gateway.md`, with screenshots):
 
 - Provider: GitHub, repository `<owner>/devbox`, branch `main`, compose path `deploy/gateway/compose.yml`.
-- **Auto Deploy: on.** **Watch paths**: `cmd/devbox-gateway/**`, `internal/gateway/**`, `internal/incus/**`, `internal/proto/**`, `internal/httpx/**`, `web/gateway-ui/**`, `web/shared/**`, `deploy/gateway/**`, `go.mod`, `go.sum`. Pushes elsewhere do not redeploy the gateway.
+- **Auto Deploy: on.** **Watch paths**: `cmd/devbox-gateway/**`, `internal/gateway/**`, `internal/incus/**`, `internal/proto/**`, `internal/config/**`, `internal/schema/**`, `internal/secret/**`, `internal/password/**`, `internal/sys/**`, `web/gateway-ui/**`, `web/shared/**`, `deploy/gateway/**`, `go.mod`, `go.sum`. Pushes elsewhere do not redeploy the gateway.
 - **No domains** (routing is written by `devbox up`, spec 09) and **no preview deployments**.
 
 `deploy/gateway/compose.yml`:
@@ -45,7 +45,7 @@ A broken gateway deploy cuts access to code./agents.: Dokploy keeps the previous
 
 ### Workflow `.github/workflows/deploy-hub.yml`
 
-On push to `main` touching `cmd/devbox-hub/**`, `internal/hub/**`, `internal/proto/**`, `internal/webpush/**`, `internal/tmux/**`, `web/hub-app/**`, `web/shared/**`, `crates/**`, `vm/**`, `go.mod`, `go.sum`, `Cargo.lock`, `web/pnpm-lock.yaml` — and only after the `CI` workflow succeeded for that commit (`workflow_run`):
+On push to `main` touching `cmd/devbox-hub/**`, `internal/hub/**`, `internal/proto/**`, `internal/config/**`, `internal/schema/**`, `internal/secret/**`, `internal/password/**`, `internal/sys/**`, `internal/webpush/**`, `internal/tmux/**`, `web/hub-app/**`, `web/shared/**`, `crates/**`, `vm/**`, `go.mod`, `go.sum`, `Cargo.lock`, `web/pnpm-lock.yaml` — and only after the `CI` workflow succeeded for that commit (`workflow_run`):
 
 1. Build `devbox-hub` (linux amd64/arm64, static) with the embedded app, and `devbox` (musl amd64/arm64).
 2. Upload them as a **workflow artifact** `vm-<sha>` (binaries + `SHA256SUMS`, retention 30 days) and create build-provenance attestations (`actions/attest-build-provenance`). Hub builds never go to Releases, so the Releases page holds only tagged versions (spec 17).

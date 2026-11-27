@@ -77,7 +77,8 @@ build() {
   for arch in $archs; do
     for cmd in devbox-gateway devbox-hub; do
       step "go build $cmd linux/$arch"
-      CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath -ldflags '-s -w' -o "bin/$cmd-linux-$arch" "./cmd/$cmd"
+      CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath -ldflags "-s -w -X main.version=$(git rev-parse --short HEAD)" \
+        -o "bin/$cmd-linux-$arch" "./cmd/$cmd"
     done
   done
   if [[ -n $target ]]; then
@@ -92,7 +93,13 @@ build() {
   fi
 }
 
-budgets() { step "budgets"; scripts/budgets.sh; }
+budgets() {
+  rm -f target/budgets/measured.toml
+  step "measure the gateway"
+  go build -o target/budgets/devbox-gateway ./cmd/devbox-gateway
+  go run ./tests/perf/gateway -gateway target/budgets/devbox-gateway
+  step "budgets"; scripts/budgets.sh
+}
 
 stages=("$@")
 [[ ${#stages[@]} -gt 0 ]] || stages=(static go rust web integration e2e build budgets)

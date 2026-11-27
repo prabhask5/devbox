@@ -35,12 +35,14 @@ func OS() FS { return osFS{} }
 
 type osFS struct{}
 
-func (osFS) ReadFile(name string) ([]byte, error) { return os.ReadFile(name) }
+func (osFS) ReadFile(name string) ([]byte, error) {
+	return os.ReadFile(name) //nolint:gosec // reading the file the caller names is this type's job
+}
 
 func (osFS) Stat(name string) (fs.FileInfo, error) { return os.Stat(name) }
 
 func (osFS) WriteFile(name string, data []byte, perm fs.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(name), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(name), 0o755); err != nil { //nolint:gosec // state directories hold nothing secret; files get the mode asked for
 		return err
 	}
 	tmp, err := os.CreateTemp(filepath.Dir(name), filepath.Base(name)+".*")

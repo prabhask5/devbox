@@ -36,14 +36,14 @@ Specs: 01, 14 (secrets types)
 
 ## M2 — Gateway core
 Specs: 02, 14, 15 (fake Incus)
-- [ ] `tests/fakes/incus` (unix-socket REST, operations, injectable delays/failures, request log) + its tests against recorded real responses
-- [ ] `internal/incus` client with the endpoint allowlist; `internal/sys`
-- [ ] State machine (wake phases, restore→cold fallback, stop with fallback, single-flight), ETA from history, persistence
-- [ ] Reverse proxy (HTTP, SSE flush, duplicate headers, WebSocket), routing by host, boot-vs-503 rules, skip cookie
-- [ ] Activity accounting, idle decision with hub status, SSH proxy with banner wait
-- [ ] Wake auth (argon2id, HMAC cookies, rate limit, open-redirect guard), endpoints, health matrix with golden strings
-- [ ] Unconfigured mode, hot reload, graceful shutdown; budgets: proxy latency/throughput/RSS measured
-- [ ] Cleanup pass; `scripts/check-hygiene.sh` green
+- [x] `tests/fakes/incus` (unix-socket REST, operations, injectable delays/failures, request log) + its tests against the reference responses — [`tests/go/incus/incus_test.go`](../tests/go/incus/incus_test.go), [`tests/fixtures/incus/`](../tests/fixtures/incus)
+- [x] `internal/incus` client with the endpoint allowlist; `internal/sys` — [`tests/go/incus/incus_test.go`](../tests/go/incus/incus_test.go), [`tests/go/sys/sys_test.go`](../tests/go/sys/sys_test.go)
+- [x] State machine (wake phases, restore→cold fallback, stop with fallback, single-flight), ETA from history, persistence — [`tests/go/gateway/wake_test.go`](../tests/go/gateway/wake_test.go), [`endpoints_test.go`](../tests/go/gateway/endpoints_test.go) (`TestStateSurvivesARestart`)
+- [x] Reverse proxy (HTTP, SSE flush, duplicate headers, WebSocket), routing by host, boot-vs-503 rules, skip cookie — [`tests/go/gateway/proxy_test.go`](../tests/go/gateway/proxy_test.go)
+- [x] Activity accounting, idle decision with hub status, SSH proxy with banner wait — [`tests/go/gateway/idle_test.go`](../tests/go/gateway/idle_test.go)
+- [x] Wake auth (argon2id, HMAC cookies, rate limit, open-redirect guard), endpoints, health matrix with golden strings — [`tests/go/gateway/auth_test.go`](../tests/go/gateway/auth_test.go), [`endpoints_test.go`](../tests/go/gateway/endpoints_test.go)
+- [x] Unconfigured mode, hot reload, graceful shutdown; budgets: proxy latency/throughput/RSS measured — [`tests/go/gateway/config_test.go`](../tests/go/gateway/config_test.go), [`tests/perf/gateway`](../tests/perf/gateway)
+- [x] Cleanup pass; `scripts/check-hygiene.sh` green
 
 ## M3 — Gateway UI and Dokploy deployment
 Specs: 03, 11 (gateway part), 16
@@ -100,7 +100,7 @@ Specs: 09, 10, 12
 - [ ] `status`, `doctor`, `connect`, `password` with golden `--json`
 - [ ] cestmoi adoption fixture: golden plan, apply, down
 - [ ] moi `System`-adapter proof test; `cargo publish --dry-run` for the library crates
-- [ ] Nightly real-VM workflow (spec 15)
+- [ ] Nightly real-VM workflow (spec 15); it also checks `internal/incus` against a real Incus and replaces the hand-written `tests/fixtures/incus/` with recorded responses
 - [ ] Cleanup pass; `scripts/check-hygiene.sh` green
 
 ## M9 — Hub continuous deployment

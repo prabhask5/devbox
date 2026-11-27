@@ -318,7 +318,7 @@ func TestBinary(t *testing.T) {
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	defer cmd.Process.Kill() //nolint:errcheck // already exited when the test passes
+	defer cmd.Process.Kill() // already exited when the test passes
 
 	// The first log line names the address it listens on.
 	logs := bufio.NewScanner(stderr)

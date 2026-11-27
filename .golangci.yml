@@ -23,9 +23,10 @@ linters:
       require-specific: true
   exclusions:
     rules:
-      # Tests run the repository's own binaries and scripts in temp dirs.
+      # Tests run the repository's own binaries and scripts in temp dirs, and a failed Close or an
+      # unread body cannot make a test pass wrongly.
       - path: ^tests/
-        linters: [gosec, noctx]
+        linters: [gosec, noctx, errcheck, bodyclose, unparam]
 formatters:
   enable:
     - gofmt

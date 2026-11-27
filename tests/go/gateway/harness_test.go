@@ -5,10 +5,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/hmac"
-	"crypto/sha1" //nolint:gosec // the WebSocket handshake is defined with SHA-1
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -31,6 +29,7 @@ import (
 	"github.com/prabhask5/devbox/internal/proto"
 	"github.com/prabhask5/devbox/internal/sys"
 	incusfake "github.com/prabhask5/devbox/tests/fakes/incus"
+	"github.com/prabhask5/devbox/tests/fakes/wsecho"
 )
 
 const (
@@ -154,7 +153,7 @@ func newFakeVM(t *testing.T, incus *incusfake.Server) *fakeVM {
 		time.Sleep(300 * time.Millisecond)
 		fmt.Fprint(w, "slow answer")
 	})
-	code.HandleFunc("GET /ws", serveEcho)
+	code.HandleFunc("GET /ws", wsecho.ServeEcho)
 	code.HandleFunc("/__devbox/health", func(w http.ResponseWriter, _ *http.Request) { fmt.Fprint(w, "the upstream must never see this") })
 	vm.codeHandler = code
 	vm.code = httptest.NewServer(vm.guard(&vm.codeUp, "code", code))
@@ -356,7 +355,7 @@ func start(t *testing.T, options ...option) *harness {
 	if s.timings != nil {
 		s.timings(&timings)
 	}
-	var clock sys.Clock = sys.SystemClock()
+	clock := sys.SystemClock()
 	if s.fakeClock {
 		h.clock = sys.NewFakeClock(time.Date(2026, 3, 4, 5, 6, 7, 0, time.UTC))
 		clock = h.clock
@@ -592,102 +591,6 @@ func (h *harness) wakeDone() proto.Wake {
 	return wake
 }
 
-// ---------------------------------------------------------------- WebSocket (RFC 6455), by hand
-
-func writeFrame(w io.Writer, opcode byte, payload []byte, masked bool) error {
-	frame := []byte{0x80 | opcode}
-	maskBit := byte(0)
-	if masked {
-		maskBit = 0x80
-	}
-	switch {
-	case len(payload) < 126:
-		frame = append(frame, maskBit|byte(len(payload)))
-	case len(payload) < 1<<16:
-		frame = append(frame, maskBit|126)
-		frame = binary.BigEndian.AppendUint16(frame, uint16(len(payload)))
-	default:
-		frame = append(frame, maskBit|127)
-		frame = binary.BigEndian.AppendUint64(frame, uint64(len(payload)))
-	}
-	if masked {
-		key := [4]byte{1, 2, 3, 4}
-		frame = append(frame, key[:]...)
-		for i, b := range payload {
-			frame = append(frame, b^key[i%4])
-		}
-	} else {
-		frame = append(frame, payload...)
-	}
-	_, err := w.Write(frame)
-	return err
-}
-
-func readFrame(r *bufio.Reader) (opcode byte, payload []byte, err error) {
-	head := make([]byte, 2)
-	if _, err = io.ReadFull(r, head); err != nil {
-		return 0, nil, err
-	}
-	length := uint64(head[1] & 0x7f)
-	switch length {
-	case 126:
-		ext := make([]byte, 2)
-		if _, err = io.ReadFull(r, ext); err != nil {
-			return 0, nil, err
-		}
-		length = uint64(binary.BigEndian.Uint16(ext))
-	case 127:
-		ext := make([]byte, 8)
-		if _, err = io.ReadFull(r, ext); err != nil {
-			return 0, nil, err
-		}
-		length = binary.BigEndian.Uint64(ext)
-	}
-	var key []byte
-	if head[1]&0x80 != 0 {
-		key = make([]byte, 4)
-		if _, err = io.ReadFull(r, key); err != nil {
-			return 0, nil, err
-		}
-	}
-	payload = make([]byte, length)
-	if _, err = io.ReadFull(r, payload); err != nil {
-		return 0, nil, err
-	}
-	for i := range payload {
-		if key != nil {
-			payload[i] ^= key[i%4]
-		}
-	}
-	return head[0] & 0x0f, payload, nil
-}
-
-// serveEcho is a WebSocket endpoint that sends every text frame back.
-func serveEcho(w http.ResponseWriter, r *http.Request) {
-	if !strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
-		http.Error(w, "not a websocket request", http.StatusBadRequest)
-		return
-	}
-	accept := sha1.Sum([]byte(r.Header.Get("Sec-WebSocket-Key") + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")) //nolint:gosec // RFC 6455
-	conn, buffered, err := http.NewResponseController(w).Hijack()
-	if err != nil {
-		return
-	}
-	defer conn.Close()
-	fmt.Fprintf(buffered, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: %s\r\nX-Forwarded-Host-Seen: %s\r\n\r\n",
-		base64.StdEncoding.EncodeToString(accept[:]), r.Header.Get("X-Forwarded-Host"))
-	_ = buffered.Flush()
-	for {
-		opcode, payload, err := readFrame(buffered.Reader)
-		if err != nil || opcode == 0x8 {
-			return
-		}
-		if err := writeFrame(conn, opcode, payload, false); err != nil {
-			return
-		}
-	}
-}
-
 // socket is a WebSocket client connection through the gateway.
 type socket struct {
 	conn   net.Conn
@@ -703,7 +606,7 @@ func (h *harness) dialWS(host, path string) (*socket, int) {
 	if err != nil {
 		h.t.Fatal(err)
 	}
-	fmt.Fprintf(conn, "GET %s HTTP/1.1\r\nHost: %s\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n", path, host)
+	fmt.Fprint(conn, wsecho.Handshake(host, path))
 	reader := bufio.NewReader(conn)
 	resp, err := http.ReadResponse(reader, nil)
 	if err != nil {
@@ -719,7 +622,7 @@ func (h *harness) dialWS(host, path string) (*socket, int) {
 
 func (s *socket) send(t *testing.T, text string) {
 	t.Helper()
-	if err := writeFrame(s.conn, 0x1, []byte(text), true); err != nil {
+	if err := wsecho.WriteFrame(s.conn, wsecho.Text, []byte(text), true); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -727,7 +630,7 @@ func (s *socket) send(t *testing.T, text string) {
 // receive returns the next frame's opcode and payload; opcode 0 means the connection ended.
 func (s *socket) receive() (byte, string) {
 	_ = s.conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	opcode, payload, err := readFrame(s.reader)
+	opcode, payload, err := wsecho.ReadFrame(s.reader)
 	if err != nil {
 		return 0, err.Error()
 	}

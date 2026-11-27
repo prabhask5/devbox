@@ -105,7 +105,7 @@ func (s *Server) Resume() error {
 	s.http = &http.Server{Handler: http.HandlerFunc(s.serve), ReadHeaderTimeout: 10 * time.Second}
 	server := s.http
 	s.mu.Unlock()
-	go server.Serve(listener) //nolint:errcheck // returns when the server is closed
+	go server.Serve(listener) // returns when the server is closed
 	return nil
 }
 
