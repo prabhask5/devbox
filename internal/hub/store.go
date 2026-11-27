@@ -6,10 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strconv"
 
 	_ "modernc.org/sqlite" // the SQLite driver, in pure Go
 
 	"github.com/prabhask5/devbox/internal/proto"
+	"github.com/prabhask5/devbox/internal/webpush"
 )
 
 // store is the hub's database: the sessions, so they survive a restart, and an append-only
@@ -39,6 +41,8 @@ func openStore(ctx context.Context, dir string) (*store, error) {
 		`CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, data TEXT NOT NULL)`,
 		`CREATE TABLE IF NOT EXISTS events (seq INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, type TEXT NOT NULL, data TEXT NOT NULL)`,
 		`CREATE INDEX IF NOT EXISTS events_at ON events (at)`,
+		`CREATE TABLE IF NOT EXISTS subscriptions (endpoint TEXT PRIMARY KEY, data TEXT NOT NULL, device TEXT NOT NULL, created INTEGER NOT NULL)`,
+		`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)`,
 	} {
 		if _, err := db.ExecContext(ctx, statement); err != nil {
 			_ = db.Close()
@@ -121,4 +125,59 @@ func (s *store) events(ctx context.Context, since int64) ([]Event, error) {
 		events = append(events, event)
 	}
 	return events, rows.Err()
+}
+
+// subscriptions returns the push subscriptions of every registered device.
+func (s *store) subscriptions(ctx context.Context) ([]webpush.Subscription, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT data FROM subscriptions ORDER BY created`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() //nolint:errcheck // read to the end below
+	var all []webpush.Subscription
+	for rows.Next() {
+		var data string
+		if err := rows.Scan(&data); err != nil {
+			return nil, err
+		}
+		var subscription webpush.Subscription
+		if json.Unmarshal([]byte(data), &subscription) == nil {
+			all = append(all, subscription)
+		}
+	}
+	return all, rows.Err()
+}
+
+func (s *store) subscribe(ctx context.Context, subscription webpush.Subscription, device string, at int64) error {
+	data, err := json.Marshal(subscription)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `INSERT INTO subscriptions (endpoint, data, device, created) VALUES (?, ?, ?, ?)
+		ON CONFLICT (endpoint) DO UPDATE SET data = excluded.data, device = excluded.device`, subscription.Endpoint, string(data), device, at)
+	return err
+}
+
+func (s *store) unsubscribe(ctx context.Context, endpoint string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM subscriptions WHERE endpoint = ?`, endpoint)
+	return err
+}
+
+// setting returns a stored setting, or fallback when it was never set.
+func (s *store) setting(ctx context.Context, key string, fallback int) int {
+	var value string
+	if err := s.db.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = ?`, key).Scan(&value); err != nil {
+		return fallback
+	}
+	number, err := strconv.Atoi(value)
+	if err != nil {
+		return fallback
+	}
+	return number
+}
+
+func (s *store) setSetting(ctx context.Context, key string, value int) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
+		key, strconv.Itoa(value))
+	return err
 }

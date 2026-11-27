@@ -75,8 +75,7 @@ func (h *Hub) servePublic(w http.ResponseWriter, r *http.Request) {
 		}
 		h.serveGateway(w, r)
 	case strings.HasPrefix(r.URL.Path, "/api/"):
-		// TODO(M5): the app API and its session cookie.
-		fail(w, http.StatusUnauthorized, "login required")
+		h.serveApp(w, r)
 	default:
 		// TODO(M5): the agents app.
 		fail(w, http.StatusNotFound, "not found")

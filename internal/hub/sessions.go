@@ -239,6 +239,10 @@ func (h *Hub) Send(ctx context.Context, id string, input Input) error {
 		return invalid("%s has no terminal to type into", s.Name)
 	}
 	name := *s.Tmux
+	if s.Unread {
+		s.Unread = false
+		h.persist(s)
+	}
 	// The agent will say it is working; show it at once instead of after its hook arrives.
 	// This comes before the keys are sent, so whatever the agent reports next wins.
 	if adapter, _ := AdapterByID(s.Agent); adapter.Hooks && input.Text != "" &&
@@ -424,7 +428,11 @@ func (h *Hub) observe(s *session, l *tmux.Session, now time.Time) {
 		name := l.Name
 		s.Tmux, s.Name = &name, name
 	}
-	s.Attached = l.Attached > 0
+	attached := l.Attached
+	if h.watches[s.ID] != nil {
+		attached-- // the hub's own client following the output for a viewer is not a terminal
+	}
+	s.Attached = attached > 0
 	s.Size = &proto.SessionSize{Cols: l.Cols, Rows: l.Rows}
 	if s.State == proto.SessionStateGone {
 		h.setState(s, proto.SessionStateIdle)
@@ -448,7 +456,9 @@ func (h *Hub) observe(s *session, l *tmux.Session, now time.Time) {
 	case exited && s.State != proto.SessionStateExited:
 		h.setState(s, proto.SessionStateExited)
 		s.WaitingFor = nil
-	case !exited && s.State == proto.SessionStateExited:
+	case !exited && s.State == proto.SessionStateExited && now.Sub(time.UnixMilli(int64(s.StateSince))) > h.t.ExitGrace:
+		// Something runs under the wrapper again: the agent was started by hand in the shell
+		// it left. (Right after it said goodbye its own process is still there for a moment.)
 		h.setState(s, proto.SessionStateIdle)
 	}
 	lastEvent := time.UnixMilli(int64(s.CreatedAt))
@@ -470,8 +480,10 @@ func (h *Hub) Sessions() []proto.Session {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	list := make([]proto.Session, 0, len(h.sessions))
-	for _, s := range h.sessions {
-		list = append(list, s.Session)
+	for id, s := range h.sessions {
+		record := s.Session
+		record.Viewers = h.viewers[id]
+		list = append(list, record)
 	}
 	sort.Slice(list, func(i, j int) bool {
 		if list[i].StateSince != list[j].StateSince {

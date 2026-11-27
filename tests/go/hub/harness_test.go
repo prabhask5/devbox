@@ -3,6 +3,7 @@ package hub_test
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -22,9 +23,21 @@ import (
 	"github.com/prabhask5/devbox/internal/proto"
 	"github.com/prabhask5/devbox/internal/sys"
 	"github.com/prabhask5/devbox/internal/tmux"
+	"github.com/prabhask5/devbox/internal/webpush"
+	"golang.org/x/crypto/argon2"
 )
 
-const hubToken = "FAKE-hub-token"
+const (
+	hubToken    = "FAKE-hub-token"
+	appPassword = "FAKE-app-password"
+)
+
+// appHash is an argon2id hash of the app password, cheap enough to sign in many times.
+var appHash = func() string {
+	salt := []byte("FAKEsaltFAKEsalt")
+	hash := argon2.IDKey([]byte(appPassword), salt, 1, 64, 1, 32)
+	return fmt.Sprintf("$argon2id$v=19$m=64,t=1,p=1$%s$%s", base64.RawStdEncoding.EncodeToString(salt), base64.RawStdEncoding.EncodeToString(hash))
+}()
 
 // bin holds what the tests put on PATH: the real devbox-hub (its `event` command is the hook
 // relay the fake agents call) and fake claude, codex and opencode.
@@ -92,6 +105,8 @@ type harness struct {
 	clock                sys.Clock
 	stop                 context.CancelFunc
 	stopped              chan error
+	vapid                string // the web push keys the hub asked to have saved, as lines of its secrets file
+	vapidSaved           int
 }
 
 func testTimings() hub.Timings {
@@ -103,6 +118,11 @@ func testTimings() hub.Timings {
 	t.ShellActive = 2 * time.Second
 	t.ExternalStale = time.Hour
 	t.EnterDelay = 30 * time.Millisecond
+	t.NeedsInputDelay = 300 * time.Millisecond
+	t.NeedsInputDelayAttached = 2 * time.Second
+	t.NotifyThrottle = 700 * time.Millisecond
+	t.StreamDebounce = 30 * time.Millisecond
+	t.StreamPing = 50 * time.Millisecond
 	return t
 }
 
@@ -159,8 +179,7 @@ func (h *harness) run() {
 		h.t.Fatal(err)
 	}
 	secrets, _, err := config.HubSecrets("hub.secrets.toml", []byte(
-		"version = 1\napp_password_hash = '$argon2id$v=19$m=64,t=1,p=1$RkFLRXNhbHRGQUtFc2FsdA$RkFLRWhhc2hGQUtFaGFzaEZBS0VoYXNoRkFLRWhhc2g'\n"+
-			"cookie_secret = \"FAKE-cookie-secret\"\nhub_token = \""+hubToken+"\"\n"))
+		"version = 1\napp_password_hash = '"+appHash+"'\ncookie_secret = \"FAKE-cookie-secret\"\nhub_token = \""+hubToken+"\"\n"+h.vapid))
 	if err != nil {
 		h.t.Fatal(err)
 	}
@@ -179,6 +198,12 @@ func (h *harness) run() {
 		TCP: tcp, Socket: socket, Tmux: h.tmux, Clock: h.clock, Host: h.machine(), Runner: h.runner, Timings: h.timings,
 		Log:       slog.New(slog.NewTextHandler(h.logs, nil)),
 		Installed: func(bin string) bool { return bin != "opencode" },
+		SaveVAPID: func(keys webpush.Keys) error {
+			// As `devbox-hub serve` does: kept with the secrets, for the next start.
+			h.vapid = fmt.Sprintf("vapid_public_key = %q\nvapid_private_key = %q\n", keys.Public, keys.Private)
+			h.vapidSaved++
+			return nil
+		},
 	})
 	if err != nil {
 		h.t.Fatal(err)

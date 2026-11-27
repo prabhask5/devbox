@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/prabhask5/devbox/internal/httpx"
 	"github.com/prabhask5/devbox/internal/incus"
 	"github.com/prabhask5/devbox/internal/proto"
 	"github.com/prabhask5/devbox/internal/sys"
@@ -98,7 +99,7 @@ type Gateway struct {
 	toCode    http.Handler
 	toHub     http.Handler
 	probes    *http.Client
-	login     *loginLimiter
+	login     *httpx.LoginLimiter
 	pollNow   chan struct{} // asks the poll loop to run without waiting for its tick
 	closing   chan struct{} // closed when the gateway stops, to end event streams
 
@@ -151,7 +152,7 @@ func New(opt Options) *Gateway {
 		closing: make(chan struct{}),
 		conns:   map[*trackedConn]struct{}{},
 		subs:    map[chan struct{}]struct{}{},
-		login:   newLoginLimiter(),
+		login:   httpx.NewLoginLimiter(),
 	}
 	g.probes = &http.Client{
 		Timeout: g.t.ProbeTimeout,

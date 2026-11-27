@@ -5,12 +5,12 @@ import (
 	_ "embed"
 	"encoding/json"
 	"io"
-	"mime"
 	"net/http"
 	"net/url"
 	"regexp"
 	"time"
 
+	"github.com/prabhask5/devbox/internal/httpx"
 	"github.com/prabhask5/devbox/internal/proto"
 )
 
@@ -43,7 +43,7 @@ var bootBefore, bootAfter = func() (string, string) {
 
 // serveBoot answers a page load with the boot screen.
 func (g *Gateway) serveBoot(w http.ResponseWriter, r *http.Request, s *settings, data bootData, code int) {
-	data.Host, data.App = requestHost(r), "code"
+	data.Host, data.App = httpx.RequestHost(r), "code"
 	if s != nil && data.Host == *s.host.Hosts.Agents {
 		data.App = "agents"
 	}
@@ -64,7 +64,7 @@ func (g *Gateway) serveDevbox(w http.ResponseWriter, r *http.Request) {
 		case r.Method != method:
 			w.Header().Set("Allow", method)
 			writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
-		case needsJSON && !isJSON(r):
+		case needsJSON && !httpx.IsJSON(r):
 			// Browsers cannot send JSON across sites without asking first, which keeps another
 			// site from triggering these.
 			writeJSON(w, http.StatusUnsupportedMediaType, map[string]string{"error": "Content-Type must be application/json"})
@@ -114,7 +114,7 @@ func (g *Gateway) serveDevbox(w http.ResponseWriter, r *http.Request) {
 	case "/__devbox/skip":
 		route(http.MethodPost, true, false, func() {
 			if v := g.view.Load(); v.wakeID != "" {
-				setCookie(w, skipCookie, v.wakeID, skipCookieFor)
+				httpx.SetCookie(w, skipCookie, v.wakeID, skipCookieFor)
 			}
 			writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 		})
@@ -133,15 +133,10 @@ func (g *Gateway) serveDevbox(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func isJSON(r *http.Request) bool {
-	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-	return err == nil && mediaType == "application/json"
-}
-
 // serveLogin checks the wake password, sets the wake cookie and starts a wake. The boot
 // screen's form posts here and is redirected; the agents app posts JSON and gets a status.
 func (g *Gateway) serveLogin(w http.ResponseWriter, r *http.Request, s *settings) {
-	asJSON := isJSON(r)
+	asJSON := httpx.IsJSON(r)
 	next := "/"
 	fail := func(code int, message string) {
 		if asJSON {
@@ -154,7 +149,7 @@ func (g *Gateway) serveLogin(w http.ResponseWriter, r *http.Request, s *settings
 		fail(http.StatusServiceUnavailable, "devbox is not set up yet")
 		return
 	}
-	if !asJSON && !sameOrigin(r) {
+	if !asJSON && !httpx.SameOrigin(r) {
 		fail(http.StatusForbidden, "This form was sent from another site.")
 		return
 	}
@@ -178,16 +173,16 @@ func (g *Gateway) serveLogin(w http.ResponseWriter, r *http.Request, s *settings
 	}
 	next = safeNext(form.Next)
 
-	if !g.login.allow(clientAddress(r), g.now()) {
+	if !g.login.Allow(httpx.ClientAddress(r), g.now()) {
 		fail(http.StatusTooManyRequests, "Too many attempts, wait a minute.")
 		return
 	}
 	if !g.checkPassword(s, form.Password) {
-		g.login.failed(g.now())
+		g.login.Failed(g.now())
 		fail(http.StatusUnauthorized, "Wrong password.")
 		return
 	}
-	setCookie(w, wakeCookie, signExpiry(s.secrets.CookieSecret.Expose(), g.now().Add(wakeCookieFor)), wakeCookieFor)
+	httpx.SetCookie(w, wakeCookie, httpx.Sign(s.secrets.CookieSecret.Expose(), g.now().Add(wakeCookieFor), ""), wakeCookieFor)
 	g.RequestWake("login")
 	if asJSON {
 		writeJSON(w, http.StatusAccepted, map[string]bool{"ok": true})
@@ -260,7 +255,7 @@ func (g *Gateway) minuteLoop(ctx context.Context) {
 		if s := g.settings(); s != nil && bytes > 0 && bytes >= int64(s.host.Sleep.ActivityBytesPerMin) {
 			g.markActivity()
 		}
-		g.login.prune(g.now())
+		g.login.Prune(g.now())
 		g.mu.Lock()
 		g.traffic = append(g.traffic, trafficMinute{At: g.now().UnixMilli(), Bytes: bytes})
 		if len(g.traffic) > trafficKept {

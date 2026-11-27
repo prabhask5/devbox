@@ -110,7 +110,7 @@ func TestAnAgentSessionFromStartToRestart(t *testing.T) {
 	for _, event := range log.Events {
 		kinds = append(kinds, event.Type)
 	}
-	if got := strings.Join(kinds, " "); got != "session.create prompt needs_input turn.done prompt" {
+	if got := strings.Join(kinds, " "); got != "session.create prompt needs_input turn.done prompt notify" {
 		t.Errorf("event log: %s", got)
 	}
 	if first := log.Events[0]; first.Data["agent"] != "claude" || first.Data["repo"] != "devbox" || first.Data["prompt"] != "Fix the flaky sync test" {
