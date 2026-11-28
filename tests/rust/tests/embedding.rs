@@ -625,3 +625,35 @@ fn down_takes_the_gateways_key_out_of_a_vm_that_stays_and_leaves_the_paired_comp
     assert_eq!(system.text("/var/lib/devbox/gateway/ssh/authorized_keys").unwrap(), keys);
     assert!(system.text("/var/lib/devbox/gateway/ssh/host_ed25519_key.pub").is_some());
 }
+
+#[test]
+fn the_release_for_a_new_vm_is_the_newest_devbox_release_whatever_else_was_released() {
+    // The repository's releases, newest first: the SSH client's, a pre-release, two releases.
+    let system = dokploy();
+    let report = setup::up(&system, &fresh(), &mut Yes).unwrap();
+    assert_eq!(report.outcome, Outcome::Applied, "{}", render::human(&report));
+    system.incus(|incus| {
+        let file = &incus.instances["devbox"].files["/var/lib/devbox-install/env"];
+        let env = String::from_utf8_lossy(&file.data).into_owned();
+        assert!(env.contains("RELEASE='v1.2.3'"), "{env}");
+    });
+
+    // A repository that has released only other things has no devbox to install, and says so.
+    let system = dokploy();
+    system.program("curl", |command| {
+        let url = command.args.last().map_or_default(String::as_str);
+        url.contains("/releases?").then(|| devbox_core::system::Output {
+            code: Some(0),
+            stdout: br#"[{"tag_name": "ssh-v0.1.0"}, {"tag_name": "v1.0.0-rc.1", "prerelease": true}, {"tag_name": "v0.9.0", "draft": true}]"#.to_vec(),
+            ..devbox_core::system::Output::default()
+        })
+    });
+    let error = setup::up(&system, &fresh(), &mut Yes).unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("example/devbox has no release of devbox yet. Name one with --release")
+            || error.to_string().contains("has no release of devbox yet"),
+        "{error}"
+    );
+}
