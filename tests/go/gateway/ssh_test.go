@@ -652,3 +652,33 @@ func TestConnectionsThatHaveNotLoggedInAreBounded(t *testing.T) {
 	}
 	_ = h.mustSSH(signer).Close()
 }
+
+func TestASignalReachesTheCommandInTheVM(t *testing.T) {
+	h := start(t)
+	client := h.mustSSH(h.pair())
+	session, err := client.NewSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+	var out syncBuffer
+	session.Stdout = &out
+	if err := session.Start("echo started; exec sleep 60"); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the command to run", func() bool { return out.String() == "started\n" })
+	if err := session.Signal(ssh.SIGTERM); err != nil {
+		t.Fatal(err)
+	}
+	ended := make(chan error, 1)
+	go func() { ended <- session.Wait() }()
+	select {
+	case err := <-ended:
+		var exit *ssh.ExitError
+		if !errors.As(err, &exit) || exit.ExitStatus() == 0 {
+			t.Errorf("a command that was signalled ended with %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the signal did not reach the command")
+	}
+}

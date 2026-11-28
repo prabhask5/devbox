@@ -147,8 +147,11 @@ budgets() {
     size=$(wc -c <target/budgets/devbox-ssh)
     (( size > largest )) && largest=$size
   done
+  go build -trimpath -ldflags "-s -w" -o target/budgets/devbox-ssh-native ./cmd/devbox-ssh
   mkdir -p target/budgets
   awk -v bytes="$largest" 'BEGIN { printf "devbox_ssh_mb = %.2f\n", bytes / 1048576 }' >>target/budgets/measured.toml
+  step "measure SSH through the gateway"
+  go run ./tests/perf/ssh -client target/budgets/devbox-ssh-native
   step "measure the hub"
   go build -trimpath -ldflags "-s -w" -o target/budgets/devbox-hub ./cmd/devbox-hub
   go run ./tests/perf/hub -hub target/budgets/devbox-hub

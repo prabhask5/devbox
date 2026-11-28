@@ -38,7 +38,8 @@ for metric, budget in budgets.items():
         rows.append((metric, budget, "", "pending"))
         continue
     value = measured[metric]
-    ok = value >= budget * 0.9 if metric.endswith("_rps") else value <= budget * 1.1
+    # Throughputs are minimums; everything else is a maximum.
+    ok = value >= budget * 0.9 if metric.endswith(("_rps", "_mbps")) else value <= budget * 1.1
     failed |= not ok
     rows.append((metric, budget, value, "ok" if ok else "over budget"))
 

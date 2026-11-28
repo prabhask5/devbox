@@ -29,7 +29,7 @@ Create one **Compose** application:
 | Provider | GitHub, your fork or `prabhask5/devbox`, branch `main` |
 | Compose path | `deploy/gateway/compose.yml` |
 | Auto Deploy | on |
-| Watch paths | `cmd/devbox-gateway/**`, `internal/**`, `deploy/gateway/**`, `go.mod`, `go.sum` |
+| Watch paths | `cmd/devbox-gateway/**`, `cmd/devbox-ssh/**`, `internal/**`, `scripts/build-ssh-client.sh`, `deploy/gateway/**`, `go.mod`, `go.sum` |
 | Environment | `DEVBOX_INCUS_GID=<gid of /var/lib/incus/unix.socket>` |
 | Domains | none — `devbox up` writes the routes |
 | Preview deployments | off |

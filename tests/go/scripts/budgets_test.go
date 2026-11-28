@@ -34,8 +34,8 @@ func TestBudgetsWithoutMeasurementsAreAllPending(t *testing.T) {
 		t.Fatalf("exit %d\n%s", code, out)
 	}
 	lines := strings.Split(strings.TrimSpace(out), "\n")
-	if lines[0] != "| Metric | Budget | Measured | Result |" || len(lines) != 2+23 {
-		t.Fatalf("want a header and the 23 metrics of budgets.toml, got %d lines\n%s", len(lines), out)
+	if lines[0] != "| Metric | Budget | Measured | Result |" || len(lines) != 2+27 {
+		t.Fatalf("want a header and the 27 metrics of budgets.toml, got %d lines\n%s", len(lines), out)
 	}
 	for _, line := range lines[2:] {
 		if !strings.HasSuffix(line, "|  | pending |") {
