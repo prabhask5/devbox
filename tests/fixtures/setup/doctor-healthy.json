@@ -103,6 +103,12 @@
       "title": "The developer context is refreshed on a timer"
     },
     {
+      "detail": "active",
+      "id": "update-timer",
+      "result": "ok",
+      "title": "New builds of the hub are looked for on a timer"
+    },
+    {
       "detail": "yes",
       "id": "agent-claude",
       "result": "ok",

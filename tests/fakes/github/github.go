@@ -89,6 +89,13 @@ func (s *Server) Deploy(environment, version string, runID int64) int64 {
 	return id
 }
 
+// Finish adds a status to a deployment, as the updater does when it is done with it.
+func (s *Server) Finish(id int64, state string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.statuses[id] = append(s.statuses[id], Status{State: state})
+}
+
 // Deployments lists the deployments, newest first.
 func (s *Server) Deployments() []Deployment {
 	s.mu.Lock()

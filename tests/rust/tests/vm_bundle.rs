@@ -165,6 +165,8 @@ fn the_installer_puts_everything_in_its_place_and_can_be_run_again() {
         "devbox-hub.service",
         "devbox-context.service",
         "devbox-context.timer",
+        "devbox-update.service",
+        "devbox-update.timer",
     ] {
         assert!(vm.home(".config/systemd/user").join(unit).exists(), "{unit}");
     }
@@ -192,7 +194,7 @@ fn the_installer_puts_everything_in_its_place_and_can_be_run_again() {
         "gh auth login --with-token",
         "gh auth setup-git",
         "loginctl enable-linger dev",
-        "systemctl --user enable --now devbox-tmux.service devbox-hub.service devbox-context.timer",
+        "systemctl --user enable --now devbox-tmux.service devbox-hub.service devbox-context.timer devbox-update.timer",
         "systemctl --user restart devbox-hub.service",
     ] {
         assert!(calls.contains(call), "{call}\n{calls}");

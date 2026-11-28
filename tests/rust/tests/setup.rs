@@ -345,6 +345,8 @@ fn a_fresh_host_is_set_up_and_a_second_run_changes_nothing() {
             ("/var/lib/devbox-install/units/devbox-context.timer", 0o644),
             ("/var/lib/devbox-install/units/devbox-hub.service", 0o644),
             ("/var/lib/devbox-install/units/devbox-tmux.service", 0o644),
+            ("/var/lib/devbox-install/units/devbox-update.service", 0o644),
+            ("/var/lib/devbox-install/units/devbox-update.timer", 0o644),
         ]);
         let text = |path: &str| String::from_utf8(vm.files[&format!("/var/lib/devbox-install/{path}")].data.clone()).unwrap();
         assert_eq!(text("env"), "DEVBOX_USER='dev'\nCODE_PORT=8080\nAGENTS='claude codex opencode'\nRELEASE='v1.2.3'\nREPO='prabhask5/devbox'\n");

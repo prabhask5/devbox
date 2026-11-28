@@ -73,6 +73,7 @@ func run(args []string) int {
 
 	options := gateway.Options{
 		ConfigDir: *configDir, StateDir: *stateDir, IncusSocket: *incusSocket, Version: buildVersion(),
+		GitHubAPI: os.Getenv("DEVBOX_GITHUB_API"), GitHubToken: os.Getenv("GITHUB_TOKEN"),
 		FS: sys.OS(), Clock: sys.SystemClock(), Timings: gateway.DefaultTimings(), Log: log,
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)

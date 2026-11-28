@@ -37,14 +37,39 @@ func run(t *testing.T, bin string, args ...string) (code int, stdout, stderr str
 	return cmd.ProcessState.ExitCode(), o.String(), e.String()
 }
 
-func TestHubSubcommandsAreNotImplementedYet(t *testing.T) {
+// The commands the updater runs on a build before and after switching to it.
+func TestHubSelftestAndHealthcheck(t *testing.T) {
 	bin := build(t, "devbox-hub")
-	for _, sub := range []string{"update", "selftest", "healthcheck"} {
-		code, stdout, stderr := run(t, bin, sub)
-		want := "devbox-hub " + sub + ": not implemented yet\n"
-		if code != 3 || stdout != "" || stderr != want {
-			t.Errorf("%s: exit %d, stdout %q, stderr %q", sub, code, stdout, stderr)
+	dir := t.TempDir()
+	write := func(name, content string, mode os.FileMode) {
+		t.Helper()
+		_ = os.Remove(filepath.Join(dir, name))
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), mode); err != nil {
+			t.Fatal(err)
 		}
+	}
+	secrets := "version = 1\napp_password_hash = '$argon2id$v=19$m=64,t=1,p=1$RkFLRXNhbHRGQUtFc2FsdA$RkFLRWhhc2hGQUtFaGFzaEZBS0VoYXNoRkFLRWhhc2g'\n" +
+		"cookie_secret = \"FAKE-cookie-secret\"\nhub_token = \"FAKE-hub-token\"\n"
+	write("hub.toml", "version = 1\nlisten = \"127.0.0.1:1\"\n[hosts]\ncode = \"code.example.com\"\nagents = \"agents.example.com\"\n", 0o644)
+	write("hub.secrets.toml", secrets, 0o600)
+
+	if code, stdout, stderr := run(t, bin, "selftest", "--config-dir", dir); code != 0 || stdout != "ok dev\n" || stderr != "" {
+		t.Errorf("selftest: exit %d, stdout %q, stderr %q", code, stdout, stderr)
+	}
+	// A config this build cannot read is what the self-test is there to find before the switch.
+	write("hub.toml", "version = 99\n", 0o644)
+	if code, stdout, stderr := run(t, bin, "selftest", "--config-dir", dir); code != 1 || stdout != "" || !strings.HasPrefix(stderr, "devbox-hub selftest: hub.toml") {
+		t.Errorf("selftest with a config from the future: exit %d, stdout %q, stderr %q", code, stdout, stderr)
+	}
+	write("hub.toml", "version = 1\nlisten = \"127.0.0.1:1\"\n[hosts]\ncode = \"code.example.com\"\nagents = \"agents.example.com\"\n", 0o644)
+
+	// Nothing listens there: no hub, no health.
+	if code, stdout, stderr := run(t, bin, "healthcheck", "--config-dir", dir); code != 1 || stdout != "" || !strings.HasPrefix(stderr, "devbox-hub healthcheck: ") || strings.Contains(stderr, "FAKE-hub-token") {
+		t.Errorf("healthcheck without a hub: exit %d, stdout %q, stderr %q", code, stdout, stderr)
+	}
+	// Without a repository to update from there is nothing to do, and that is not a failure.
+	if code, stdout, stderr := run(t, bin, "update", "--config-dir", dir); code != 0 || stdout != "no [deploy] repo in hub.toml: this hub does not update itself\n" || stderr != "" {
+		t.Errorf("update without a repository: exit %d, stdout %q, stderr %q", code, stdout, stderr)
 	}
 }
 
