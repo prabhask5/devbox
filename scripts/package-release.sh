@@ -41,5 +41,9 @@ cp "$ssh"/devbox-ssh-*.gz "$out/"
 unpacked=$(grep -E '  devbox-ssh-[a-z0-9-]+$' "$ssh/SHA256SUMS")
 rm -rf "$ssh"
 
-(cd "$out" && { sum -- * | grep -v '  SHA256SUMS$'; echo "$unpacked"; } | sort -k2 >SHA256SUMS.new && mv SHA256SUMS.new SHA256SUMS)
+# (Written outside the directory first: a file that is being written there would be listed too.)
+sums=$(mktemp)
+(cd "$out" && { sum -- *; echo "$unpacked"; } | sort -k2 >"$sums")
+mv "$sums" "$out/SHA256SUMS"
+chmod 644 "$out/SHA256SUMS"
 ls "$out"
