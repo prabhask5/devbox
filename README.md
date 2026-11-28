@@ -53,6 +53,8 @@ Requirements: a Linux server with systemd, [Incus](https://linuxcontainers.org/i
 
    It installs `devbox-ssh` into `~/.local/bin`, asks for your agents app password once to pair the computer's SSH key, and adds a `Host devbox` entry to your SSH config. Then `ssh devbox` works from anywhere. `curl -fsSL https://devbox.example.com/setup | sh -s -- remove` undoes it.
 
+Already run a development VM on Incus? **[docs/adopting-an-existing-vm.md](docs/adopting-an-existing-vm.md)** puts devbox around it without rebuilding it, and back out again.
+
 ## Your dotfiles
 
 devbox is generic; your personal setup lives in your own **private dotfiles repository**, which devbox reads through a small manifest (`devbox.toml`). Pass it to `devbox up --dotfiles <repo>` and rebuilding your exact machine is one command. devbox also writes your generated developer context into it. See **[docs/dotfiles.md](docs/dotfiles.md)** for the format and how to set one up or convert an existing one.
