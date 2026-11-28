@@ -235,14 +235,14 @@ pub fn run(system: &dyn System, options: &Options) -> Result<Outcome, Error> {
     for (name, content) in &files {
         let path = dir.join(name);
         if read(system, &path).as_deref() != Some(content) {
-            system.write(&path, content.as_bytes()).map_err(io(&path))?;
+            system.write(&path, content.as_bytes(), 0o644).map_err(io(&path))?;
             outcome.changed = true;
         }
     }
     // A repository that is gone from the machine is gone from the context.
-    for entry in system.read_dir(&dir.join("projects")).unwrap_or_default() {
-        if !files.contains_key(&format!("projects/{}", entry.name)) {
-            let path = dir.join("projects").join(&entry.name);
+    for name in system.read_dir(&dir.join("projects")).unwrap_or_default() {
+        if !files.contains_key(&format!("projects/{name}")) {
+            let path = dir.join("projects").join(&name);
             system.remove_file(&path).map_err(io(&path))?;
             outcome.changed = true;
         }
@@ -263,9 +263,9 @@ pub fn run(system: &dyn System, options: &Options) -> Result<Outcome, Error> {
             "# Summary (AI-written)\n\n_Generated {today} by Claude from the files in this folder._\n\n{}\n",
             redact::redact(&summary)
         );
-        system.write(&summary_path, text.as_bytes()).map_err(io(&summary_path))?;
+        system.write(&summary_path, text.as_bytes(), 0o644).map_err(io(&summary_path))?;
         system
-            .write(&summarized_path, facts.now.to_string().as_bytes())
+            .write(&summarized_path, facts.now.to_string().as_bytes(), 0o644)
             .map_err(io(&summarized_path))?;
         outcome.summarized = true;
     }
@@ -273,11 +273,20 @@ pub fn run(system: &dyn System, options: &Options) -> Result<Outcome, Error> {
     let index_path = dir.join("README.md");
     if outcome.changed || !system.exists(&index_path) {
         let index = redact::redact(&render::index(&time::date(facts.now, facts.offset), &rows));
-        system.write(&index_path, index.as_bytes()).map_err(io(&index_path))?;
+        system.write(&index_path, index.as_bytes(), 0o644).map_err(io(&index_path))?;
     }
     let marker = options.state_dir.join("context-last-run");
     system
-        .write(&marker, format!("{}\n", time::rfc3339(facts.now)).as_bytes())
+        .write(
+            &marker,
+            format!(
+                "{}
+",
+                time::rfc3339(facts.now)
+            )
+            .as_bytes(),
+            0o644,
+        )
         .map_err(io(&marker))?;
 
     if options.commit && manifest.context.commit {

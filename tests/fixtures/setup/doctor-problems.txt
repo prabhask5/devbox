@@ -1,0 +1,34 @@
+  ✓ Incus answers — Incus 6.0.5
+  ✓ The host config is valid — /etc/devbox/devbox.toml
+  ✗ The secrets are valid and private — /etc/devbox/secrets.toml
+      fix: run `devbox up` to write them again; the file must be mode 0600 and owned by the gateway's user (65532)
+  ✓ The VM exists — devbox, running
+  ✓ Its memory is saved when it sleeps — migration.stateful = true
+  ✗ It does not start with the host — boot.autostart = true
+      fix: run `devbox up`: a VM that starts by itself is awake with nobody using it
+  ✓ There is room on disk for its memory — size.state = 6GiB for 5GiB of memory
+  · The firewall lets the gateway reach the VM — no firewall manager devbox knows on this host
+  ✓ The gateway container runs — devbox-gateway: running
+  ✓ Both hosts are routed to the gateway — /etc/dokploy/traefik/dynamic/devbox.yml
+  ✓ code.example.com resolves — 203.0.113.7
+  ✗ agents.example.com resolves — no address
+      fix: add a DNS record for the host that points at this server, like the one for the editor
+  ✓ The gateway is healthy, asked through the public host — ok
+  ✓ code-server runs — active
+  ✗ The agents hub runs — failed
+      fix: in the VM: `systemctl --user status devbox-hub` and `journalctl --user -u devbox-hub`
+  ✓ The tmux server for agent sessions runs — active
+  ✓ The developer context is refreshed on a timer — active
+  ✓ claude is installed — yes
+  ✓ claude reports to the hub — yes
+  ✓ codex is installed — yes
+  ✗ codex reports to the hub — no
+      fix: in the VM: `devbox-hub hooks install`
+  ✓ opencode is installed — yes
+  ✓ opencode reports to the hub — yes
+  ✓ The repositories have been synced — 2026-09-21T14:00:00Z
+  ✓ The developer context has been written — 2026-09-21T12:00:00Z
+  ✗ The dotfiles are committed and pushed — 2 uncommitted file(s), 1 unpushed commit(s)
+      fix: in the VM: commit and push in ~/dotfiles, so a rebuilt devbox starts from the same setup
+
+6 checks failed.

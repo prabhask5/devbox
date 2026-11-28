@@ -50,6 +50,28 @@ go_() { step "go test"; go test -race ./...; }
 
 rust() { step "cargo test"; cargo test --workspace --locked; }
 
+# What moi needs of the library crates it embeds (docs/spec/12-moi.md): they build with moi's
+# toolchain, work through moi's host, bring nothing moi's policy refuses, and can be published.
+compat() {
+  local consumer=tests/compat/moi-consumer msrv
+  msrv=$(sed -n 's/^rust-version = "\(.*\)"/\1/p' "$consumer/Cargo.toml")
+  step "the library crates name moi's Rust ($msrv)"
+  for crate in devbox-core devbox-sync devbox-context; do
+    grep -qx "rust-version = \"$msrv\"" "crates/$crate/Cargo.toml" || { echo "crates/$crate/Cargo.toml: rust-version is not $msrv"; return 1; }
+  done
+  rustup toolchain install "$msrv" --profile minimal --no-self-update >/dev/null
+  step "the library crates build with Rust $msrv"
+  CARGO_TARGET_DIR=target/msrv cargo "+$msrv" check --locked -p devbox-core -p devbox-sync -p devbox-context
+  step "moi's commands through moi's host, with Rust $msrv"
+  CARGO_TARGET_DIR=$PWD/target/msrv cargo "+$msrv" test --locked --manifest-path "$consumer/Cargo.toml"
+  step "no async runtime, HTTP crate or TLS stack; moi's majors"
+  python3 scripts/check-compat-deps.py
+  step "cargo deny (moi's policy, next to moi's dependencies)"
+  cargo_tool deny "$CARGO_DENY" --log-level error --manifest-path "$consumer/Cargo.toml" --config tests/compat/moi-deny.toml check licenses bans sources
+  # moi takes the crates from crates.io: they must package and build from the package alone.
+  step "cargo publish (dry run)"; scripts/publish-crates.sh --dry-run
+}
+
 web() {
   step "web install"; web_install
   step "vitest";      pnpm -C web run test
@@ -115,12 +137,12 @@ budgets() {
 }
 
 stages=("$@")
-[[ ${#stages[@]} -gt 0 ]] || stages=(static go rust web integration e2e build budgets)
+[[ ${#stages[@]} -gt 0 ]] || stages=(static go rust compat web integration e2e build budgets)
 for stage in "${stages[@]}"; do
   case $stage in
-    static|rust|web|integration|e2e|build|budgets) "$stage" ;;
+    static|rust|compat|web|integration|e2e|build|budgets) "$stage" ;;
     go) go_ ;;
-    *) echo "unknown stage: $stage (static go rust web integration e2e build budgets)"; exit 2 ;;
+    *) echo "unknown stage: $stage (static go rust compat web integration e2e build budgets)"; exit 2 ;;
   esac
 done
 printf '\n\033[1;32mall green\033[0m\n'

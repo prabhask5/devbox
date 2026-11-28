@@ -1,0 +1,3 @@
+# Sourced from ~/.bashrc in the devbox.
+alias g=git
+export EDITOR=vim

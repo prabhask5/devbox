@@ -600,6 +600,39 @@ export interface HostConfig {
     service_url: string;
   };
   /**
+   * How `devbox up` built the VM, so that it can build it again without being asked anything.
+   */
+  provision: {
+    /**
+     * The user in the VM that owns the repositories and the agent sessions. Absent until `devbox up` has run.
+     */
+    user?: string;
+    /**
+     * vCPUs of the VM.
+     */
+    cpu: number;
+    /**
+     * Memory of the VM, like `5GiB`.
+     */
+    memory: string;
+    /**
+     * Root disk of the VM, like `60GiB`.
+     */
+    disk: string;
+    /**
+     * Image the VM is created from, as `remote:alias`.
+     */
+    image: string;
+    /**
+     * Coding agents installed in the VM.
+     */
+    agents: string[];
+    /**
+     * The owner's dotfiles repository, cloned into the VM and applied.
+     */
+    dotfiles?: string;
+  };
+  /**
    * Continuous deployment of the hub.
    */
   deploy: {
@@ -637,6 +670,10 @@ export interface HostSecrets {
    * Bearer token the gateway presents to the hub.
    */
   hub_token: string;
+  /**
+   * argon2id hash of the agents app's password, kept here too so that a rebuilt VM gets it back without anyone being asked. The gateway does not read it.
+   */
+  app_password_hash?: string;
 }
 /**
  * Hub configuration, ~/.config/devbox/hub.toml in the VM.

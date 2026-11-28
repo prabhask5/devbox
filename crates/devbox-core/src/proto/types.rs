@@ -498,6 +498,7 @@ pub struct HostConfig {
     pub hosts: HostConfigHosts,
     #[doc = "Incus instance name."]
     pub instance: ::std::string::String,
+    pub provision: HostConfigProvision,
     pub routing: HostConfigRouting,
     pub sleep: HostConfigSleep,
     #[doc = "Version of this file's format."]
@@ -534,6 +535,26 @@ pub struct HostConfigHosts {
     #[doc = "Editor hostname. Default: `code.<domain>`."]
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub code: ::std::option::Option<::std::string::String>,
+}
+#[doc = "How `devbox up` built the VM, so that it can build it again without being asked anything."]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug, PartialEq)]
+pub struct HostConfigProvision {
+    #[doc = "Coding agents installed in the VM."]
+    pub agents: ::std::vec::Vec<::std::string::String>,
+    #[doc = "vCPUs of the VM."]
+    pub cpu: i64,
+    #[doc = "Root disk of the VM, like `60GiB`."]
+    pub disk: ::std::string::String,
+    #[doc = "The owner's dotfiles repository, cloned into the VM and applied."]
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub dotfiles: ::std::option::Option<::std::string::String>,
+    #[doc = "Image the VM is created from, as `remote:alias`."]
+    pub image: ::std::string::String,
+    #[doc = "Memory of the VM, like `5GiB`."]
+    pub memory: ::std::string::String,
+    #[doc = "The user in the VM that owns the repositories and the agent sessions. Absent until `devbox up` has run."]
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub user: ::std::option::Option<::std::string::String>,
 }
 #[doc = "How public traffic reaches the gateway."]
 #[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug, PartialEq)]
@@ -680,6 +701,9 @@ pub struct HostConfigVm {
 #[doc = "Host secrets, /etc/devbox/secrets.toml (mode 0600)."]
 #[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug, PartialEq)]
 pub struct HostSecrets {
+    #[doc = "argon2id hash of the agents app's password, kept here too so that a rebuilt VM gets it back without anyone being asked. The gateway does not read it."]
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub app_password_hash: ::std::option::Option<::std::string::String>,
     #[doc = "Key that signs wake cookies."]
     pub cookie_secret: ::devbox_core::secret::Secret,
     #[doc = "Bearer token the gateway presents to the hub."]

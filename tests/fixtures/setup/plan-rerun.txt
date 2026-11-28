@@ -1,0 +1,39 @@
+ 1. Preflight
+    ok: root, Incus 6.0.5, the gateway container runs, routes in /etc/dokploy/traefik/dynamic/devbox.yml, firewall: none
+ 2. Secrets
+    up to date: /etc/devbox/secrets.toml
+ 3. Incus instance
+    up to date: devbox (running, 5GiB memory, 10.77.0.10)
+ 4. Provision the VM
+    up to date: installed as dev in devbox
+ 5. Dotfiles
+    none given: pass --dotfiles <git url> to bring your shell, editor and agent setup
+ 6. Host config
+    up to date: /etc/devbox/devbox.toml
+ 7. Routing
+    up to date: /etc/dokploy/traefik/dynamic/devbox.yml
+ 8. Firewall
+    left to you: allow tcp from 172.16.0.0/12 to 10.77.0.10 ports 22,8080,8090, and nothing else to the VM
+ 9. Monitor
+    the health URL for a monitor is https://code.example.com/__devbox/health
+10. Verify
+    ask https://code.example.com/__devbox/health through the public path, as a browser would
+
+Everything is already up to date.
+
+Your devbox
+
+  Editor       https://code.example.com
+  Agents app   https://agents.example.com
+
+On your phone: open https://agents.example.com in Safari, Share → Add to Home Screen, open it from
+there, then Settings → Enable notifications.
+
+SSH goes through the gateway, which wakes the VM: it listens on port 2222 of this server's
+loopback. In ~/.ssh/config on your own machine:
+
+  Host devbox
+    HostName 127.0.0.1
+    Port 2222
+    User dev
+    ProxyJump <this server>

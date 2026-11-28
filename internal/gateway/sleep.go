@@ -25,6 +25,7 @@ func (g *Gateway) Sleep(reason string) <-chan struct{} {
 	done := make(chan struct{})
 	g.stopDone = done
 	g.phase = proto.GatewayPhaseStopping
+	g.transitions++
 	g.publishLocked()
 	client := g.incusClient(s)
 	g.operations.Add(1)
@@ -68,6 +69,7 @@ func (g *Gateway) Sleep(reason string) <-chan struct{} {
 			}
 		}
 		g.phase = proto.GatewayPhaseIdle
+		g.transitions++
 		g.stopDone = nil
 		g.publishLocked()
 		g.mu.Unlock()
@@ -99,6 +101,7 @@ func (g *Gateway) poll(ctx context.Context) {
 	}
 	g.mu.Lock()
 	client := g.incusClient(s)
+	asked := g.transitions
 	g.mu.Unlock()
 
 	instance, err := client.Get(ctx)
@@ -110,9 +113,11 @@ func (g *Gateway) poll(ctx context.Context) {
 	busy := false
 	g.update(func() {
 		g.incusOKAt, g.incusErr = g.now(), ""
-		busy = g.phase != proto.GatewayPhaseIdle
+		// A wake or stop in progress owns the VM state, and one that began or ended since
+		// Incus was asked has made the answer old news: the next poll asks again.
+		busy = g.phase != proto.GatewayPhaseIdle || g.transitions != asked
 		if busy {
-			return // the wake or stop in progress owns the VM state
+			return
 		}
 		g.vmStatus = instance.Status
 		switch {

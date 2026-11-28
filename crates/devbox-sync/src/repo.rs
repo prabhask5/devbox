@@ -106,7 +106,7 @@ fn save(git: Git) -> Option<Saved> {
     let index = git.text(&["write-tree"])?;
     let copy = git.system.read(&git_dir.join("index")).ok()?;
     git.system.remove_file(&scratch).ok()?;
-    git.system.append(&scratch, &copy).ok()?;
+    git.system.write(&scratch, &copy, 0o600).ok()?;
     let files = git
         .text_with_index(&scratch, &["add", "--all"])
         .and_then(|_| git.text_with_index(&scratch, &["write-tree"]));

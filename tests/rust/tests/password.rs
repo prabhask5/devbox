@@ -71,8 +71,8 @@ fn verify_matches_the_shared_vectors() {
 
 #[test]
 fn hash_uses_the_spec_parameters_and_a_fresh_salt() {
-    let first = password::hash("FAKE-password").unwrap();
-    let second = password::hash("FAKE-password").unwrap();
+    let first = password::hash(&devbox_core::system::Host::new(), "FAKE-password").unwrap();
+    let second = password::hash(&devbox_core::system::Host::new(), "FAKE-password").unwrap();
     let prefix = "$argon2id$v=19$m=65536,t=3,p=1$";
     assert!(first.starts_with(prefix), "{first}");
     assert_eq!(first.len(), prefix.len() + 22 + 1 + 43, "{first}");

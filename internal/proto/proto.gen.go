@@ -772,6 +772,10 @@ type HostConfig struct {
 	// Incus instance name.
 	Instance string `json:"instance"`
 
+	// How `devbox up` built the VM, so that it can build it again without being asked
+	// anything.
+	Provision HostConfigProvision `json:"provision"`
+
 	// How public traffic reaches the gateway.
 	Routing HostConfigRouting `json:"routing"`
 
@@ -862,6 +866,62 @@ type HostConfigHosts struct {
 
 	// Editor hostname. Default: `code.<domain>`.
 	Code *string `json:"code,omitempty,omitzero"`
+}
+
+// How `devbox up` built the VM, so that it can build it again without being asked
+// anything.
+type HostConfigProvision struct {
+	// Coding agents installed in the VM.
+	Agents []string `json:"agents"`
+
+	// vCPUs of the VM.
+	Cpu int `json:"cpu"`
+
+	// Root disk of the VM, like `60GiB`.
+	Disk string `json:"disk"`
+
+	// The owner's dotfiles repository, cloned into the VM and applied.
+	Dotfiles *string `json:"dotfiles,omitempty,omitzero"`
+
+	// Image the VM is created from, as `remote:alias`.
+	Image string `json:"image"`
+
+	// Memory of the VM, like `5GiB`.
+	Memory string `json:"memory"`
+
+	// The user in the VM that owns the repositories and the agent sessions. Absent
+	// until `devbox up` has run.
+	User *string `json:"user,omitempty,omitzero"`
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *HostConfigProvision) UnmarshalJSON(value []byte) error {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(value, &raw); err != nil {
+		return err
+	}
+	if _, ok := raw["agents"]; raw != nil && !ok {
+		return fmt.Errorf("field agents in HostConfigProvision: required")
+	}
+	if _, ok := raw["cpu"]; raw != nil && !ok {
+		return fmt.Errorf("field cpu in HostConfigProvision: required")
+	}
+	if _, ok := raw["disk"]; raw != nil && !ok {
+		return fmt.Errorf("field disk in HostConfigProvision: required")
+	}
+	if _, ok := raw["image"]; raw != nil && !ok {
+		return fmt.Errorf("field image in HostConfigProvision: required")
+	}
+	if _, ok := raw["memory"]; raw != nil && !ok {
+		return fmt.Errorf("field memory in HostConfigProvision: required")
+	}
+	type Plain HostConfigProvision
+	var plain Plain
+	if err := json.Unmarshal(value, &plain); err != nil {
+		return err
+	}
+	*j = HostConfigProvision(plain)
+	return nil
 }
 
 // How public traffic reaches the gateway.
@@ -1086,6 +1146,9 @@ func (j *HostConfig) UnmarshalJSON(value []byte) error {
 	if _, ok := raw["instance"]; raw != nil && !ok {
 		return fmt.Errorf("field instance in HostConfig: required")
 	}
+	if _, ok := raw["provision"]; raw != nil && !ok {
+		return fmt.Errorf("field provision in HostConfig: required")
+	}
 	if _, ok := raw["routing"]; raw != nil && !ok {
 		return fmt.Errorf("field routing in HostConfig: required")
 	}
@@ -1109,6 +1172,10 @@ func (j *HostConfig) UnmarshalJSON(value []byte) error {
 
 // Host secrets, /etc/devbox/secrets.toml (mode 0600).
 type HostSecrets struct {
+	// argon2id hash of the agents app's password, kept here too so that a rebuilt VM
+	// gets it back without anyone being asked. The gateway does not read it.
+	AppPasswordHash *string `json:"app_password_hash,omitempty,omitzero"`
+
 	// Key that signs wake cookies.
 	CookieSecret secret.Secret `json:"cookie_secret"`
 

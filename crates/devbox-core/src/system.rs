@@ -100,17 +100,55 @@ impl Output {
     }
 }
 
-/// An entry of a directory.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Entry {
-    /// Its file name.
-    pub name: String,
-    /// Whether it is a directory (a link to one counts).
-    pub is_dir: bool,
+/// What a path is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FileKind {
+    /// A regular file.
+    File,
+    /// A directory.
+    Dir,
+    /// A symbolic link (only when the link itself is asked about).
+    Symlink,
+    /// Anything else: a socket, a device.
+    Other,
 }
 
-/// The machine devbox runs on. Implementations are shared between threads.
-pub trait System: Sync {
+/// The parts of `stat` devbox uses.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Metadata {
+    /// What it is.
+    pub kind: FileKind,
+    /// Its size in bytes.
+    pub size: u64,
+    /// Its permission bits (`0o7777` mask).
+    pub mode: u32,
+    /// The user id that owns it.
+    pub uid: u32,
+    /// The group id that owns it.
+    pub gid: u32,
+    /// When it was last changed.
+    pub mtime: SystemTime,
+}
+
+/// Whether `path` is a directory (a link to one counts).
+#[must_use]
+pub fn is_dir(system: &dyn System, path: &Path) -> bool {
+    system.metadata(path).is_ok_and(|meta| meta.kind == FileKind::Dir)
+}
+
+/// A connected stream socket: the Incus API's unix socket.
+pub trait Conn: Read + Write + Send + std::fmt::Debug {
+    /// Fails reads and writes that block longer than this; `None` waits forever.
+    ///
+    /// # Errors
+    ///
+    /// When the socket refuses the setting.
+    fn set_timeout(&mut self, timeout: Option<Duration>) -> io::Result<()>;
+}
+
+/// The machine devbox runs on. Every method maps onto the method of the same name of moi's
+/// `host::Host` (docs/spec/12-moi.md), so that moi can drive devbox through its own host.
+pub trait System: Send + Sync {
     /// Runs a program to its end.
     ///
     /// # Errors
@@ -125,19 +163,52 @@ pub trait System: Sync {
     /// As [`std::fs::read`].
     fn read(&self, path: &Path) -> io::Result<Vec<u8>>;
 
-    /// Writes a file, replacing what is there and creating its directories when missing.
+    /// The names of a directory's entries, sorted.
+    ///
+    /// # Errors
+    ///
+    /// As [`std::fs::read_dir`].
+    fn read_dir(&self, path: &Path) -> io::Result<Vec<String>>;
+
+    /// Whether something exists at `path`.
+    fn exists(&self, path: &Path) -> bool;
+
+    /// What is at `path`, following symbolic links.
+    ///
+    /// # Errors
+    ///
+    /// As [`std::fs::metadata`].
+    fn metadata(&self, path: &Path) -> io::Result<Metadata>;
+
+    /// The target of a symbolic link, as stored.
+    ///
+    /// # Errors
+    ///
+    /// As [`std::fs::read_link`].
+    fn read_link(&self, path: &Path) -> io::Result<PathBuf>;
+
+    /// Writes a file with these permission bits, replacing what is there and creating its
+    /// directories when missing. The file has its mode before it has its content.
     ///
     /// # Errors
     ///
     /// As [`std::fs::write`].
-    fn write(&self, path: &Path, data: &[u8]) -> io::Result<()>;
+    fn write(&self, path: &Path, data: &[u8], mode: u32) -> io::Result<()>;
 
-    /// Adds `data` to the end of a file, creating it and its directories when missing.
+    /// Adds `data` to the end of a file, creating it (with `mode`) and its directories when
+    /// missing.
     ///
     /// # Errors
     ///
     /// As [`std::fs::OpenOptions::open`] and [`std::io::Write::write_all`].
-    fn append(&self, path: &Path, data: &[u8]) -> io::Result<()>;
+    fn append(&self, path: &Path, data: &[u8], mode: u32) -> io::Result<()>;
+
+    /// Creates a directory and those above it; the ones it creates get `mode`.
+    ///
+    /// # Errors
+    ///
+    /// As [`std::fs::create_dir_all`].
+    fn create_dir_all(&self, path: &Path, mode: u32) -> io::Result<()>;
 
     /// Removes a file; one that is not there is not an error.
     ///
@@ -146,28 +217,52 @@ pub trait System: Sync {
     /// As [`std::fs::remove_file`], except for a missing file.
     fn remove_file(&self, path: &Path) -> io::Result<()>;
 
-    /// Creates a directory and those above it.
+    /// Creates a symbolic link at `path` pointing to `target`, replacing a file or link there.
     ///
     /// # Errors
     ///
-    /// As [`std::fs::create_dir_all`].
-    fn create_dir_all(&self, path: &Path) -> io::Result<()>;
+    /// As [`std::os::unix::fs::symlink`].
+    fn symlink(&self, target: &Path, path: &Path) -> io::Result<()>;
 
-    /// Lists a directory, sorted by name.
+    /// Sets the permission bits of a file or directory (`0o600`, `0o755`).
     ///
     /// # Errors
     ///
-    /// As [`std::fs::read_dir`].
-    fn read_dir(&self, path: &Path) -> io::Result<Vec<Entry>>;
+    /// As [`std::fs::set_permissions`].
+    fn set_mode(&self, path: &Path, mode: u32) -> io::Result<()>;
 
-    /// Whether something exists at `path`.
-    fn exists(&self, path: &Path) -> bool;
+    /// Sets the user and group that own a file.
+    ///
+    /// # Errors
+    ///
+    /// As [`std::os::unix::fs::chown`].
+    fn set_owner(&self, path: &Path, uid: u32, gid: u32) -> io::Result<()>;
+
+    /// Connects to the service listening on a unix stream socket.
+    ///
+    /// # Errors
+    ///
+    /// When nothing listens there or it may not be reached.
+    fn connect_unix(&self, path: &Path) -> io::Result<Box<dyn Conn>>;
 
     /// A variable of the environment; `None` when unset or not text.
     fn env(&self, name: &str) -> Option<String>;
 
     /// The time.
     fn now(&self) -> SystemTime;
+
+    /// A clock that only moves forward, for measuring how long something took.
+    fn monotonic(&self) -> Duration;
+
+    /// Waits.
+    fn sleep(&self, duration: Duration);
+
+    /// Bytes nobody can guess, for secrets.
+    ///
+    /// # Errors
+    ///
+    /// When the machine has no source of randomness.
+    fn random_bytes(&self, count: usize) -> io::Result<Vec<u8>>;
 }
 
 /// The real machine. Variables given to [`Host::with_env`] replace those of the process, for
@@ -205,6 +300,33 @@ fn lock(child: &Mutex<Child>) -> std::sync::MutexGuard<'_, Child> {
     child.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
+#[derive(Debug)]
+struct UnixConn(std::os::unix::net::UnixStream);
+
+impl Read for UnixConn {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        self.0.read(buffer)
+    }
+}
+
+impl Write for UnixConn {
+    fn write(&mut self, data: &[u8]) -> io::Result<usize> {
+        self.0.write(data)
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        self.0.flush()
+    }
+}
+
+impl Conn for UnixConn {
+    fn set_timeout(&mut self, timeout: Option<Duration>) -> io::Result<()> {
+        self.0.set_read_timeout(timeout)?;
+        self.0.set_write_timeout(timeout)
+    }
+}
+
+// The one place in the library crates that touches the operating system directly.
+#[allow(clippy::disallowed_methods)]
 impl System for Host {
     fn run(&self, command: &Command) -> io::Result<Output> {
         let mut process = std::process::Command::new(&command.program);
@@ -254,18 +376,71 @@ impl System for Host {
         std::fs::read(path)
     }
 
-    fn write(&self, path: &Path, data: &[u8]) -> io::Result<()> {
-        if let Some(dir) = path.parent() {
-            std::fs::create_dir_all(dir)?;
+    fn read_dir(&self, path: &Path) -> io::Result<Vec<String>> {
+        let mut names = Vec::new();
+        for entry in std::fs::read_dir(path)? {
+            names.push(entry?.file_name().to_string_lossy().into_owned());
         }
-        std::fs::write(path, data)
+        names.sort();
+        Ok(names)
     }
 
-    fn append(&self, path: &Path, data: &[u8]) -> io::Result<()> {
+    fn exists(&self, path: &Path) -> bool {
+        std::fs::symlink_metadata(path).is_ok()
+    }
+
+    fn metadata(&self, path: &Path) -> io::Result<Metadata> {
+        use std::os::unix::fs::MetadataExt;
+        let meta = std::fs::metadata(path)?;
+        let kind = if meta.is_dir() {
+            FileKind::Dir
+        } else if meta.is_file() {
+            FileKind::File
+        } else {
+            FileKind::Other
+        };
+        Ok(Metadata {
+            kind,
+            size: meta.len(),
+            mode: meta.mode() & 0o7777,
+            uid: meta.uid(),
+            gid: meta.gid(),
+            mtime: meta.modified()?,
+        })
+    }
+
+    fn read_link(&self, path: &Path) -> io::Result<PathBuf> {
+        std::fs::read_link(path)
+    }
+
+    fn write(&self, path: &Path, data: &[u8], mode: u32) -> io::Result<()> {
+        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
-        std::fs::OpenOptions::new().append(true).create(true).open(path)?.write_all(data)
+        // Created with its mode, and given it if it was there with another, before any content.
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .mode(mode)
+            .open(path)?;
+        file.set_permissions(std::fs::Permissions::from_mode(mode))?;
+        file.set_len(0)?;
+        file.write_all(data)
+    }
+
+    fn append(&self, path: &Path, data: &[u8], mode: u32) -> io::Result<()> {
+        use std::os::unix::fs::OpenOptionsExt;
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        std::fs::OpenOptions::new().append(true).create(true).mode(mode).open(path)?.write_all(data)
+    }
+
+    fn create_dir_all(&self, path: &Path, mode: u32) -> io::Result<()> {
+        use std::os::unix::fs::DirBuilderExt;
+        std::fs::DirBuilder::new().recursive(true).mode(mode).create(path)
     }
 
     fn remove_file(&self, path: &Path) -> io::Result<()> {
@@ -275,25 +450,24 @@ impl System for Host {
         }
     }
 
-    fn create_dir_all(&self, path: &Path) -> io::Result<()> {
-        std::fs::create_dir_all(path)
-    }
-
-    fn read_dir(&self, path: &Path) -> io::Result<Vec<Entry>> {
-        let mut entries = Vec::new();
-        for entry in std::fs::read_dir(path)? {
-            let entry = entry?;
-            entries.push(Entry {
-                name: entry.file_name().to_string_lossy().into_owned(),
-                is_dir: entry.path().is_dir(),
-            });
+    fn symlink(&self, target: &Path, path: &Path) -> io::Result<()> {
+        if std::fs::symlink_metadata(path).is_ok() {
+            std::fs::remove_file(path)?;
         }
-        entries.sort();
-        Ok(entries)
+        std::os::unix::fs::symlink(target, path)
     }
 
-    fn exists(&self, path: &Path) -> bool {
-        path.exists()
+    fn set_mode(&self, path: &Path, mode: u32) -> io::Result<()> {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))
+    }
+
+    fn set_owner(&self, path: &Path, uid: u32, gid: u32) -> io::Result<()> {
+        std::os::unix::fs::chown(path, Some(uid), Some(gid))
+    }
+
+    fn connect_unix(&self, path: &Path) -> io::Result<Box<dyn Conn>> {
+        Ok(Box::new(UnixConn(std::os::unix::net::UnixStream::connect(path)?)))
     }
 
     fn env(&self, name: &str) -> Option<String> {
@@ -302,5 +476,21 @@ impl System for Host {
 
     fn now(&self) -> SystemTime {
         SystemTime::now()
+    }
+
+    fn monotonic(&self) -> Duration {
+        static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+        START.get_or_init(std::time::Instant::now).elapsed()
+    }
+
+    fn sleep(&self, duration: Duration) {
+        std::thread::sleep(duration);
+    }
+
+    fn random_bytes(&self, count: usize) -> io::Result<Vec<u8>> {
+        // The kernel's generator; never short of entropy once the system is up.
+        let mut bytes = vec![0; count];
+        std::fs::File::open("/dev/urandom")?.read_exact(&mut bytes)?;
+        Ok(bytes)
     }
 }

@@ -1,0 +1,5 @@
+devbox up cannot start:
+  ✗ not running as root: devbox up changes Incus, routing and the firewall. Run it with sudo.
+  ✗ Incus is not reachable at /var/lib/incus/unix.socket: connection refused. Install Incus and run `incus admin init`, then run devbox up again.
+  ✗ Docker is not installed or its daemon does not answer: the gateway runs in a container.
+  ✗ no Traefik found: /etc/dokploy/traefik/dynamic does not exist. Pass --traefik-file <path> (a file in the directory your Traefik watches), or --routing none to route the hosts yourself.

@@ -1,0 +1,17 @@
+#cloud-config
+# First boot of a devbox VM: the user `devbox up` was told to create, with the SSH keys it was
+# given. Everything else is installed by `vm/install.sh`, so it is the same for a new VM and
+# an adopted one.
+users:
+  - name: {{user}}
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    ssh_authorized_keys:
+{{ssh_keys}}
+package_update: true
+packages:
+  - git
+  - curl
+  - sudo
+  - openssh-server

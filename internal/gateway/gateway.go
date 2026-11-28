@@ -124,17 +124,20 @@ type Gateway struct {
 	stopDone  chan struct{} // closed when the stop in progress ends
 	upSince   time.Time
 	codeOKAt  time.Time
-	hubSeenAt time.Time
-	incusOKAt time.Time
-	incusErr  string
-	hub       *proto.HubStatus
-	idle      *proto.GatewayIdle
-	lastStop  *proto.LastStop
-	stopErr   string
-	stopErrAt time.Time
-	history   []wakeRecord
-	traffic   []trafficMinute
-	subs      map[chan struct{}]struct{}
+	// Counts wakes and stops as they begin and end, so a poll can tell that the answer it got
+	// from Incus is from before one of them.
+	transitions uint64
+	hubSeenAt   time.Time
+	incusOKAt   time.Time
+	incusErr    string
+	hub         *proto.HubStatus
+	idle        *proto.GatewayIdle
+	lastStop    *proto.LastStop
+	stopErr     string
+	stopErrAt   time.Time
+	history     []wakeRecord
+	traffic     []trafficMinute
+	subs        map[chan struct{}]struct{}
 }
 
 // view is the part of the state the proxy needs for every request.

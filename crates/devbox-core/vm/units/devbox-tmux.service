@@ -1,0 +1,11 @@
+[Unit]
+Description=devbox: the tmux server agent sessions live in
+
+[Service]
+Type=forking
+ExecStart=/usr/bin/tmux -L devbox new-session -d -s main
+ExecStop=/usr/bin/tmux -L devbox kill-server
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,44 @@
+# What moi does with devbox, in small: a crate outside the workspace that depends on devbox's
+# library crates, drives them through a copy of moi's `host::Host`, and is built with moi's
+# toolchain and checked against moi's dependency policy (docs/spec/12-moi.md).
+[package]
+name = "moi-consumer"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT"
+publish = false
+
+[workspace]
+
+[dependencies]
+devbox-context = { path = "../../../crates/devbox-context", version = "0.1.0" }
+devbox-core = { path = "../../../crates/devbox-core", version = "0.1.0" }
+devbox-sync = { path = "../../../crates/devbox-sync", version = "0.1.0" }
+
+# moi's own direct dependencies, at moi's versions and with moi's features (Cargo.toml of
+# github.com/prabhask5/moi, refreshed when it changes). They are resolved, so that the policy
+# check sees devbox's crates next to them, and never built.
+clap = { version = "4", features = ["derive", "env", "wrap_help"], optional = true }
+flate2 = { version = "1", optional = true }
+gix = { version = "0.90", default-features = false, features = ["sha1", "revision"], optional = true }
+md-5 = { version = "0.11", optional = true }
+rusqlite = { version = "0.43", features = ["bundled", "backup"], optional = true }
+rustix = { version = "1", features = ["fs"], optional = true }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"], optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
+sha2 = { version = "0.11", optional = true }
+tar = { version = "0.4", default-features = false, optional = true }
+thiserror = { version = "2", optional = true }
+toml = { version = "1.2", optional = true }
+
+# Resolved for the policy check only, as said above.
+[package.metadata.cargo-machete]
+ignored = ["clap", "flate2", "gix", "md-5", "rusqlite", "rustix", "rustls", "serde", "serde_json", "sha2", "tar", "thiserror", "toml"]
+
+[features]
+moi = ["dep:clap", "dep:flate2", "dep:gix", "dep:md-5", "dep:rusqlite", "dep:rustix", "dep:rustls", "dep:serde", "dep:serde_json", "dep:sha2", "dep:tar", "dep:thiserror", "dep:toml"]
+
+[lints.rust]
+unsafe_code = "forbid"

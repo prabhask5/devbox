@@ -34,7 +34,7 @@ A broken gateway deploy cuts access to code./agents.: Dokploy keeps the previous
 
 ### Workflow `.github/workflows/deploy-hub.yml`
 
-On push to `main` touching `cmd/devbox-hub/**`, `internal/hub/**`, `internal/proto/**`, `internal/config/**`, `internal/schema/**`, `internal/secret/**`, `internal/password/**`, `internal/sys/**`, `internal/httpx/**`, `internal/relay/**`, `internal/hooks/**`, `internal/webpush/**`, `internal/tmux/**`, `web/hub-app/**`, `web/shared/**`, `crates/**`, `vm/**`, `go.mod`, `go.sum`, `Cargo.lock`, `web/pnpm-lock.yaml` — and only after the `CI` workflow succeeded for that commit (`workflow_run`):
+On push to `main` touching `cmd/devbox-hub/**`, `internal/hub/**`, `internal/proto/**`, `internal/config/**`, `internal/schema/**`, `internal/secret/**`, `internal/password/**`, `internal/sys/**`, `internal/httpx/**`, `internal/relay/**`, `internal/hooks/**`, `internal/webpush/**`, `internal/tmux/**`, `web/hub-app/**`, `web/shared/**`, `crates/**`, `go.mod`, `go.sum`, `Cargo.lock`, `web/pnpm-lock.yaml` — and only after the `CI` workflow succeeded for that commit (`workflow_run`):
 
 1. Build `devbox-hub` (linux amd64/arm64, static) with the embedded app, and `devbox` (musl amd64/arm64).
 2. Upload them as a **workflow artifact** `vm-<sha>` (binaries + `SHA256SUMS`, retention 30 days) and create build-provenance attestations (`actions/attest-build-provenance`). Hub builds never go to Releases, so the Releases page holds only tagged versions (spec 17).

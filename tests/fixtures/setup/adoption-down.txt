@@ -1,0 +1,6 @@
+removed /etc/devbox/secrets.toml
+removed /etc/devbox/devbox.toml
+restored /etc/dokploy/traefik/dynamic/devbox.yml
+restored /etc/host-firewall/rules4.txt
+ran systemctl restart host-firewall
+restored the Incus configuration of devbox

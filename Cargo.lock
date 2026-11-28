@@ -164,7 +164,7 @@ dependencies = [
 
 [[package]]
 name = "devbox-context"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "devbox-core",
  "serde_json",
@@ -174,10 +174,9 @@ dependencies = [
 
 [[package]]
 name = "devbox-core"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "argon2",
- "getrandom",
  "serde",
  "serde_json",
  "thiserror",
@@ -186,7 +185,7 @@ dependencies = [
 
 [[package]]
 name = "devbox-sync"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "devbox-core",
  "thiserror",

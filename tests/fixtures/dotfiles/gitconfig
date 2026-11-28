@@ -1,0 +1,7 @@
+[user]
+	name = Dev Example
+	email = dev@example.com
+[pull]
+	rebase = true
+[init]
+	defaultBranch = main

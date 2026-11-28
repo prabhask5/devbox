@@ -1,0 +1,24 @@
+# An example dotfiles repository for devbox (docs/dotfiles.md). Everything is optional.
+version = 1
+
+[vm]
+packages = ["fd-find", "htop"]
+install = "install.sh"
+
+[shell]
+bashrc = "bashrc"
+gitconfig = "gitconfig"
+
+[code_server]
+settings = "code-server/settings.json"
+keybindings = "code-server/keybindings.json"
+extensions = "code-server/extensions.txt"
+
+[agents]
+instructions = "agents/AGENTS.md"
+
+[context]
+dir = "context"
+
+[sync]
+exclude = ["old-*"]

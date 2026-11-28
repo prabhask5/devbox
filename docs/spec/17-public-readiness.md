@@ -13,7 +13,7 @@ The repository contains only:
 | `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `CHANGELOG.md`, `LICENSE` | community files; CONTRIBUTING gains a short "AI-assisted contributions" section replacing `docs/agent-workflow.md` |
 | `docs/spec/` | behaviour as shipped — no "decided in", "planned", "spike", "open question", "TBD", milestone numbers or references to `reference/` |
 | `docs/` guides | `dotfiles.md`, `deploy-gateway.md`, `adopting-an-existing-vm.md`, `roadmap.md` (replaces `milestones.md`), `images/` (screenshots used by the README and guides) |
-| source | `contracts/`, `cmd/`, `internal/`, `crates/`, `web/`, `deploy/`, `vm/` |
+| source | `contracts/`, `cmd/`, `internal/`, `crates/` (with the VM bundle in `crates/devbox-core/vm/`), `web/`, `deploy/` |
 | `tests/` | tests, fakes, minimal anonymized fixtures, visual baselines |
 | `scripts/` | only scripts CI or users run (`ci.sh`, `gen.sh`, `e2e.sh`, `budgets.sh`, the checks) |
 | `.github/` | workflows, templates, Dependabot |
@@ -45,7 +45,7 @@ The repository contains only:
 - Go: `go mod tidy` leaves no diff; `staticcheck` (incl. U1000 unused) and `deadcode ./...` report nothing outside allowlisted generated code; `govulncheck` clean.
 - Rust: `cargo machete` (unused dependencies) clean; no unused features enabled; `cargo deny` clean; `#![deny(dead_code)]` holds without blanket `allow`s.
 - TypeScript: `knip` reports no unused files, exports or dependencies; `pnpm audit --prod` clean.
-- No committed build outputs (`dist/`, `target/`, `node_modules/`, binaries); no executable files except scripts in `scripts/`, `vm/`, `deploy/`; no file over 1 MB.
+- No committed build outputs (`dist/`, `target/`, `node_modules/`, binaries); no executable files except scripts in `scripts/`, `deploy/`; no file over 1 MB.
 - Generated code is up to date (01) and marked as generated.
 - Every skipped/ignored test states why; no commented-out code; no debug output.
 - Every GitHub Action is referenced by commit SHA (`check-hygiene.sh` fails on a tag or branch reference).

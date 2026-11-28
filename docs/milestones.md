@@ -92,17 +92,18 @@ Specs: 08
 
 ## M8 — Setup CLI (Rust)
 Specs: 09, 10, 12
-- [ ] `devbox_core::system::System` + `FakeSystem`; Incus REST client (incl. exec and file push) shared with the fake Incus from M2
-- [ ] `devbox up` plan/confirm/apply with every step; backups; idempotency; `devbox down` byte-identical restore
-- [ ] Provisioning bundle (`vm/`): cloud-init template, installer, units, code-server config, agents, hook configs, hub config/secrets
-- [ ] Dotfiles manifest support + `docs/dotfiles.md` with a fixture dotfiles repo
-- [ ] Routing (traefik-file), firewall managers (host-firewall, ufw, nftables, moi), Kuma monitor step
-- [ ] `status`, `doctor`, `connect`, `password` with golden `--json`
-- [ ] cestmoi adoption fixture: golden plan, apply, down
-- [ ] moi embedding contract (spec 12): commands as library functions returning reports + shared renderers; non-interactive `UpOptions` + `Confirm`; `System` extended to the 1:1 moi `host::Host` mapping (modes, `connect_unix`, `metadata`, `symlink`, `set_owner`, `monotonic`, `random_bytes`) with clippy `disallowed-methods` in the library crates; Incus client over `connect_unix`; `firewall::Manager` trait
-- [ ] Library crates' `rust-version` lowered to moi's MSRV (1.88 today) and kept there; shared dependency majors aligned with moi
-- [ ] `tests/compat/moi-consumer` + `compat` CI job (MSRV toolchain, moi's `deny.toml`, dry-run publish, consumer scenarios), part of `required`
-- [ ] `publish-crates.yml` (tags `crates-v*`); after this milestone merges, tag `crates-v0.1.0` so moi can start its devbox milestone
+- [x] `devbox_core::system::System` + `FakeSystem`; Incus REST client (incl. exec and file push) shared with the fake Incus from M2
+- [x] `devbox up` plan/confirm/apply with every step; backups; idempotency; `devbox down` byte-identical restore
+- [x] Provisioning bundle (`vm/`): cloud-init template, installer, units, code-server config, agents, hook configs, hub config/secrets
+- [x] Dotfiles manifest support + `docs/dotfiles.md` with a fixture dotfiles repo
+- [x] Routing (traefik-file), firewall managers (host-firewall, ufw, nftables, moi), Kuma monitor step
+- [x] `status`, `doctor`, `connect`, `password` with golden `--json`
+- [x] cestmoi adoption fixture: golden plan, apply, down
+- [x] moi embedding contract (spec 12): commands as library functions returning reports + shared renderers; non-interactive `UpOptions` + `Confirm`; `System` extended to the 1:1 moi `host::Host` mapping (modes, `connect_unix`, `metadata`, `symlink`, `set_owner`, `monotonic`, `random_bytes`) with clippy `disallowed-methods` in the library crates; Incus client over `connect_unix`; `firewall::Manager` trait
+- [x] Library crates' `rust-version` lowered to moi's MSRV (1.88 today) and kept there; shared dependency majors aligned with moi
+- [x] `tests/compat/moi-consumer` + `compat` CI job (MSRV toolchain, moi's `deny.toml`, dry-run publish, consumer scenarios), part of `required`
+- [x] `publish-crates.yml` (tags `crates-v*`)
+- [ ] After this milestone merges, the owner tags `crates-v0.1.0` so moi can start its devbox milestone
 - [ ] Nightly real-VM workflow (spec 15); it also checks `internal/incus` against a real Incus and replaces the hand-written `tests/fixtures/incus/` with recorded responses
 - [ ] Cleanup pass; `scripts/check-hygiene.sh` green
 

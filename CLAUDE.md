@@ -49,9 +49,9 @@ internal/             Go packages: gateway/, hub/, incus/, proto/ (generated), c
 crates/               Rust workspace members: devbox-cli (bin `devbox`), devbox-core, devbox-sync, devbox-context
 web/                  pnpm workspace: gateway-ui/, hub-app/, shared/ (generated types, design tokens)
 deploy/gateway/       Dockerfile + compose.yml for Dokploy (no domain, no previews)
-vm/                   What gets installed into the VM: systemd units, cloud-init template, agent hook configs, code-server defaults
+crates/devbox-core/vm/  What gets installed into the VM, embedded in the CLI: installer, systemd units, cloud-init template, code-server defaults
 docs/                 spec/, guides (dotfiles.md, deploy-gateway.md, …); milestones.md + agent-workflow.md until 1.0
-tests/                every test that is not a small pure-function unit test (spec 15)
+tests/                every test that is not a small pure-function unit test (spec 15); compat/ is moi's view of the library crates (spec 12)
 reference/            the working prototype and cestmoi's current setup; read-only input, deleted before 1.0
 scripts/              ci.sh and the checks CI runs
 ```
@@ -65,10 +65,11 @@ Host (written by `devbox up`, spec 09):
 | Path | What |
 |---|---|
 | `/usr/local/bin/devbox` | Rust CLI |
-| `/etc/devbox/devbox.toml` | host config (0644): instance, domain + hosts, idle, VM address, ports, deploy settings |
-| `/etc/devbox/secrets.toml` | host secrets (0600, owned by the gateway container's uid, spec 14): wake password hash, cookie secret, gateway↔hub token |
+| `/etc/devbox/devbox.toml` | host config (0644): instance, domain + hosts, idle, VM address, ports, how the VM is built (`[provision]`), deploy settings |
+| `/etc/devbox/secrets.toml` | host secrets (0600, owned by the gateway container's uid, spec 14): wake password hash, cookie secret, gateway↔hub token, a copy of the app password hash |
 | `/var/lib/devbox/gateway/` | gateway state: wake history, last stop, calibration log (bind-mounted into the container) |
-| `/var/lib/devbox/backup/` | everything `devbox up` replaced (Traefik file, firewall rules, Incus config) for `devbox down` |
+| `/var/lib/devbox/backup/<timestamp>/` | everything `devbox up` replaced (Traefik file, firewall rules, Incus config) with a manifest, for `devbox down` |
+| `/var/lib/devbox/provisioned.json` | what `devbox up` installed into the VM (user, agents, a fingerprint), so an unchanged run installs nothing |
 | Traefik dynamic file (e.g. `/etc/dokploy/traefik/dynamic/devbox.yml`) | routes for `code.` and `agents.` to the gateway |
 | Dokploy compose app `devbox-gateway` | the gateway container (`/etc/devbox` read-only, Incus socket, state dir) |
 
@@ -95,7 +96,7 @@ pnpm -C web test              # TS unit tests; pnpm -C web e2e for Playwright
 
 Rules:
 
-- **Tests live in `tests/`** (`tests/go/...` as external test packages, `tests/rust` as the `devbox-tests` workspace crate, `tests/web`, `tests/e2e`). Small in-package unit tests for pure functions are allowed (`*_test.go` with `package x`, `#[cfg(test)]`), nothing that touches I/O. CI fails on test files elsewhere.
+- **Tests live in `tests/`** (`tests/go/...` as external test packages, `tests/rust` as the `devbox-tests` workspace crate, `tests/web`, `tests/e2e`, `tests/compat/moi-consumer` as a crate of its own outside the workspace). Small in-package unit tests for pure functions are allowed (`*_test.go` with `package x`, `#[cfg(test)]`), nothing that touches I/O. CI fails on test files elsewhere.
 - **Never touch the real system in tests.** All OS access goes through an interface with a real and a fake implementation: Go `internal/sys` (files, clock, commands) and Rust `devbox_core::system::System`. Incus is faked by an in-process HTTP server speaking the Incus REST API (`tests/fakes/incus`); GitHub by a fake API server; web push by a fake push service that decrypts and verifies messages. Real tmux and real git are allowed in tests (they are local and deterministic) inside temp dirs.
 - **Contracts are code-generated.** Edit `contracts/*.schema.json`, run `scripts/gen.sh`; CI fails if generated code is stale.
 - **Go**: `gofmt`, `go vet`, `golangci-lint` (config in `.golangci.yml`), `govulncheck`. Standard library first; each dependency justified in spec 14. No cgo (static binaries): SQLite via `modernc.org/sqlite`.

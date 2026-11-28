@@ -14,6 +14,17 @@
     "code": "code.example.com"
   },
   "instance": "devbox",
+  "provision": {
+    "agents": [
+      "claude",
+      "codex",
+      "opencode"
+    ],
+    "cpu": 3,
+    "disk": "60GiB",
+    "image": "images:ubuntu/26.04/cloud",
+    "memory": "5GiB"
+  },
   "routing": {
     "entrypoint": "websecure",
     "file": "/etc/dokploy/traefik/dynamic/devbox.yml",

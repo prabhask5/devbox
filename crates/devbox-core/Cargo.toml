@@ -1,9 +1,10 @@
 [package]
 name = "devbox-core"
 description = "Configuration, Incus client and the plan/apply engine behind the devbox CLI"
-version.workspace = true
+version = "0.1.0"
 edition.workspace = true
-rust-version.workspace = true
+# At most moi's, which embeds this crate (docs/spec/12-moi.md).
+rust-version = "1.88"
 license.workspace = true
 repository.workspace = true
 
@@ -12,7 +13,6 @@ workspace = true
 
 [dependencies]
 argon2.workspace = true
-getrandom.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

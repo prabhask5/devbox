@@ -180,8 +180,8 @@ pub fn sync(
         let path = path.clone();
         move |source| Error::Io { path, source }
     };
-    system.create_dir_all(&options.code_dir).map_err(io(&options.code_dir))?;
-    system.create_dir_all(&options.state_dir).map_err(io(&options.state_dir))?;
+    system.create_dir_all(&options.code_dir, 0o755).map_err(io(&options.code_dir))?;
+    system.create_dir_all(&options.state_dir, 0o755).map_err(io(&options.state_dir))?;
     let log_path = options.state_dir.join("sync.log");
     let now = || {
         let since = system.now().duration_since(UNIX_EPOCH).map_or(0, |since| since.as_secs());
@@ -189,16 +189,16 @@ pub fn sync(
     };
     let log = |line: &str| {
         let line = format!("{} {line}\n", rfc3339(now()));
-        system.append(&log_path, line.as_bytes()).map_err(io(&log_path))
+        system.append(&log_path, line.as_bytes(), 0o644).map_err(io(&log_path))
     };
 
-    let entries = system.read_dir(&options.code_dir).map_err(io(&options.code_dir))?;
-    let have: Vec<String> = entries.iter().map(|entry| entry.name.clone()).collect();
-    let mut repos: Vec<String> = entries
-        .into_iter()
-        .filter(|entry| entry.is_dir && !entry.name.starts_with('.'))
-        .filter(|entry| system.exists(&options.code_dir.join(&entry.name).join(".git")))
-        .map(|entry| entry.name)
+    let have = system.read_dir(&options.code_dir).map_err(io(&options.code_dir))?;
+    let mut repos: Vec<String> = have
+        .iter()
+        .filter(|name| !name.starts_with('.'))
+        .filter(|name| devbox_core::system::is_dir(system, &options.code_dir.join(name)))
+        .filter(|name| system.exists(&options.code_dir.join(name).join(".git")))
+        .cloned()
         .collect();
     let found = if let Some(only) = &options.only {
         if !repos.contains(only) {
