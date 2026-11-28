@@ -100,14 +100,14 @@ The texts are golden-tested byte for byte (`internal/gateway/sshux_test.go`: tra
 | `GET /` with `Upgrade: websocket` | SSH itself | the SSH stream (§ Wire protocol) |
 | `GET /` | none | a small page (HTML for browsers, plain text for curl): what this host is and the setup command. No secrets, no state |
 | `GET /setup` | none | the setup script (§ Client setup) with this devbox's values filled in: alias `devbox`, URL `https://<hosts.ssh>`, user, the gateway's host key, `--pair`, client base `https://<hosts.ssh>/__devbox/ssh/client` |
-| `GET /__devbox/ssh/client/SHA256SUMS` | none | checksums of the client builds below |
-| `GET /__devbox/ssh/client/devbox-ssh-<os>-<arch>.gz` | none | the client for `darwin`/`linux` × `amd64`/`arm64`, gzip-compressed, built from the same commit as the gateway |
+| `GET /__devbox/ssh/client/SHA256SUMS` | none | checksums of the client builds below, each as its `.gz` and as the unpacked program (which is how the setup script knows an installed client is current without downloading it) |
+| `GET /__devbox/ssh/client/devbox-ssh-<os>-<arch>.gz` | none | the client for `darwin`/`linux` × `amd64`/`arm64`, gzip-compressed, built from the same commit as the gateway. The gateway serves these six names from the directory `--ssh-client-dir` (`/usr/share/devbox/ssh-client` in the image) and nothing else from it |
 | `POST /__devbox/ssh/pair` | app password | adds a key (below) |
 | `/__devbox/health`, `/status`, `/events` | as on the other hosts | |
 
 Any other path is 404. The page, the script and both `ssh/pair` answers are golden-tested.
 
-**Pairing** (`POST /__devbox/ssh/pair`, `application/x-www-form-urlencoded`, at most 16 KB): fields `password`, `name` (the computer's name, 1–64 printable characters), `key` (one OpenSSH public key line; `ssh-ed25519`, `ecdsa-sha2-nistp256/384/521` or `ssh-rsa` ≥ 3072 bits). The password is the **agents app password**, checked against the host's copy of its hash (`app_password_hash` in the host secrets; the app password already lets you start agents that run commands in the VM, so pairing grants nothing new). Verification and rate limiting are the login's (02, 14). A request whose `Origin` is another site is refused (403). Success appends `<key> <name> paired <YYYY-MM-DD>` to `ssh/authorized_keys` (an identical key already there only gets its name updated) and answers `200 text/plain`, one `key=value` per line so a shell can read it: `ok=1`, `user=<vm user>`, `host=<hosts.ssh>`, `host_key=<gateway host key line>`. Errors: `401`/`429`/`400` with `error=<message>`. Pairing never wakes the VM.
+**Pairing** (`POST /__devbox/ssh/pair`, `application/x-www-form-urlencoded`, at most 16 KB): fields `password`, `name` (the computer's name, 1–64 printable characters), `key` (one OpenSSH public key line; `ssh-ed25519`, `ecdsa-sha2-nistp256/384/521` or `ssh-rsa` ≥ 3072 bits). The password is the **agents app password**, checked against the host's copy of its hash (`app_password_hash` in the host secrets; the app password already lets you start agents that run commands in the VM, so pairing grants nothing new). Verification and rate limiting are the login's (02, 14): 6 attempts a minute per address, and the lockout after 50 failures an hour from anywhere. A request whose `Origin` is another site is refused (403). Success appends `<key> <name> paired <YYYY-MM-DD>` to `ssh/authorized_keys` (an identical key already there only gets its name updated) and answers `200 text/plain`, one `key=value` per line so a shell can read it: `ok=1`, `user=<vm user>`, `host=<hosts.ssh>`, `host_key=<gateway host key line>`. Errors answer `error=<message>`: `401` wrong password, `429` too many attempts, `400` a name or key that is not accepted (a key line with options or with anything after it is refused), `403` another site, `413` too large, `405` not a POST, `503` when the host has no app password hash yet. Pairing never wakes the VM, and every pairing and every refusal is in the gateway's log (never the password).
 
 ## Client: `devbox-ssh`
 
@@ -135,7 +135,7 @@ sh devbox-ssh-setup.sh remove --alias NAME
 sh devbox-ssh-setup.sh status [--alias NAME]
 ```
 
-`curl -fsSL https://devbox.example.com/setup | sh` runs `add` with the served defaults. Arguments after `sh -s --` replace them; the served alias stays the default, so `… | sh -s -- remove` removes `devbox`. Prompts read from `/dev/tty`, so they work when the script is piped.
+`curl -fsSL https://devbox.example.com/setup | sh` runs `add` with the served defaults (the script has a block of `DEFAULT_…=''` lines at its top, which whoever serves it fills in). Arguments after `sh -s --` replace them; the served alias stays the default, so `… | sh -s -- remove` removes `devbox`. Prompts read from `/dev/tty`, so they work when the script is piped.
 
 ### The client contract
 
@@ -143,7 +143,7 @@ What `add` does, in order, each step idempotent. Re-running it changes nothing a
 
 1. **Client.** If `~/.local/bin/devbox-ssh` is missing or its checksum differs from the one in `<client base>/SHA256SUMS` for this OS and architecture, download `devbox-ssh-<os>-<arch>.gz`, check its SHA-256, unpack and install it there (0755). The script refuses to continue when the checksum doesn't match. The SSH config refers to it by absolute path, so `PATH` does not matter.
 2. **Key.** Use `~/.ssh/id_ed25519` if it exists; otherwise create it with `ssh-keygen -t ed25519`, letting `ssh-keygen` ask for a passphrase. Every tool that follows this contract uses the same key.
-3. **Pair** (only with `--pair`). Ask for the agents app password (hidden), `POST <url>/__devbox/ssh/pair` with the computer's name (`scutil --get ComputerName` on macOS, `hostname` elsewhere) and the public key. Stop on an error, showing the server's message.
+3. **Pair** (only with `--pair`). Ask for the agents app password (hidden; `DEVBOX_APP_PASSWORD` in the environment is used instead when set, for computers without a terminal), `POST <url>/__devbox/ssh/pair` with the computer's name (`scutil --get ComputerName` on macOS, `hostname` elsewhere) and the public key. Stop on an error, showing the server's message.
 4. **SSH config.** Make sure `~/.ssh/config` starts with
    ```
    # devbox-ssh-setup: include
@@ -182,7 +182,9 @@ What `add` does, in order, each step idempotent. Re-running it changes nothing a
 - deletes the marked `Include` lines only when `config.d` holds no other file written by this script;
 - leaves the client binary and the key, and prints the server command that revokes the key (`devbox ssh keys remove <name>`; for moi, its hint).
 
-`status` lists each alias the script manages, with the host, the key fingerprint, and whether `ssh -o BatchMode=yes -o ConnectTimeout=10 <alias> true` works.
+`status` lists each alias the script manages (the files in `config.d` that start with its `# Managed by devbox-ssh-setup.` line), one per line: alias, host, key fingerprint, and `works` or `does not connect` for `ssh -o BatchMode=yes -o ConnectTimeout=10 <alias> true`.
+
+The script refuses what could write outside its files or into the config of another host: an alias that is not letters, digits, dots, dashes and underscores, a user or header of more than one line, a URL that is not `https://` (plain `http://` only for `127.0.0.1` and `localhost`).
 
 ## Server commands
 
@@ -218,8 +220,8 @@ All are measured by the `budgets` job (spec 13); `scripts/budgets.sh` learns min
 - [x] Gateway SSH: keys created on first start with the right modes, `authorized_keys` reload, wrong user / unknown key / key with options refused, auth limits, **no wake before authentication**, upstream host-key pinning, VM rejecting the upstream key → health problem. (`tests/go/gateway/ssh_test.go`, fake VM sshd built on `x/crypto/ssh`)
 - [ ] Relay with the real OpenSSH client (`ssh`, `scp`, `sftp`) against a fake VM sshd: shell with pty, exec with exit status and signals, stderr, scp and sftp both ways, `-L`, `-R`, `-D`, agent forwarding, `ProxyCommand devbox-ssh proxy` over the WebSocket and the TCP listener, queued channels replayed after a wake. (`tests/go/e2e/ssh_test.go`)
 - [x] Boot-aware transcripts (restore, cold, joined, failure, timeout, dumb terminal, non-UTF-8, non-interactive) golden byte for byte; awake VM: zero extra bytes. (`internal/gateway/sshux_test.go`, `TestATerminalIsShownTheWakeAndThenTheShell`)
-- [ ] SSH host endpoints: page, `/setup` with filled-in defaults, client downloads and checksums, pairing (success, duplicate key, bad key types, short RSA, wrong password, rate limit, cross-site Origin) golden.
+- [x] SSH host endpoints: page, `/setup` with filled-in defaults, client downloads and checksums, pairing (success, duplicate key, bad key types, short RSA, wrong password, rate limit, cross-site Origin) golden. (`tests/go/gateway/sshhost_test.go`, goldens in `tests/fixtures/gateway/`)
 - [x] `devbox-ssh`: proxy against the gateway and the tunnel-style peer, `--header`, pings on a quiet stream, each error message golden, exit codes, size budget. (`tests/go/sshclient`; the size of the largest of the four builds is `devbox_ssh_mb` in `budgets.toml`, measured by the `budgets` job.)
-- [ ] Setup script under `dash` and `bash` on Linux and under `/bin/sh` on a macOS runner (CI job `ssh-client`), against a fake gateway and a fake `$HOME`: fresh machine, existing key, existing covering `Include`, conflicting `Host devbox` block, alias among other patterns, re-run unchanged, refused key with hint, checksum mismatch refused, `remove` restoring `~/.ssh/config` byte for byte, `status`. Generated files golden.
+- [x] Setup script under `dash` and `bash` on Linux and under `/bin/sh` on a macOS runner (CI job `ssh-client`), against a fake gateway and a fake `$HOME`: fresh machine, existing key, existing covering `Include`, conflicting `Host devbox` block, alias among other patterns, re-run unchanged, refused key with hint, checksum mismatch refused, `remove` restoring `~/.ssh/config` byte for byte, `status`. Generated files golden.
 - [ ] `devbox up` writes the SSH route and installs the upstream key and the recorded VM host key; `--dry-run` golden; `down` removes them; `devbox ssh keys|status` golden; doctor checks.
 - [ ] Budgets above in `budgets.toml`, measured in the `budgets` job.

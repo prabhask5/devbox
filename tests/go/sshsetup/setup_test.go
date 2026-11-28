@@ -52,6 +52,25 @@ type server struct {
 	corrupt  bool // serve a client that does not match its checksum
 }
 
+// with reads or changes the server's state while no request is being answered.
+func (s *server) with(f func(s *server)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	f(s)
+}
+
+func (s *server) asked() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string{}, s.requests...)
+}
+
+func (s *server) pairings() []url.Values {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]url.Values{}, s.paired...)
+}
+
 const fakeClient = "#!/bin/sh\necho devbox-ssh fake\n"
 
 func platform() string {
@@ -247,8 +266,8 @@ func TestAFreshComputerIsSetUpAndASecondRunChangesNothing(t *testing.T) {
 			t.Error("the client that was installed is not the one that was served")
 		}
 		// The key that was made is the one that was paired, under this computer's name.
-		if len(m.srv.paired) != 1 || m.srv.paired[0].Get("key") != strings.TrimSpace(m.read(".ssh/id_ed25519.pub")) || m.srv.paired[0].Get("name") == "" {
-			t.Errorf("paired: %v", m.srv.paired)
+		if paired := m.srv.pairings(); len(paired) != 1 || paired[0].Get("key") != strings.TrimSpace(m.read(".ssh/id_ed25519.pub")) || paired[0].Get("name") == "" {
+			t.Errorf("paired: %v", paired)
 		}
 		if calls := m.read("ssh-calls"); calls != "-o BatchMode=yes devbox true\n" {
 			t.Errorf("ssh was run as: %q", calls)
@@ -256,7 +275,7 @@ func TestAFreshComputerIsSetUpAndASecondRunChangesNothing(t *testing.T) {
 
 		// Again, without pairing: nothing is downloaded, written or backed up, and it says so.
 		before := m.read(".ssh/config") + m.read(".ssh/config.d/devbox") + m.read(".ssh/id_ed25519.pub")
-		requests := len(m.srv.requests)
+		requests := len(m.srv.asked())
 		code, out = m.add()
 		if code != 0 {
 			t.Fatalf("exit %d\n%s", code, out)
@@ -265,7 +284,7 @@ func TestAFreshComputerIsSetUpAndASecondRunChangesNothing(t *testing.T) {
 		if after := m.read(".ssh/config") + m.read(".ssh/config.d/devbox") + m.read(".ssh/id_ed25519.pub"); after != before {
 			t.Error("a second run changed files")
 		}
-		if got := m.srv.requests[requests:]; len(got) != 1 || got[0] != "GET /__devbox/ssh/client/SHA256SUMS" {
+		if got := m.srv.asked()[requests:]; len(got) != 1 || got[0] != "GET /__devbox/ssh/client/SHA256SUMS" {
 			t.Errorf("a second run asked the server for: %v", got)
 		}
 		backups, _ := filepath.Glob(filepath.Join(m.home, ".ssh/config.bak.devbox-ssh-setup.*"))
@@ -422,7 +441,7 @@ func TestAKeyThatIsNotAuthorizedYetIsSaidWithWhatToDo(t *testing.T) {
 
 func TestWhatDoesNotMatchItsChecksumIsNotInstalledAndBadInputIsRefused(t *testing.T) {
 	each(t, func(t *testing.T, m *machine) {
-		m.srv.corrupt = true
+		m.srv.with(func(s *server) { s.corrupt = true })
 		code, out := m.add()
 		if code != 1 || !strings.Contains(out, "does not match its checksum: nothing was installed") {
 			t.Fatalf("exit %d\n%s", code, out)
@@ -430,10 +449,10 @@ func TestWhatDoesNotMatchItsChecksumIsNotInstalledAndBadInputIsRefused(t *testin
 		if m.exists(".local/bin/devbox-ssh") || m.exists(".ssh/config.d/devbox") || m.exists(".ssh/config") {
 			t.Error("something was installed or written after a checksum mismatch")
 		}
-		m.srv.corrupt = false
+		m.srv.with(func(s *server) { s.corrupt = false })
 
 		// A wrong password stops before anything is written to the SSH config.
-		m.srv.password = "another"
+		m.srv.with(func(s *server) { s.password = "another" })
 		code, out = m.add("--pair")
 		if code != 1 || !strings.HasSuffix(out, "devbox-ssh-setup: pairing was refused: Wrong password.\n") || m.exists(".ssh/config.d/devbox") {
 			t.Errorf("a wrong password: exit %d\n%s", code, out)

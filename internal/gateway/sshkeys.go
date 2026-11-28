@@ -223,3 +223,43 @@ func strongKey(key ssh.PublicKey) bool {
 	}
 	return false
 }
+
+// hostKeyLine is the gateway's host key as clients pin it: its type and its key, no comment.
+func (k *sshKeys) hostKeyLine() string {
+	return strings.TrimSpace(string(ssh.MarshalAuthorizedKey(k.host.PublicKey())))
+}
+
+// add lets a key in under a device name: a line `<key> <name> paired <date>` at the end of
+// authorized_keys. A key that is there already only gets the new name.
+func (k *sshKeys) add(key ssh.PublicKey, name string, at time.Time) error {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	path := filepath.Join(k.dir, sshAuthorizedFile)
+	existing, err := os.ReadFile(path) //nolint:gosec // the gateway's own state
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	wanted := strings.TrimSpace(string(ssh.MarshalAuthorizedKey(key))) + " " + name + " paired " + at.UTC().Format("2006-01-02")
+	var lines []string
+	replaced := false
+	for _, line := range strings.Split(strings.TrimRight(string(existing), "\n"), "\n") {
+		if line == "" && len(existing) == 0 {
+			continue
+		}
+		if present, _, _, _, err := ssh.ParseAuthorizedKey([]byte(line)); err == nil && bytes.Equal(present.Marshal(), key.Marshal()) {
+			if !replaced {
+				lines = append(lines, wanted)
+				replaced = true
+			}
+			continue
+		}
+		lines = append(lines, line)
+	}
+	if !replaced {
+		lines = append(lines, wanted)
+	}
+	if err := os.WriteFile(path+".new", []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+		return err
+	}
+	return os.Rename(path+".new", path)
+}

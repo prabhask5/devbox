@@ -76,6 +76,9 @@ type Options struct {
 	Version     string // commit the binary was built from
 	GitHubAPI   string // the GitHub API deployments are read from; "" is api.github.com
 	GitHubToken string // for a private repository's deployments; "" asks without one
+	// SSHClientDir holds the devbox-ssh builds the setup script downloads and their SHA256SUMS;
+	// "" serves none.
+	SSHClientDir string
 
 	HTTP net.Listener // serves the proxy and /__devbox/*
 	SSH  net.Listener // serves the SSH proxy; nil turns it off
