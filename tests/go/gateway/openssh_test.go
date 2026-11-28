@@ -98,7 +98,7 @@ func newOpenSSH(t *testing.T, h *harness) *openssh {
 func (o *openssh) run(stdin string, program string, args ...string) (stdout, stderr string, code int) {
 	o.t.Helper()
 	cmd := exec.Command(program, append([]string{"-F", o.config}, args...)...)
-	cmd.Env = append(os.Environ(), "SSH_AUTH_SOCK=")
+	cmd.Env = append(os.Environ(), "SSH_AUTH_SOCK=", "TERM=xterm")
 	var out, errOut bytes.Buffer
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = strings.NewReader(stdin), &out, &errOut
 	_ = cmd.Run()
@@ -121,7 +121,7 @@ func TestOpenSSHDoesWhatItDoesAgainstSSHDThroughBothEntries(t *testing.T) {
 		}
 		// A shell on a terminal: nothing but the VM's own words, since it is awake.
 		stdout, _, code = o.run("echo typed in $TERM\nexit\n", "ssh", "-tt", alias)
-		if code != 0 || !strings.HasPrefix(stdout, "Welcome to the fake VM") || !strings.Contains(stdout, "typed in ") || strings.Contains(stdout, "devbox is") {
+		if code != 0 || !strings.HasPrefix(stdout, "Welcome to the fake VM") || !strings.Contains(stdout, "typed in xterm") || strings.Contains(stdout, "devbox is") {
 			t.Errorf("%s: shell: %q, exit %d", alias, stdout, code)
 		}
 
