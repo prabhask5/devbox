@@ -1,0 +1,6 @@
+Installed devbox-ssh in ~/.local/bin.
+A Host devbox block in ~/.ssh/config was in the way: it is commented out, and `remove` brings it back.
+Added an Include of ~/.ssh/config.d/* at the top of ~/.ssh/config.
+Wrote ~/.ssh/config.d/devbox and ~/.ssh/known_hosts.d/devbox.
+devbox: waking the VM (about 7s)…
+Done. Connect with: ssh devbox

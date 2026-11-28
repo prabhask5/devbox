@@ -1,0 +1,15 @@
+# Managed by devbox-ssh-setup. Undo: sh devbox-ssh-setup.sh remove --alias devbox
+Host devbox
+  HostName devbox.example.com
+  User dev
+  ProxyCommand /home/me/.local/bin/devbox-ssh proxy https://devbox.example.com --header 'CF-Access-Client-Id: FAKE-id.access' --header 'CF-Access-Client-Secret: it'\''s a FAKE secret'
+  HostKeyAlias devbox.example.com
+  UserKnownHostsFile ~/.ssh/known_hosts.d/devbox
+  StrictHostKeyChecking yes
+  IdentityFile ~/.ssh/id_ed25519
+  IdentitiesOnly yes
+  ServerAliveInterval 30
+  ServerAliveCountMax 4
+  IgnoreUnknown UseKeychain
+  UseKeychain yes
+  AddKeysToAgent yes

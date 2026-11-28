@@ -1,0 +1,3 @@
+Removed the SSH config for devbox.
+The client (~/.local/bin/devbox-ssh) and your key (~/.ssh/id_ed25519) are left where they are.
+To take this computer's key off the server, on the server: devbox ssh keys remove <name>

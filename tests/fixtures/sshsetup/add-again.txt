@@ -1,0 +1,4 @@
+devbox-ssh is installed and current.
+The SSH config for devbox is already as it should be.
+devbox: waking the VM (about 7s)…
+Done. Connect with: ssh devbox
