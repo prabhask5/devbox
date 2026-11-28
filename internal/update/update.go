@@ -38,11 +38,12 @@ type Options struct {
 	API         string // the GitHub API, without a trailing slash
 	AgentsHost  string // the public host of the app, for the deployment's link
 
-	Lib      string // holds releases/<version>/ and the current symlink
-	StateDir string // holds deploy.json, which the hub shows in the app
-	Arch     string // amd64 or arm64
-	HubURL   string // where the hub answers /devbox/status
-	HubToken string // the gateway↔hub token, which that endpoint asks for
+	ConfigDir string // holds hub.toml and hub.secrets.toml, which a new build must be able to read
+	Lib       string // holds releases/<version>/ and the current symlink
+	StateDir  string // holds deploy.json, which the hub shows in the app
+	Arch      string // amd64 or arm64
+	HubURL    string // where the hub answers /devbox/status
+	HubToken  string // the gateway↔hub token, which that endpoint asks for
 
 	HTTP   *http.Client
 	Runner sys.Runner
@@ -137,7 +138,8 @@ func safeName(version string) bool {
 		return false
 	}
 	for _, c := range version {
-		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '.' || c == '-' || c == '_') {
+		letter := c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
+		if !letter && c != '.' && c != '-' && c != '_' {
 			return false
 		}
 	}
@@ -176,7 +178,7 @@ func (u *updater) install(target deployment, version, running string) error {
 			return fmt.Errorf("the build's provenance could not be verified: %w", err)
 		}
 	}
-	if _, err := u.Runner.Run(u.ctx, hub, "selftest"); err != nil {
+	if _, err := u.Runner.Run(u.ctx, hub, "selftest", "--config-dir", u.ConfigDir); err != nil {
 		_ = os.RemoveAll(dir)
 		return fmt.Errorf("the new build does not pass its self-test: %w", err)
 	}
@@ -281,8 +283,8 @@ func (u *updater) point(version string) error {
 // healthy waits for the hub to answer with the new version.
 func (u *updater) healthy(version string) error {
 	deadline := u.Clock.Now().Add(u.HealthWithin)
-	last := errors.New("it did not answer")
 	for {
+		var last error
 		if status, err := u.hubStatus(); err != nil {
 			last = err
 		} else if status.Version != version {

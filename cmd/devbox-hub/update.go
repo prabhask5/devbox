@@ -64,6 +64,7 @@ func runUpdate(args []string, stdout, stderr io.Writer) int {
 	configDir := flags.String("config-dir", filepath.Join(home, ".config", "devbox"), "directory holding hub.toml and hub.secrets.toml")
 	stateDir := flags.String("state-dir", filepath.Join(home, ".local", "state", "devbox"), "directory the result is recorded in")
 	lib := flags.String("lib", filepath.Join(home, ".local", "lib", "devbox"), "directory holding releases/ and the current symlink")
+	healthWithin := flags.Duration("health-within", 30*time.Second, "how long a new hub has to come up before the previous build is put back")
 	if err := flags.Parse(args); err != nil || flags.NArg() > 0 {
 		return cli.ExitUsage
 	}
@@ -88,11 +89,11 @@ func runUpdate(args []string, stdout, stderr io.Writer) int {
 	defer stop()
 	outcome, err := update.Run(ctx, update.Options{
 		Repo: *cfg.Deploy.Repo, Environment: cfg.Deploy.Environment, Token: token, API: api, AgentsHost: cfg.Hosts.Agents,
-		Lib: *lib, StateDir: *stateDir, Arch: runtime.GOARCH,
+		ConfigDir: *configDir, Lib: *lib, StateDir: *stateDir, Arch: runtime.GOARCH,
 		HubURL: hubURL(cfg.Listen), HubToken: secrets.HubToken.Expose(),
 		HTTP: &http.Client{Timeout: 5 * time.Minute}, Runner: sys.Exec(), Clock: sys.SystemClock(), Sleep: time.Sleep,
 		Log:          slog.New(slog.NewTextHandler(stderr, nil)),
-		HealthWithin: 30 * time.Second, HealthEvery: time.Second, Keep: 3,
+		HealthWithin: *healthWithin, HealthEvery: time.Second / 4, Keep: 3,
 	})
 	if err != nil {
 		fmt.Fprintln(stderr, "devbox-hub update:", err)

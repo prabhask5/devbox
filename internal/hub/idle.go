@@ -73,7 +73,7 @@ func (h *Hub) Status() proto.HubStatus {
 // lastDeploy is what the updater wrote about the last update (`devbox-hub update`, a separate
 // program so that it can restart the hub); nil when there has been none.
 func (h *Hub) lastDeploy() *proto.DeployState {
-	data, err := os.ReadFile(filepath.Join(h.opt.StateDir, "deploy.json")) //nolint:gosec // the hub's own state directory
+	data, err := os.ReadFile(filepath.Join(h.opt.StateDir, "deploy.json"))
 	if err != nil {
 		return nil
 	}

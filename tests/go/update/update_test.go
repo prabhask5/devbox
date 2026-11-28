@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	repo     = "you/devbox"
+	repoName = "you/devbox"
 	oldBuild = "aaaaaaa"
 	newBuild = "bbbbbbb"
 	token    = "FAKE-github-token"
@@ -55,7 +55,7 @@ type machine struct {
 func newMachine(t *testing.T) *machine {
 	t.Helper()
 	m := &machine{
-		t: t, github: githubfake.Start(t, repo), lib: filepath.Join(t.TempDir(), "lib"), state: filepath.Join(t.TempDir(), "state"),
+		t: t, github: githubfake.Start(t, repoName), lib: filepath.Join(t.TempDir(), "lib"), state: filepath.Join(t.TempDir(), "state"),
 		clock: sys.NewFakeClock(time.UnixMilli(1_790_000_000_000)), serving: oldBuild, stuck: map[string]bool{},
 	}
 	m.github.Token = token
@@ -114,7 +114,7 @@ func (m *machine) Run(_ context.Context, name string, args ...string) ([]byte, e
 		}
 	case name == "gh":
 		return nil, m.attestation
-	case strings.HasSuffix(line, "devbox-hub selftest"):
+	case strings.Contains(line, "devbox-hub selftest --config-dir "):
 		return nil, m.selftest
 	case line == "systemctl --user restart devbox-hub.service":
 		// The hub starts from whatever `current` names now.
@@ -133,8 +133,8 @@ func (m *machine) Stream(context.Context, func(string), string, ...string) error
 
 func (m *machine) update() (update.Outcome, error) {
 	return update.Run(context.Background(), update.Options{
-		Repo: repo, Environment: "agents-hub", Token: token, API: m.github.URL(), AgentsHost: "agents.example.com",
-		Lib: m.lib, StateDir: m.state, Arch: "arm64", HubURL: m.hub.URL, HubToken: hubToken,
+		Repo: repoName, Environment: "agents-hub", Token: token, API: m.github.URL(), AgentsHost: "agents.example.com",
+		ConfigDir: "/home/dev/.config/devbox", Lib: m.lib, StateDir: m.state, Arch: "arm64", HubURL: m.hub.URL, HubToken: hubToken,
 		HTTP: http.DefaultClient, Runner: m, Clock: m.clock, Sleep: m.clock.Advance,
 		Log:          slog.New(slog.NewTextHandler(io.Discard, nil)),
 		HealthWithin: 30 * time.Second, HealthEvery: time.Second, Keep: 3,
@@ -209,7 +209,7 @@ func TestANewBuildIsInstalledAndGitHubIsToldSo(t *testing.T) {
 		}
 	}
 	// gh is not installed here: the checksums are what vouches for the build.
-	wantCalls := []string{"gh --version", "LIB/releases/bbbbbbb/devbox-hub selftest", "systemctl --user restart devbox-hub.service"}
+	wantCalls := []string{"gh --version", "LIB/releases/bbbbbbb/devbox-hub selftest --config-dir /home/dev/.config/devbox", "systemctl --user restart devbox-hub.service"}
 	if !reflect.DeepEqual(m.calls, wantCalls) {
 		t.Errorf("commands:\n%s", strings.Join(m.calls, "\n"))
 	}
