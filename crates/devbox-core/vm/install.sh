@@ -18,15 +18,16 @@ as_user() {
   sudo -u "$DEVBOX_USER" -H env "XDG_RUNTIME_DIR=/run/user/$uid" "PATH=$home/.local/bin:/usr/local/bin:/usr/bin:/bin" "$@"
 }
 # The bundle is root's alone (it holds secrets), so the user cannot read it: its files are
-# read by root and written by the user. give -m <mode> <file...> <target file or directory>
+# read by root and written by the user, through a pipe (a file root alone may read cannot be
+# opened again by the user, even when it is handed over open). give -m <mode> <file...> <target>
 give() {
   local mode=$2 target file; shift 2
   target=${@: -1}
   for file in "${@:1:$#-1}"; do
     if [ -d "$target" ]; then
-      as_user install -m "$mode" /dev/stdin "${target%/}/$(basename "$file")" <"$file"
+      cat "$file" | as_user install -m "$mode" /dev/stdin "${target%/}/$(basename "$file")"
     else
-      as_user install -m "$mode" /dev/stdin "$target" <"$file"
+      cat "$file" | as_user install -m "$mode" /dev/stdin "$target"
     fi
   done
 }
