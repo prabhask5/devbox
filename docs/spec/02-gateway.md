@@ -129,7 +129,7 @@ Tests are in `tests/go/gateway` (the real gateway against `tests/fakes/incus` an
 - [x] Proxy: HTTP (incl. streaming SSE flush), duplicate `Set-Cookie`, WebSocket echo through the gateway, `X-Forwarded-*`, upstream down → reconnecting page / 502 JSON. (`proxy_test.go`)
 - [x] Routing by host; `/__devbox/*` never proxied; boot screen shown during a wake until done unless the skip cookie matches. (`proxy_test.go`)
 - [x] Idle: byte threshold per minute, ignored paths, busy hub blocks sleep, unreachable hub does not, `min_up`, `mode = off`; stateful stop failure falls back to clean stop. (`idle_test.go`)
-- [x] SSH: wake on connect, banner wait (a port that accepts and closes is not ready), byte counting, cleanup. (`idle_test.go`)
+- [x] SSH: wake only after authentication, banner wait (a port that accepts and closes is not ready), byte counting, cleanup at sleep. (`ssh_test.go`, spec 18)
 - [x] Auth: wrong/right password, rate limit, cookie tamper/expiry, `next` open-redirect rejected, cookie required to wake. (`auth_test.go`)
 - [x] Health matrix: every problem condition, and asleep = ok (exact strings). (`endpoints_test.go`, `wake_test.go`, `idle_test.go`, `config_test.go`)
 - [x] Unconfigured mode; config hot reload without dropping an open WebSocket; graceful SIGTERM. (`config_test.go`, `endpoints_test.go`: `TestGracefulShutdown`, `TestBinary`)

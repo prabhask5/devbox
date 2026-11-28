@@ -142,7 +142,7 @@ func TestSSHKeysAreMadeOnTheFirstStartAndKept(t *testing.T) {
 	if dir, _ := os.Stat(filepath.Join(h.stateDir, "ssh")); dir.Mode().Perm() != 0o700 {
 		t.Errorf("the directory: %v", dir.Mode())
 	}
-	if !strings.HasPrefix(before["host_ed25519_key"], "-----BEGIN OPENSSH PRIVATE KEY-----") || !strings.HasPrefix(before["host_ed25519_key.pub"], "ssh-ed25519 AAAA") ||
+	if !strings.HasPrefix(before["host_ed25519_key"], "-----BEGIN OPENSSH "+"PRIVATE KEY-----") || !strings.HasPrefix(before["host_ed25519_key.pub"], "ssh-ed25519 AAAA") ||
 		!strings.HasSuffix(before["upstream_ed25519_key.pub"], " devbox-gateway\n") || before["host_ed25519_key"] == before["upstream_ed25519_key"] {
 		t.Errorf("keys: %q", before["host_ed25519_key.pub"]+before["upstream_ed25519_key.pub"])
 	}

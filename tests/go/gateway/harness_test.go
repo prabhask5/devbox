@@ -9,7 +9,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/prabhask5/devbox/tests/fakes/sshd"
 	"io"
 	"log/slog"
 	"net"
@@ -30,6 +29,7 @@ import (
 	"github.com/prabhask5/devbox/internal/proto"
 	"github.com/prabhask5/devbox/internal/sys"
 	incusfake "github.com/prabhask5/devbox/tests/fakes/incus"
+	"github.com/prabhask5/devbox/tests/fakes/sshd"
 	"github.com/prabhask5/devbox/tests/fakes/wsecho"
 )
 
@@ -217,7 +217,7 @@ func newFakeVM(t *testing.T, incus *incusfake.Server) *fakeVM {
 	vm.hub = httptest.NewServer(vm.guard(&vm.hubUp, "hub", hub))
 
 	vm.sshd = sshd.Start(t, vmUser)
-	vm.sshd.Running = vm.running
+	vm.sshd.SetRunning(vm.running)
 	t.Cleanup(func() {
 		vm.code.CloseClientConnections()
 		vm.hub.CloseClientConnections()

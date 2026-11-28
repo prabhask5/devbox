@@ -30,8 +30,6 @@ type Server struct {
 	// Up is whether sshd runs: when it does not, connections are closed without a banner, as
 	// by a kernel that accepts for a server that is not back yet.
 	Up atomic.Bool
-	// Running, when set, says whether the VM runs at all; when it does not, nothing answers.
-	Running func() bool
 	// Dir is where commands run.
 	Dir string
 
@@ -39,6 +37,7 @@ type Server struct {
 	signer   ssh.Signer
 
 	mu         sync.Mutex
+	running    func() bool     // whether the VM runs at all; nil: it does
 	authorized map[string]bool // marshalled public keys that may log in
 	user       string
 	sessions   []Session
@@ -76,6 +75,14 @@ func Start(t *testing.T, user string) *Server {
 	t.Cleanup(s.Close)
 	go s.accept()
 	return s
+}
+
+// SetRunning makes the server answer only while the VM runs: when it does not, a connection
+// is closed at once.
+func (s *Server) SetRunning(running func() bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.running = running
 }
 
 // Addr is where it listens.
@@ -157,7 +164,10 @@ func (s *Server) accept() {
 
 func (s *Server) serve(conn net.Conn) {
 	defer conn.Close()
-	if (s.Running != nil && !s.Running()) || !s.Up.Load() {
+	s.mu.Lock()
+	running := s.running
+	s.mu.Unlock()
+	if (running != nil && !running()) || !s.Up.Load() {
 		return
 	}
 	s.mu.Lock()
@@ -268,7 +278,7 @@ func (c *connection) global(requests <-chan *ssh.Request) {
 				_ = request.Reply(false, nil)
 				continue
 			}
-			port := uint32(listener.Addr().(*net.TCPAddr).Port) //nolint:gosec // a port
+			port := uint32(listener.Addr().(*net.TCPAddr).Port)
 			c.mu.Lock()
 			c.forwards[fmt.Sprintf("%s:%d", asked.Host, port)] = listener
 			c.mu.Unlock()
@@ -311,7 +321,7 @@ func (c *connection) forwarded(listener net.Listener, host string, port uint32) 
 				Port       uint32
 				OriginHost string
 				OriginPort uint32
-			}{host, port, origin.IP.String(), uint32(origin.Port)}) //nolint:gosec // a port
+			}{host, port, origin.IP.String(), uint32(origin.Port)})
 			channel, requests, err := c.conn.OpenChannel("forwarded-tcpip", payload)
 			if err != nil {
 				return
@@ -490,7 +500,7 @@ func (c *connection) run(channel ssh.Channel, requests <-chan *ssh.Request, sess
 	case err == nil:
 		return 0
 	case errors.As(err, &exit) && exit.ExitCode() >= 0:
-		return uint32(exit.ExitCode()) //nolint:gosec // an exit code
+		return uint32(exit.ExitCode())
 	default:
 		return 255
 	}
