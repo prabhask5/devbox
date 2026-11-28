@@ -73,7 +73,7 @@ test("an idle devbox is put to sleep, and the app wakes it", async ({ request })
   expect((await request.post(`${AGENTS}/__devbox/wake`, { data: {} })).status()).toBe(202);
   await expect.poll(async () => (await status(request)).vm).toBe("running");
   await expect.poll(async () => (await request.get(`${AGENTS}/api/state`)).status()).toBe(401);
-  expect((await incus(request)).stateChanges?.at(-1)).toEqual({ action: "start", timeout: -1 });
+  expect((await incus(request)).stateChanges?.at(-1)).toEqual({ action: "start", stateful: true, timeout: -1 });
 });
 
 // Scenario 4: an agent that is working keeps the VM awake; one that waits for the owner does not.

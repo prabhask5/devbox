@@ -55,7 +55,7 @@ test("an asleep devbox wakes on sign-in and opens the page that was asked for", 
 
   const state = await incus(request);
   expect(state.status).toBe("Running");
-  expect(state.stateChanges).toEqual([{ action: "start", timeout: -1 }]);
+  expect(state.stateChanges).toEqual([{ action: "start", stateful: true, timeout: -1 }]);
   expect(elsewhere).toEqual([]);
 
   // Signed in and awake: the next visit goes straight through.
