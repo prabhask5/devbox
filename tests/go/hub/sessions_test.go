@@ -2,7 +2,10 @@ package hub_test
 
 import (
 	"context"
+	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -10,9 +13,6 @@ import (
 	"github.com/prabhask5/devbox/internal/hub"
 	"github.com/prabhask5/devbox/internal/proto"
 	"github.com/prabhask5/devbox/tests/go/repo"
-	"os"
-	"regexp"
-	"strconv"
 )
 
 var ctx = context.Background()
