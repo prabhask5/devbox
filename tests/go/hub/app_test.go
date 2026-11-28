@@ -289,8 +289,16 @@ func TestTheStateStreamFollowsChanges(t *testing.T) {
 	if err := h.hub.Kill(ctx, created.ID); err != nil {
 		t.Fatal(err)
 	}
-	if state := read(); len(state.Sessions) != 0 {
-		t.Errorf("after the kill the stream still lists %d sessions", len(state.Sessions))
+	// (A change on its own is sent at once, so the terminal going may arrive as a state of its
+	// own just before the session leaves the list.)
+	for deadline := time.Now().Add(time.Second); ; {
+		state := read()
+		if len(state.Sessions) == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("a second after the kill the stream still lists %d sessions", len(state.Sessions))
+		}
 	}
 
 	// The stream ends when the hub stops.

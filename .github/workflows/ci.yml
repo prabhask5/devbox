@@ -164,6 +164,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
         with: { go: true, rust: true, web: true }
+      - name: Browser
+        run: pnpm -C web install --frozen-lockfile && pnpm -C web --filter devbox-e2e exec playwright install --with-deps chromium
       - run: scripts/ci.sh budgets
         env:
           DEVBOX_DOCKER: 1

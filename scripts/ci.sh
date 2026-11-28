@@ -160,9 +160,15 @@ budgets() {
   go run ./tests/perf/sync -devbox target/release/devbox
   step "measure the developer context"
   go run ./tests/perf/context -devbox target/release/devbox
-  if [[ ${DEVBOX_DOCKER:-} == 1 ]]; then step "measure the gateway image"; scripts/check-image.sh --measure; fi
+  step "measure the devbox command"
+  go run ./tests/perf/cli -devbox target/release/devbox
+  step "measure the app's first render"
+  web_install
+  DEVBOX_BUDGETS_OUT=target/budgets/measured.toml scripts/e2e.sh --project=chromium budget.spec.ts
+  local not_here=""
+  if [[ ${DEVBOX_DOCKER:-} == 1 ]]; then step "measure the gateway image"; scripts/check-image.sh --measure; else not_here=gateway_image_mb; fi
   # Process start-up and scheduling differ too much elsewhere for the numbers to mean the same.
-  step "budgets"; BUDGETS_REPORT_ONLY=$([[ $(uname -s) == Linux ]] || echo 1) scripts/budgets.sh
+  step "budgets"; BUDGETS_NOT_MEASURED_HERE=$not_here BUDGETS_REPORT_ONLY=$([[ $(uname -s) == Linux ]] || echo 1) scripts/budgets.sh
 }
 
 stages=("$@")

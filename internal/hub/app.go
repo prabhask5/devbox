@@ -272,18 +272,24 @@ func (h *Hub) serveStream(w http.ResponseWriter, r *http.Request) {
 	}
 	ping := time.NewTicker(h.t.StreamPing)
 	defer ping.Stop()
+	sent := time.Now()
 	for {
 		select {
 		case <-changes:
-			select {
-			case <-time.After(h.t.StreamDebounce):
-			case <-r.Context().Done():
-				return
+			// A change on its own goes out at once; changes that follow closely wait, so a
+			// burst is at most one frame per StreamDebounce and the last state always arrives.
+			if wait := h.t.StreamDebounce - time.Since(sent); wait > 0 {
+				select {
+				case <-time.After(wait):
+				case <-r.Context().Done():
+					return
+				}
+				select {
+				case <-changes: // what arrived during the pause is in this state too
+				default:
+				}
 			}
-			select {
-			case <-changes: // what arrived during the pause is in this state too
-			default:
-			}
+			sent = time.Now()
 			if !state() {
 				return
 			}

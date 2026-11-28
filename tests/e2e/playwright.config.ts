@@ -26,7 +26,8 @@ export default defineConfig({
     {
       name: "webkit-iphone",
       use: { ...devices["iPhone 14"] },
-      testIgnore: /(health|idle)\.spec\.ts/,
+      // The first-render budget is defined for Chromium, whose CPU can be slowed.
+      testIgnore: /(health|idle|budget)\.spec\.ts/,
     },
     {
       name: "chromium",
