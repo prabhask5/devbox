@@ -457,6 +457,14 @@ impl ::std::convert::TryFrom<::std::string::String> for GatewayPhase {
         value.parse()
     }
 }
+#[doc = "When each paired SSH key was last used, kept by the gateway in its state directory (`ssh/keys-used.json`) and read by `devbox ssh keys`."]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug, PartialEq)]
+pub struct GatewaySshKeysUsed {
+    #[doc = "One entry per key that has been used."]
+    pub keys: ::std::vec::Vec<SshKeyUse>,
+    #[doc = "Contract version of this message."]
+    pub v: i64,
+}
 #[doc = "State of the gateway and the VM, served at /__devbox/status and pushed over /__devbox/events."]
 #[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug, PartialEq)]
 pub struct GatewayStatus {
@@ -543,6 +551,9 @@ pub struct HostConfigHosts {
     #[doc = "Editor hostname. Default: `code.<domain>`."]
     #[serde(skip_serializing_if = "::std::option::Option::is_none")]
     pub code: ::std::option::Option<::std::string::String>,
+    #[doc = "SSH hostname (SSH over WebSocket, the setup script and pairing). Default: `devbox.<domain>`."]
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub ssh: ::std::option::Option<::std::string::String>,
 }
 #[doc = "How `devbox up` built the VM, so that it can build it again without being asked anything."]
 #[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug, PartialEq)]
@@ -703,6 +714,9 @@ pub struct HostConfigVm {
     pub code_port: ::std::num::NonZeroU16,
     #[doc = "Hub port."]
     pub hub_port: ::std::num::NonZeroU16,
+    #[doc = "The VM's SSH host key, as one `ssh-ed25519 AAAA…` line, recorded by `devbox up`. The gateway connects to no other. Absent until `devbox up` has run."]
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub ssh_host_key: ::std::option::Option<::std::string::String>,
     #[doc = "sshd port."]
     pub ssh_port: ::std::num::NonZeroU16,
 }
@@ -1165,6 +1179,14 @@ impl ::std::convert::TryFrom<::std::string::String> for SessionState {
     ) -> ::std::result::Result<Self, self::error::ConversionError> {
         value.parse()
     }
+}
+#[doc = "The last use of one key."]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug, PartialEq)]
+pub struct SshKeyUse {
+    #[doc = "When it last authenticated a connection (Unix time, ms)."]
+    pub at: i64,
+    #[doc = "The key's fingerprint, as `ssh-keygen -l` prints it (`SHA256:…`)."]
+    pub fingerprint: ::std::string::String,
 }
 #[doc = "One line of `devbox sync --json` (NDJSON). `start` carries `total`; `begin` carries `name`; `repo` carries `name`, `status` and `detail`; `done` ends the run."]
 #[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug, PartialEq)]

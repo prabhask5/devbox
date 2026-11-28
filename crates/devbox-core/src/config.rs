@@ -41,16 +41,25 @@ pub fn host(name: &str, text: &str) -> Result<Parsed<proto::HostConfig>, ConfigE
     parse(name, text, "HostConfig", versions::HOST_CONFIG_VERSION, |file| {
         let domain = file.get("domain").and_then(Value::as_str).unwrap_or_default().to_owned();
         let Some(Value::Object(hosts)) = file.get_mut("hosts") else { return Vec::new() };
-        for app in ["code", "agents"] {
-            hosts.entry(app).or_insert_with(|| Value::String(format!("{app}.{domain}")));
+        for (app, label) in [("code", "code"), ("agents", "agents"), ("ssh", "devbox")] {
+            hosts.entry(app).or_insert_with(|| Value::String(format!("{label}.{domain}")));
         }
+        let mut problems = Vec::new();
         if hosts.get("code") == hosts.get("agents") {
-            return vec![Problem {
+            problems.push(Problem {
                 path: "hosts.agents".to_owned(),
                 message: "must differ from hosts.code".to_owned(),
-            }];
+            });
         }
-        Vec::new()
+        for other in ["code", "agents"] {
+            if hosts.get("ssh") == hosts.get(other) {
+                problems.push(Problem {
+                    path: "hosts.ssh".to_owned(),
+                    message: format!("must differ from hosts.{other}"),
+                });
+            }
+        }
+        problems
     })
 }
 

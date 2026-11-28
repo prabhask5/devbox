@@ -34,6 +34,11 @@ fn contract(name: &str, example: &str) -> Option<(&'static str, i64, Value)> {
             versions::GATEWAY_HEALTH_VERSION,
             reencode::<proto::GatewayHealth>(example),
         ),
+        "gateway-ssh-keys-used" => (
+            "GatewaySshKeysUsed",
+            versions::GATEWAY_SSH_KEYS_USED_VERSION,
+            reencode::<proto::GatewaySshKeysUsed>(example),
+        ),
         "gateway-status" => (
             "GatewayStatus",
             versions::GATEWAY_STATUS_VERSION,
@@ -110,7 +115,7 @@ fn every_example_round_trips_and_matches_its_schema() {
 
     // Every schema file has an example, and the generated code agrees with its title and version.
     let schemas = devbox_tests::list("contracts", ".schema.json");
-    assert_eq!(schemas.len(), 17);
+    assert_eq!(schemas.len(), 18);
     for name in &schemas {
         assert!(seen.contains(name), "{name}: no example in contracts/examples/");
         let doc: Value =

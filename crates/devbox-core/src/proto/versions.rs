@@ -10,6 +10,8 @@ pub const DOTFILES_MANIFEST_VERSION: i64 = 1;
 pub const GATEWAY_EVENT_VERSION: i64 = 1;
 /// Version of the `gateway-health` contract.
 pub const GATEWAY_HEALTH_VERSION: i64 = 1;
+/// Version of the `gateway-ssh-keys-used` contract.
+pub const GATEWAY_SSH_KEYS_USED_VERSION: i64 = 1;
 /// Version of the `gateway-status` contract.
 pub const GATEWAY_STATUS_VERSION: i64 = 1;
 /// Version of the `host-config` contract.

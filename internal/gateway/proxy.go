@@ -118,6 +118,12 @@ func (g *Gateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The SSH host is never proxied: it is the gateway's own SSH server and what goes with it.
+	if httpx.RequestHost(r) == hostOf(s.host.Hosts.SSH) {
+		g.serveSSHHost(w, r)
+		return
+	}
+
 	forward, ready := g.toCode, false
 	toHub := httpx.RequestHost(r) == *s.host.Hosts.Agents
 	if toHub {

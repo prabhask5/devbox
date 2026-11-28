@@ -394,6 +394,27 @@
     "stopping"
    ]
   },
+  "GatewaySshKeysUsed": {
+   "description": "When each paired SSH key was last used, kept by the gateway in its state directory (`ssh/keys-used.json`) and read by `devbox ssh keys`.",
+   "type": "object",
+   "required": [
+    "v",
+    "keys"
+   ],
+   "properties": {
+    "v": {
+     "description": "Contract version of this message.",
+     "type": "integer"
+    },
+    "keys": {
+     "description": "One entry per key that has been used.",
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/SshKeyUse"
+     }
+    }
+   }
+  },
   "GatewayStatus": {
    "description": "State of the gateway and the VM, served at /__devbox/status and pushed over /__devbox/events.",
    "type": "object",
@@ -498,6 +519,11 @@
        "description": "Agents app hostname. Default: `agents.<domain>`.",
        "type": "string",
        "format": "hostname"
+      },
+      "ssh": {
+       "description": "SSH hostname (SSH over WebSocket, the setup script and pairing). Default: `devbox.<domain>`.",
+       "type": "string",
+       "format": "hostname"
       }
      },
      "default": {}
@@ -534,6 +560,11 @@
        "format": "uint16",
        "minimum": 1,
        "default": 22
+      },
+      "ssh_host_key": {
+       "description": "The VM's SSH host key, as one `ssh-ed25519 AAAA…` line, recorded by `devbox up`. The gateway connects to no other. Absent until `devbox up` has run.",
+       "type": "string",
+       "format": "devbox-nonempty"
       }
      }
     },
@@ -1426,6 +1457,24 @@
     "gone",
     "ended"
    ]
+  },
+  "SshKeyUse": {
+   "description": "The last use of one key.",
+   "type": "object",
+   "required": [
+    "fingerprint",
+    "at"
+   ],
+   "properties": {
+    "fingerprint": {
+     "description": "The key's fingerprint, as `ssh-keygen -l` prints it (`SHA256:…`).",
+     "type": "string"
+    },
+    "at": {
+     "description": "When it last authenticated a connection (Unix time, ms).",
+     "type": "integer"
+    }
+   }
   },
   "SyncProgress": {
    "description": "One line of `devbox sync --json` (NDJSON). `start` carries `total`; `begin` carries `name`; `repo` carries `name`, `status` and `detail`; `done` ends the run.",

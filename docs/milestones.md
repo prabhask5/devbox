@@ -118,8 +118,8 @@ Specs: 11 (hub part)
 ## M10 — SSH from anywhere
 Specs: 18 (and the SSH rows in 01, 02, 09, 11, 12, 13, 14, 15)
 - [x] `internal/wsconn` (RFC 6455 framing for server and client) with fuzzing and a Cloudflare-Tunnel-style interop peer
-- [ ] Gateway SSH server on `x/crypto/ssh`: keys created in `state/ssh/` on first start, publickey auth against `ssh/authorized_keys` with reload, per-address limits, no wake before authentication, upstream connection with host-key pinning, generic channel/request relay with queue-and-replay across a wake, agent forwarding and forwards both ways; the TCP listener uses the same server (no raw splice left); new health problems
-- [ ] Boot-aware terminal: live phase screen for pty sessions, stderr lines otherwise, nothing when awake; golden transcripts
+- [x] Gateway SSH server on `x/crypto/ssh`: keys created in `state/ssh/` on first start, publickey auth against `ssh/authorized_keys` with reload, per-address limits, no wake before authentication, upstream connection with host-key pinning, generic channel/request relay with queue-and-replay across a wake, agent forwarding and forwards both ways; the TCP listener uses the same server (no raw splice left); new health problems
+- [x] Boot-aware terminal: live phase screen for pty sessions, stderr lines otherwise, nothing when awake; golden transcripts
 - [ ] SSH host routing and endpoints: page, `/setup` with filled-in defaults, client downloads + `SHA256SUMS`, `POST /__devbox/ssh/pair` (app password, login rate limits); goldens
 - [x] `cmd/devbox-ssh`: `proxy` (headers, pings, error messages, exit 255) and `version`; size budget
 - [ ] `cmd/devbox-ssh/setup.sh`: `add`/`remove`/`status` per the client contract; tests under dash and bash, plus the macOS `ssh-client` CI job (part of `required`)

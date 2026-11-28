@@ -1,1 +1,3 @@
 devbox.toml: hosts.agents: must differ from hosts.code
+devbox.toml: hosts.ssh: must differ from hosts.code
+devbox.toml: hosts.ssh: must differ from hosts.agents

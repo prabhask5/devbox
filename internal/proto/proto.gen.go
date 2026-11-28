@@ -651,6 +651,37 @@ func (j *GatewayPhase) UnmarshalJSON(value []byte) error {
 	return nil
 }
 
+// When each paired SSH key was last used, kept by the gateway in its state
+// directory (`ssh/keys-used.json`) and read by `devbox ssh keys`.
+type GatewaySSHKeysUsed struct {
+	// One entry per key that has been used.
+	Keys []SSHKeyUse `json:"keys"`
+
+	// Contract version of this message.
+	V int `json:"v"`
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *GatewaySSHKeysUsed) UnmarshalJSON(value []byte) error {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(value, &raw); err != nil {
+		return err
+	}
+	if _, ok := raw["keys"]; raw != nil && !ok {
+		return fmt.Errorf("field keys in GatewaySSHKeysUsed: required")
+	}
+	if _, ok := raw["v"]; raw != nil && !ok {
+		return fmt.Errorf("field v in GatewaySSHKeysUsed: required")
+	}
+	type Plain GatewaySSHKeysUsed
+	var plain Plain
+	if err := json.Unmarshal(value, &plain); err != nil {
+		return err
+	}
+	*j = GatewaySSHKeysUsed(plain)
+	return nil
+}
+
 // State of the gateway and the VM, served at /__devbox/status and pushed over
 // /__devbox/events.
 type GatewayStatus struct {
@@ -877,6 +908,10 @@ type HostConfigHosts struct {
 
 	// Editor hostname. Default: `code.<domain>`.
 	Code *string `json:"code,omitempty,omitzero"`
+
+	// SSH hostname (SSH over WebSocket, the setup script and pairing). Default:
+	// `devbox.<domain>`.
+	SSH *string `json:"ssh,omitempty,omitzero"`
 }
 
 // How `devbox up` built the VM, so that it can build it again without being asked
@@ -1095,6 +1130,10 @@ type HostConfigVM struct {
 
 	// Hub port.
 	HubPort int `json:"hub_port"`
+
+	// The VM's SSH host key, as one `ssh-ed25519 AAAA…` line, recorded by `devbox
+	// up`. The gateway connects to no other. Absent until `devbox up` has run.
+	SSHHostKey *string `json:"ssh_host_key,omitempty,omitzero"`
 
 	// sshd port.
 	SSHPort int `json:"ssh_port"`
@@ -1793,6 +1832,36 @@ func (j *PushPayload) UnmarshalJSON(value []byte) error {
 		return err
 	}
 	*j = PushPayload(plain)
+	return nil
+}
+
+// The last use of one key.
+type SSHKeyUse struct {
+	// When it last authenticated a connection (Unix time, ms).
+	At int `json:"at"`
+
+	// The key's fingerprint, as `ssh-keygen -l` prints it (`SHA256:…`).
+	Fingerprint string `json:"fingerprint"`
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *SSHKeyUse) UnmarshalJSON(value []byte) error {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(value, &raw); err != nil {
+		return err
+	}
+	if _, ok := raw["at"]; raw != nil && !ok {
+		return fmt.Errorf("field at in SSHKeyUse: required")
+	}
+	if _, ok := raw["fingerprint"]; raw != nil && !ok {
+		return fmt.Errorf("field fingerprint in SSHKeyUse: required")
+	}
+	type Plain SSHKeyUse
+	var plain Plain
+	if err := json.Unmarshal(value, &plain); err != nil {
+		return err
+	}
+	*j = SSHKeyUse(plain)
 	return nil
 }
 

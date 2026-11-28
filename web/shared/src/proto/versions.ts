@@ -5,6 +5,7 @@ export const AGENT_EVENT_VERSION = 1;
 export const DOTFILES_MANIFEST_VERSION = 1;
 export const GATEWAY_EVENT_VERSION = 1;
 export const GATEWAY_HEALTH_VERSION = 1;
+export const GATEWAY_SSH_KEYS_USED_VERSION = 1;
 export const GATEWAY_STATUS_VERSION = 1;
 export const HOST_CONFIG_VERSION = 1;
 export const HOST_SECRETS_VERSION = 1;

@@ -288,6 +288,32 @@ export interface GatewayIdle {
   hubReasons: string[];
 }
 /**
+ * When each paired SSH key was last used, kept by the gateway in its state directory (`ssh/keys-used.json`) and read by `devbox ssh keys`.
+ */
+export interface GatewaySshKeysUsed {
+  /**
+   * Contract version of this message.
+   */
+  v: number;
+  /**
+   * One entry per key that has been used.
+   */
+  keys: SshKeyUse[];
+}
+/**
+ * The last use of one key.
+ */
+export interface SshKeyUse {
+  /**
+   * The key's fingerprint, as `ssh-keygen -l` prints it (`SHA256:…`).
+   */
+  fingerprint: string;
+  /**
+   * When it last authenticated a connection (Unix time, ms).
+   */
+  at: number;
+}
+/**
  * State of the gateway and the VM, served at /__devbox/status and pushed over /__devbox/events.
  */
 export interface GatewayStatus {
@@ -518,6 +544,10 @@ export interface HostConfig {
      * Agents app hostname. Default: `agents.<domain>`.
      */
     agents?: string;
+    /**
+     * SSH hostname (SSH over WebSocket, the setup script and pairing). Default: `devbox.<domain>`.
+     */
+    ssh?: string;
   };
   /**
    * How the gateway reaches the VM.
@@ -539,6 +569,10 @@ export interface HostConfig {
      * sshd port.
      */
     ssh_port: number;
+    /**
+     * The VM's SSH host key, as one `ssh-ed25519 AAAA…` line, recorded by `devbox up`. The gateway connects to no other. Absent until `devbox up` has run.
+     */
+    ssh_host_key?: string;
   };
   /**
    * When the VM is put to sleep.

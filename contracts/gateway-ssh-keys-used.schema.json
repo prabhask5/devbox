@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "gateway-ssh-keys-used.schema.json",
+  "title": "GatewaySshKeysUsed",
+  "x-version": 1,
+  "description": "When each paired SSH key was last used, kept by the gateway in its state directory (`ssh/keys-used.json`) and read by `devbox ssh keys`.",
+  "type": "object",
+  "required": [
+    "v",
+    "keys"
+  ],
+  "properties": {
+    "v": {
+      "description": "Contract version of this message.",
+      "type": "integer"
+    },
+    "keys": {
+      "description": "One entry per key that has been used.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/SshKeyUse"
+      }
+    }
+  },
+  "$defs": {
+    "SshKeyUse": {
+      "description": "The last use of one key.",
+      "type": "object",
+      "required": [
+        "fingerprint",
+        "at"
+      ],
+      "properties": {
+        "fingerprint": {
+          "description": "The key's fingerprint, as `ssh-keygen -l` prints it (`SHA256:\u2026`).",
+          "type": "string"
+        },
+        "at": {
+          "description": "When it last authenticated a connection (Unix time, ms).",
+          "type": "integer"
+        }
+      }
+    }
+  }
+}

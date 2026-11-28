@@ -26,8 +26,8 @@ const bundle = json("internal/proto/schema.gen.json") as { $defs: Record<string,
 const ajv = new Ajv2020({ strict: false, validateFormats: false, allErrors: true });
 ajv.addSchema(bundle, "contracts");
 
-test("there are seventeen contracts and each has an example", () => {
-  expect(contracts).toHaveLength(17);
+test("there are eighteen contracts and each has an example", () => {
+  expect(contracts).toHaveLength(18);
   for (const { name } of contracts) {
     expect(examples, name).toContain(`${name}.json`);
   }

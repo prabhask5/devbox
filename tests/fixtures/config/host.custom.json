@@ -12,7 +12,8 @@
   },
   "hosts": {
     "agents": "a.devbox.test",
-    "code": "code.devbox.test"
+    "code": "code.devbox.test",
+    "ssh": "devbox.devbox.test"
   },
   "instance": "dev-2",
   "provision": {

@@ -44,11 +44,11 @@ All under the gateway's state directory, owned by the gateway's uid, created on 
 | `ssh/authorized_keys` | 0600 | the keys allowed in, in OpenSSH `authorized_keys` format; the comment is the device name. Options other than none are refused with a warning in the log (devbox does not interpret `command=`, `from=` …) |
 | `ssh/keys-used.json` | 0600 | last use per key fingerprint (`gateway-ssh-keys-used`), for `devbox ssh keys` |
 
-The private keys never leave the state directory. `devbox up` reads the `.pub` files, puts the upstream key in the VM user's `~/.ssh/authorized_keys` as `from="<bridge address>",no-X11-forwarding ssh-ed25519 … devbox-gateway`, and records the VM's host key in the host config (`vm.ssh_host_key`), which the gateway pins when it connects (a mismatch refuses the connection and is a health problem). `authorized_keys` is reloaded when it changes (the same 2 s polling as the config, spec 02). Because the state directory is identity data (moi backs it up), a rebuilt host keeps its host key and its paired devices.
+The private keys never leave the state directory. `devbox up` reads the `.pub` files, puts the upstream key in the VM user's `~/.ssh/authorized_keys` as `from="<bridge address>",no-X11-forwarding ssh-ed25519 … devbox-gateway`, and records the VM's host key in the host config (`vm.ssh_host_key`), which the gateway pins when it connects (a mismatch refuses the connection and is a health problem). `authorized_keys` is reloaded when it changes (the same 2 s polling as the config, spec 02), and the sessions of a key that is no longer in it are closed then. The files fail closed: a key line that is not `ssh-ed25519`, ECDSA on a NIST curve or RSA of at least 3072 bits is refused with a warning; an `authorized_keys` that group or others may write lets nobody in until it is `chmod 600`; a private key that others can read is made 0600 again at start, and the SSH server stays off if it cannot be. Because the state directory is identity data (moi backs it up), a rebuilt host keeps its host key and its paired devices.
 
 ### Accepting a connection
 
-1. Algorithms: key exchange `mlkem768x25519-sha256`, `curve25519-sha256`; ciphers `chacha20-poly1305@openssh.com`, `aes256-gcm@openssh.com`, `aes128-gcm@openssh.com`; host key `ssh-ed25519`. Public-key authentication only, at most 6 attempts, 30 s to authenticate, at most 10 unauthenticated connections per source address per minute (the WebSocket's `X-Forwarded-For` from Traefik, otherwise the peer).
+1. Algorithms: key exchange `mlkem768x25519-sha256`, `curve25519-sha256`; ciphers `chacha20-poly1305@openssh.com`, `aes256-gcm@openssh.com`, `aes128-gcm@openssh.com`; host key `ssh-ed25519`. Public-key authentication only, with SHA-2 signatures (`ssh-ed25519`, `ecdsa-sha2-nistp256/384/521`, `rsa-sha2-512/256`; never `ssh-rsa`), at most 6 attempts, 30 s to authenticate, at most 10 connections per source address per minute that do not log in (the WebSocket's `CF-Connecting-IP` or `X-Forwarded-For`, otherwise the peer), and at most 128 connections in the middle of logging in at any time. Every login (source, key fingerprint, device name) and every connection that did not log in is written to the gateway's log.
 2. The user name must be the VM user (`provision.user`). Any other name, or a key not in `authorized_keys`, fails authentication: `Permission denied (publickey)`.
 3. **Only an authenticated connection may wake the VM.** On success the gateway requests a wake if the VM is not ready (idempotent: it joins a running wake), counts the connection as activity (02), and opens the upstream connection as soon as the VM's sshd sends its `SSH-` banner (≤ 180 s, as before).
 4. Upstream: TCP to `vm.address:vm.ssh_port`, the VM's host key checked against `vm.ssh_host_key`, user `provision.user`, the upstream key. One upstream connection per client connection.
@@ -59,7 +59,7 @@ Everything is relayed generically, so features work without the gateway knowing 
 
 - **Channels**: each channel the client opens (`session`, `direct-tcpip`, `direct-streamlocal@openssh.com`, …) is opened on the upstream connection with the same type and extra data; accept/reject and the reason go back to the client. Channels the VM opens (`forwarded-tcpip`, `auth-agent@openssh.com`, `forwarded-streamlocal@openssh.com`) are opened towards the client the same way. Data, extended data (stderr), EOF and close are copied both ways.
 - **Requests**: channel requests (`pty-req`, `env`, `shell`, `exec`, `subsystem`, `window-change`, `signal`, `exit-status`, `exit-signal`, `auth-agent-req@openssh.com`, …) and global requests (`tcpip-forward`, `cancel-tcpip-forward`, `streamlocal-forward@openssh.com`, …) are forwarded with their `want-reply` answered from the other side. `keepalive@openssh.com` is answered by the gateway; `x11-req` is refused.
-- **Before the VM is ready**, channels the client opens are accepted by the gateway and their requests are queued. When the upstream connection exists, each queued channel is opened upstream and its requests are replayed in order. A rejection at that point closes the client's channel with the VM's reason.
+- **Before the VM is ready**, channels the client opens are accepted by the gateway and their requests are queued and answered with success at once (a client that waits for each answer before sending the next request would otherwise never ask for its shell). When the upstream connection exists, each queued channel is opened upstream and its requests are replayed in order. A rejection at that point — of the channel, or of its `shell`, `exec` or `subsystem` request — closes the client's channel with the VM's reason on stderr and exit status 255. Connection-wide requests (`tcpip-forward`) wait and are answered by the VM. The VM's own `hostkeys-00@openssh.com` announcement is not passed on: the client knows the gateway's key, not the VM's.
 - Client→server bytes count as activity, like proxied HTTP (02). Putting the VM to sleep closes every SSH connection (02).
 
 So shells, `exec`, scp/sftp/rsync, `git` over SSH, `-L`/`-R`/`-D` forwards, agent forwarding and VS Code Remote-SSH work as they do against sshd.
@@ -68,26 +68,28 @@ So shells, `exec`, scp/sftp/rsync, `git` over SSH, `-L`/`-R`/`-D` forwards, agen
 
 Shown only when the connection had to wait for the VM. When the VM is awake there is no extra output and no delay beyond the relay.
 
-**Interactive session** (a `pty-req` on the first session channel): the gateway draws the wake on the terminal, updating in place, from the same status the boot screen uses (phases, ETA from past wakes, 02):
+**Interactive session** (a `pty-req` on the first session channel): the gateway draws the wake on the terminal from the same status the boot screen uses (phases, ETA from past wakes, 02):
 
 ```
 devbox is asleep — waking it up (about 7s)
 
   ✓ VM           restored in 5.8s
-  ● SSH          0.6s · about 1s
+  ✓ SSH          answers after 0.6s
     Repos        sync continues in the background
+
+  Ready in 6.4s (restored).
 
 ```
 
-- One line per phase that matters for SSH (`VM` = the `start` phase, `SSH` = the VM's sshd banner), then a line for the sync phase, which SSH does not wait for.
-- `●` is the active phase, with elapsed time and the remaining ETA, redrawn at most 10 times a second (`\r` and `ESC[K` on the active line). Colour (the boot screen's success/active/muted tokens as ANSI 256 colours) only when the client's `TERM` is not `dumb`; plain characters otherwise (`*`, `+`, `-` instead of the symbols when the `LANG`/`LC_*` sent with `env` do not mention UTF-8).
-- When ready: `  Ready in 6.4s (restored).` followed by an empty line, then the VM's session starts normally (its motd and prompt follow).
-- A cold boot says so: `devbox is off — starting it (about 22s)`. A wake already running when you connect shows its progress from where it is.
-- Failure: the step gets `✗` and the gateway's error, the line `See https://code.example.com for details.`, and the channel ends with exit status 255. Timeout (180 s): `✗ SSH  the VM's SSH server did not answer in 3 minutes`.
+- One line per phase that matters for SSH (`VM` = the `start` phase, `SSH` = the VM's sshd banner). A line appears when its phase begins and is redrawn in place while it runs — `●`, the time so far and what is left (`● VM  2.1s · about 4s`), at most 10 times a second, with `\r` and `ESC[K` — and gets its final text and its line end when the phase is over. The `Repos` line, which SSH does not wait for, follows when SSH answers. Nothing moves the cursor up, so the screen is right at any width.
+- Colour (the boot screen's success/active/failure/muted tokens as ANSI 256 colours 114/75/203/245) and redrawing only when the client's `TERM` is set and not `dumb`; a dumb terminal gets each phase as one line when it is over. Plain characters (`*`, `+`, `-` for `●`, `✓`, `✗`, and `-` for the dashes) when none of `LC_ALL`, `LC_CTYPE`, `LANG` sent with `env` mentions UTF-8.
+- When ready: `  Ready in 6.4s (restored).` (`(booted)` after a cold boot) followed by an empty line, then the VM's session starts normally (its motd and prompt follow).
+- A cold boot says so: `devbox is off — starting it (about 22s)`, and its VM line ends `started in 18.2s`. A wake already running when you connect says `devbox is waking up (about 1s)` and shows its progress from where it is (`✓ VM  running` when the VM was up already).
+- Failure: the step gets `✗` and the gateway's error, then an empty line and `See https://code.example.com for details.`, and the channel ends with exit status 255. Timeout (180 s): `✗ SSH  the VM's SSH server did not answer in 3 minutes`. Only the VM not starting fails the wait: a wake that fails later, because the editor does not come up, does not keep SSH from working.
 
-**Non-interactive** (exec, subsystem, forwards only): two lines on the first session's stderr, nothing on stdout: `devbox: waking the VM (about 7s)…` and `devbox: ready in 6.4s`, or `devbox: wake failed: <error>` with exit status 255. Channels without a session (`ssh -N -L …`) just wait.
+**Non-interactive** (exec, subsystem, forwards only): two lines on the first session's stderr, nothing on stdout: `devbox: waking the VM (about 7s)…` and `devbox: ready in 6.4s`, or `devbox: wake failed: <error>` with exit status 255. Channels without a session (`ssh -N -L …`) just wait. A connection to an awake VM that then cannot be relayed (the VM refuses the gateway's key, its host key is not the recorded one) gets the same `devbox: wake failed: …` line with what to do, on a terminal as `devbox: …`.
 
-The texts are golden-tested byte for byte (transcripts with the ANSI sequences, for a restore, a cold boot, a joined wake, a failure, a timeout and a dumb terminal).
+The texts are golden-tested byte for byte (`internal/gateway/sshux_test.go`: transcripts with the ANSI sequences, for a restore, a cold boot, a joined wake, a failure, a timeout, a dumb terminal and a locale without UTF-8, and the lines without a terminal). The screen is a pure function of the wake's state, so the transcripts need no clock.
 
 ## The SSH host
 
@@ -213,9 +215,9 @@ All are measured by the `budgets` job (spec 13); `scripts/budgets.sh` learns min
 ## Acceptance
 
 - [x] `internal/wsconn`: framing round-trips, fragmentation, ping/pong, close codes, limits; fuzz target with a seed corpus; interop with a Cloudflare-Tunnel-style peer (a test server that behaves like the tunnel's `ssh://` ingress). (`tests/go/wsconn`)
-- [ ] Gateway SSH: keys created on first start with the right modes, `authorized_keys` reload, wrong user / unknown key / key with options refused, auth limits, **no wake before authentication**, upstream host-key pinning, VM rejecting the upstream key → health problem. (`tests/go/gateway/ssh_test.go`, fake VM sshd built on `x/crypto/ssh`)
+- [x] Gateway SSH: keys created on first start with the right modes, `authorized_keys` reload, wrong user / unknown key / key with options refused, auth limits, **no wake before authentication**, upstream host-key pinning, VM rejecting the upstream key → health problem. (`tests/go/gateway/ssh_test.go`, fake VM sshd built on `x/crypto/ssh`)
 - [ ] Relay with the real OpenSSH client (`ssh`, `scp`, `sftp`) against a fake VM sshd: shell with pty, exec with exit status and signals, stderr, scp and sftp both ways, `-L`, `-R`, `-D`, agent forwarding, `ProxyCommand devbox-ssh proxy` over the WebSocket and the TCP listener, queued channels replayed after a wake. (`tests/go/e2e/ssh_test.go`)
-- [ ] Boot-aware transcripts (restore, cold, joined, failure, timeout, dumb terminal, non-UTF-8, non-interactive) golden byte for byte; awake VM: zero extra bytes.
+- [x] Boot-aware transcripts (restore, cold, joined, failure, timeout, dumb terminal, non-UTF-8, non-interactive) golden byte for byte; awake VM: zero extra bytes. (`internal/gateway/sshux_test.go`, `TestATerminalIsShownTheWakeAndThenTheShell`)
 - [ ] SSH host endpoints: page, `/setup` with filled-in defaults, client downloads and checksums, pairing (success, duplicate key, bad key types, short RSA, wrong password, rate limit, cross-site Origin) golden.
 - [x] `devbox-ssh`: proxy against the gateway and the tunnel-style peer, `--header`, pings on a quiet stream, each error message golden, exit codes, size budget. (`tests/go/sshclient`; the size of the largest of the four builds is `devbox_ssh_mb` in `budgets.toml`, measured by the `budgets` job.)
 - [ ] Setup script under `dash` and `bash` on Linux and under `/bin/sh` on a macOS runner (CI job `ssh-client`), against a fake gateway and a fake `$HOME`: fresh machine, existing key, existing covering `Include`, conflicting `Host devbox` block, alias among other patterns, re-run unchanged, refused key with hint, checksum mismatch refused, `remove` restoring `~/.ssh/config` byte for byte, `status`. Generated files golden.

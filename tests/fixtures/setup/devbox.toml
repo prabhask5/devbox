@@ -19,6 +19,7 @@ sync_wait = "90s"
 [hosts]
 agents = "agents.example.com"
 code = "code.example.com"
+ssh = "devbox.example.com"
 
 [provision]
 agents = ["claude","codex","opencode"]
