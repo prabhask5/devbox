@@ -43,8 +43,15 @@ func (s Server) observeOnce(ctx context.Context, session string, changed func())
 	defer cmd.Wait() //nolint:errcheck // the exit status of a killed client says nothing
 	lines := bufio.NewScanner(stdout)
 	lines.Buffer(make([]byte, 64<<10), 4<<20)
+	attached := false
 	for lines.Scan() {
 		line := lines.Text()
+		if !attached {
+			// The client is attached: what changed while there was none (between the server
+			// coming up and now) was reported to nobody.
+			attached = true
+			changed()
+		}
 		switch {
 		case strings.HasPrefix(line, "%sessions-changed"), strings.HasPrefix(line, "%session-renamed"),
 			strings.HasPrefix(line, "%unlinked-window-close"), strings.HasPrefix(line, "%unlinked-window-add"),
