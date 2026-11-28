@@ -13,7 +13,7 @@ use moi_consumer::{FixtureHost, OnMoi};
 
 const HEALTH_OK: &str = r#"{"v":1,"status":"ok","problems":[],"vm":"running","phase":"idle","checkedAt":1790000000000}"#;
 const GATEWAY_STATUS: &str = r#"{"v":1,"version":"3f9c2d1","phase":"idle","vm":"running","lastStop":{"at":1789990000000,"reason":"idle","mode":"stateful","ms":4200}}"#;
-const VM_FINE: &str = "code_server=active\nhub=active\ntmux=active\ncontext_timer=active\nagent_claude=yes\nagent_codex=yes\nagent_opencode=yes\nhooks_claude=yes\nhooks_codex=yes\nhooks_opencode=yes\nsync=2026-09-21T14:00:00Z\ncontext=2026-09-21T12:00:00Z\ndotfiles=0 0\n";
+const VM_FINE: &str = "code_server=active\nhub=active\ntmux=active\ncontext_timer=active\nupdate_timer=active\nagent_claude=yes\nagent_codex=yes\nagent_opencode=yes\nhooks_claude=yes\nhooks_codex=yes\nhooks_opencode=yes\nsync=2026-09-21T14:00:00Z\ncontext=2026-09-21T12:00:00Z\ndotfiles=0 0\n";
 
 fn printed(text: &str) -> Option<Output> {
     Some(Output { code: Some(0), stdout: text.as_bytes().to_vec(), ..Output::default() })

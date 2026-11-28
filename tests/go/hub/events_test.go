@@ -443,3 +443,24 @@ func without(calls []string, command string) []string {
 	}
 	return rest
 }
+
+// What the updater recorded about the last update is part of the status, for the gateway and
+// for the app's settings.
+func TestStatusCarriesTheLastDeploy(t *testing.T) {
+	h := start(t)
+	if deploy := h.status().Deploy; deploy != nil {
+		t.Fatalf("without an update: %+v", deploy)
+	}
+	record := `{"status":"failure","version":"bbbbbbb","at":1790000000000,"error":"the new build does not pass its self-test"}`
+	if err := os.MkdirAll(h.stateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(h.stateDir, "deploy.json"), []byte(record), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	deploy := h.status().Deploy
+	if deploy == nil || deploy.Status != proto.DeployStateStatusFailure || deploy.Version != "bbbbbbb" || deploy.At == nil || *deploy.At != 1790000000000 ||
+		deploy.Error == nil || *deploy.Error != "the new build does not pass its self-test" {
+		t.Errorf("deploy: %+v", deploy)
+	}
+}

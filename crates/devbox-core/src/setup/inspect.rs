@@ -215,6 +215,7 @@ echo "code_server=$(systemctl is-active "code-server@$u" 2>/dev/null)"
 echo "hub=$(as systemctl --user is-active devbox-hub.service 2>/dev/null)"
 echo "tmux=$(as systemctl --user is-active devbox-tmux.service 2>/dev/null)"
 echo "context_timer=$(as systemctl --user is-active devbox-context.timer 2>/dev/null)"
+echo "update_timer=$(as systemctl --user is-active devbox-update.timer 2>/dev/null)"
 for a in claude codex opencode; do as sh -c "command -v $a" >/dev/null 2>&1 && echo "agent_$a=yes" || echo "agent_$a=no"; done
 grep -qs 'devbox-hub event' "$h/.claude/settings.json" && echo hooks_claude=yes || echo hooks_claude=no
 grep -qs 'devbox-hub event' "$h/.codex/hooks.json" && echo hooks_codex=yes || echo hooks_codex=no
@@ -411,7 +412,7 @@ fn vm_checks(
     instance: Option<&Instance>,
     checks: &mut Checks,
 ) {
-    const TITLES: [(&str, &str, &str); 4] = [
+    const TITLES: [(&str, &str, &str); 5] = [
         (
             "code_server",
             "code-server runs",
@@ -431,6 +432,11 @@ fn vm_checks(
             "context_timer",
             "The developer context is refreshed on a timer",
             "in the VM: `systemctl --user enable --now devbox-context.timer`",
+        ),
+        (
+            "update_timer",
+            "New builds of the hub are looked for on a timer",
+            "in the VM: `systemctl --user enable --now devbox-update.timer`; `devbox up` installs it again",
         ),
     ];
     let record = remembered(system, paths);

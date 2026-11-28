@@ -46,8 +46,13 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return agent(args[1:], stdout, stderr)
 	case "hooks":
 		return installHooks(args[1:], stdout, stderr)
+	case "update":
+		return runUpdate(args[1:], stdout, stderr)
+	case "selftest":
+		return selftest(args[1:], stdout, stderr)
+	default:
+		return healthcheck(args[1:], stdout, stderr)
 	}
-	return cli.NotImplemented(stderr, "devbox-hub "+args[0])
 }
 
 // installHooks makes every agent report to the hub through this binary: `devbox-hub hooks

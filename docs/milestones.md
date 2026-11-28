@@ -109,11 +109,11 @@ Specs: 09, 10, 12
 
 ## M9 — Hub continuous deployment
 Specs: 11 (hub part)
-- [ ] `deploy-hub.yml`: path filter, after CI success, build + release + attestations + GitHub Deployment (`agents-hub`), prune
-- [ ] `devbox-hub update` + `devbox-update.{service,timer}`: poll, verify (checksums + attestation), install, selftest, switch, restart, health, rollback, statuses; asleep → queued; optional wake-to-deploy in the gateway
-- [ ] Fake GitHub API tests for every path; e2e scenario 6
-- [ ] App shows deployed version and "Updated — tap to reload"
-- [ ] Cleanup pass; `scripts/check-hygiene.sh` green
+- [x] `deploy-hub.yml`: path filter, after CI success, build + release + attestations + GitHub Deployment (`agents-hub`), prune
+- [x] `devbox-hub update` + `devbox-update.{service,timer}`: poll, verify (checksums + attestation), install, selftest, switch, restart, health, rollback, statuses; asleep → queued; optional wake-to-deploy in the gateway
+- [x] Fake GitHub API tests for every path; e2e scenario 6
+- [x] App shows deployed version and "Updated — tap to reload"
+- [x] Cleanup pass; `scripts/check-hygiene.sh` green
 
 ## M10 — First real deployment (the author's homelab)
 Specs: 09 (adoption), 10, `reference/cestmoi.md`

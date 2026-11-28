@@ -16,11 +16,42 @@ import (
 	"github.com/prabhask5/devbox/internal/cli"
 	"github.com/prabhask5/devbox/internal/config"
 	"github.com/prabhask5/devbox/internal/hub"
+	"github.com/prabhask5/devbox/internal/proto"
 	"github.com/prabhask5/devbox/internal/relay"
 	"github.com/prabhask5/devbox/internal/sys"
 	"github.com/prabhask5/devbox/internal/tmux"
 	"github.com/prabhask5/devbox/internal/webpush"
 )
+
+// load reads the hub's config and secrets from a directory. Secrets that others can read are
+// refused.
+func load(dir string) (*proto.HubConfig, *proto.HubSecrets, []string, error) {
+	configData, err := os.ReadFile(filepath.Join(dir, "hub.toml")) //nolint:gosec // the owner's own config directory
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	cfg, warnings, err := config.Hub("hub.toml", configData)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	secretsPath := filepath.Join(dir, "hub.secrets.toml")
+	info, err := os.Stat(secretsPath)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if mode := info.Mode().Perm(); mode&0o077 != 0 {
+		return nil, nil, nil, fmt.Errorf("hub.secrets.toml: readable by group or others (mode %04o); run chmod 600", mode)
+	}
+	secretsData, err := os.ReadFile(secretsPath) //nolint:gosec // the owner's own config directory
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	secrets, moreWarnings, err := config.HubSecrets("hub.secrets.toml", secretsData)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return cfg, secrets, append(warnings, moreWarnings...), nil
+}
 
 func serve(args []string, stderr io.Writer) int {
 	home, _ := os.UserHomeDir()
@@ -39,32 +70,13 @@ func serve(args []string, stderr io.Writer) int {
 		return 1
 	}
 
-	configData, err := os.ReadFile(filepath.Join(*configDir, "hub.toml"))
-	if err != nil {
-		return problem(err)
-	}
-	cfg, warnings, err := config.Hub("hub.toml", configData)
-	if err != nil {
-		return problem(err)
-	}
 	secretsPath := filepath.Join(*configDir, "hub.secrets.toml")
-	info, err := os.Stat(secretsPath)
-	if err != nil {
-		return problem(err)
-	}
-	if mode := info.Mode().Perm(); mode&0o077 != 0 {
-		return problem(fmt.Errorf("hub.secrets.toml: readable by group or others (mode %04o); run chmod 600", mode))
-	}
-	secretsData, err := os.ReadFile(secretsPath) //nolint:gosec // the owner's own config directory
-	if err != nil {
-		return problem(err)
-	}
-	secrets, moreWarnings, err := config.HubSecrets("hub.secrets.toml", secretsData)
+	cfg, secrets, warnings, err := load(*configDir)
 	if err != nil {
 		return problem(err)
 	}
 	log := slog.New(slog.NewTextHandler(stderr, nil))
-	for _, warning := range append(warnings, moreWarnings...) {
+	for _, warning := range warnings {
 		log.Warn(warning)
 	}
 

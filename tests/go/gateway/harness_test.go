@@ -267,11 +267,12 @@ func port(t *testing.T, address string) string {
 
 // harness is a gateway under test with everything around it faked.
 type harness struct {
-	t     *testing.T
-	incus *incusfake.Server
-	vm    *fakeVM
-	gw    *gateway.Gateway
-	clock *sys.FakeClock // nil when the gateway runs on the real clock
+	t      *testing.T
+	incus  *incusfake.Server
+	vm     *fakeVM
+	gw     *gateway.Gateway
+	clock  *sys.FakeClock // nil when the gateway runs on the real clock
+	github string         // the GitHub API the gateway reads deployments from; "" is the real one
 
 	configDir, stateDir string
 	base                string // http://127.0.0.1:<port>
@@ -288,6 +289,7 @@ type setup struct {
 	fakeClock  bool
 	configured bool
 	timings    func(*gateway.Timings)
+	github     string
 	history    string // content of history.json before the gateway starts
 	codeDown   bool   // code-server does not answer until the test says so
 }
@@ -303,6 +305,9 @@ func withFakeClock() option                       { return func(s *setup) { s.fa
 func unconfigured() option                        { return func(s *setup) { s.configured = false } }
 func withHistory(json string) option              { return func(s *setup) { s.history = json } }
 func withTimings(f func(*gateway.Timings)) option { return func(s *setup) { s.timings = f } }
+
+// withGitHub makes the gateway read deployments from a fake GitHub.
+func withGitHub(api string) option { return func(s *setup) { s.github = api } }
 
 func testTimings() gateway.Timings {
 	t := gateway.DefaultTimings()
@@ -370,6 +375,7 @@ func start(t *testing.T, options ...option) *harness {
 		h.clock = sys.NewFakeClock(time.Date(2026, 3, 4, 5, 6, 7, 0, time.UTC))
 		clock = h.clock
 	}
+	h.github = s.github
 	h.run(clock, timings)
 	t.Cleanup(h.shutdown)
 	return h
@@ -388,7 +394,8 @@ func (h *harness) run(clock sys.Clock, timings gateway.Timings) {
 	h.base, h.sshAddr = "http://"+httpListener.Addr().String(), sshListener.Addr().String()
 	h.gw = gateway.New(gateway.Options{
 		ConfigDir: h.configDir, StateDir: h.stateDir, IncusSocket: h.incus.Socket(), Version: "test-commit",
-		HTTP: httpListener, SSH: sshListener, FS: sys.OS(), Clock: clock, Timings: timings,
+		GitHubAPI: h.github,
+		HTTP:      httpListener, SSH: sshListener, FS: sys.OS(), Clock: clock, Timings: timings,
 		Log: slog.New(slog.NewTextHandler(h.logs, nil)),
 	})
 	ctx, cancel := context.WithCancel(context.Background())
