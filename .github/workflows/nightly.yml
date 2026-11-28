@@ -13,6 +13,11 @@ on:
   schedule:
     - cron: "17 3 * * *"
   workflow_dispatch:
+    inputs:
+      release:
+        description: Try this release (a tag such as v1.0.0) instead of the checkout — its install.sh, its archive for the VM, its SSH client
+        type: string
+        default: ""
   pull_request:
     branches: [main]
     paths: [scripts/nightly.sh, scripts/fuzz.sh, .github/workflows/nightly.yml]
@@ -72,6 +77,8 @@ jobs:
       - uses: ./.github/actions/setup
         with: { go: true, rust: true, web: false }
       - run: scripts/nightly.sh
+        env:
+          DEVBOX_NIGHTLY_RELEASE: ${{ inputs.release }}
       - if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

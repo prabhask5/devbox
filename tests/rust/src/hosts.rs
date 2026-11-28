@@ -61,8 +61,9 @@ pub fn host() -> FakeSystem {
             printed(r#"{"v":1,"version":"3f9c2d1","phase":"idle","vm":"running","lastStop":{"at":1789990000000,"reason":"idle","mode":"stateful","ms":4200}}"#)
         } else if command.args.iter().any(|arg| arg == "Upgrade: websocket") {
             printed("\u{0}\u{10}SSH-2.0-devbox\r\n")
-        } else if url.ends_with("/releases/latest") {
-            printed(r#"{"tag_name": "v1.2.3"}"#)
+        } else if url.ends_with("/releases?per_page=100") {
+            // The newest first, as GitHub lists them: the SSH client's, a pre-release, a release.
+            printed(r#"[{"tag_name": "ssh-v0.3.0"}, {"tag_name": "v1.3.0-rc.1", "prerelease": true}, {"tag_name": "v1.2.3"}, {"tag_name": "v1.2.2"}]"#)
         } else {
             None
         }

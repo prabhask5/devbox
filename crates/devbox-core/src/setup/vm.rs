@@ -334,9 +334,11 @@ pub(crate) fn provision(
     })
 }
 
-/// The tag of the repository's latest release.
+/// The tag of the repository's latest release of devbox itself: the newest `v…` release that is
+/// neither a draft nor a pre-release. The repository has other releases (the SSH client's, tagged
+/// `ssh-v…`), so what GitHub calls its latest release is not asked for.
 fn latest_release(system: &dyn System, repo: &str) -> Result<String, SetupError> {
-    let url = format!("{}/repos/{repo}/releases/latest", crate::github::api(system));
+    let url = format!("{}/repos/{repo}/releases?per_page=100", crate::github::api(system));
     let curl = crate::system::Command::new(
         "curl",
         ["--silent", "--show-error", "--fail", "--max-time", "30", &url],
@@ -348,10 +350,23 @@ fn latest_release(system: &dyn System, repo: &str) -> Result<String, SetupError>
         .filter(crate::system::Output::success)
         .and_then(|output| serde_json::from_slice(&output.stdout).ok())
         .unwrap_or(Value::Null);
-    match answer["tag_name"].as_str() {
-        Some(tag) => Ok(tag.to_owned()),
+    let Some(releases) = answer.as_array() else {
+        return fail(format!(
+            "the releases of {repo} could not be read from GitHub. Check the network, name a release with --release, or give binaries built for the VM with --binaries <dir>."
+        ));
+    };
+    // GitHub lists the newest first.
+    let tag = releases.iter().find_map(|release| {
+        let tag = release["tag_name"].as_str()?;
+        let version = tag.strip_prefix('v')?;
+        let devbox = version.starts_with(|first: char| first.is_ascii_digit());
+        let published = release["draft"] != true && release["prerelease"] != true;
+        (devbox && published).then(|| tag.to_owned())
+    });
+    match tag {
+        Some(tag) => Ok(tag),
         None => fail(format!(
-            "the latest release of {repo} could not be found on GitHub. Check the network, name a release with --release, or give binaries built for the VM with --binaries <dir>."
+            "{repo} has no release of devbox yet. Name one with --release (a pre-release, say), or give binaries built for the VM with --binaries <dir>."
         )),
     }
 }

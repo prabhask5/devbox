@@ -3,7 +3,8 @@ name: Release SSH client
 # Tags ssh-v* publish the SSH client on its own: the four devbox-ssh builds, the setup script
 # (devbox-ssh-setup.sh, with this release as where it downloads the client from) and
 # SHA256SUMS, with build provenance attestations (docs/spec/18-ssh.md). Other tools point at
-# these files by tag, so a release is never changed after it is made.
+# these files by tag, so a release is never changed after it is made. It is never the repository's
+# "latest" release: that is the latest devbox (v*), which install.sh is downloaded from.
 
 on:
   push:
@@ -35,6 +36,6 @@ jobs:
             dist/devbox-ssh-*.gz
             dist/devbox-ssh-setup.sh
       - name: Publish
-        run: gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --title "devbox-ssh ${GITHUB_REF_NAME#ssh-v}" --notes "The SSH client of devbox and its setup script (docs/spec/18-ssh.md). Set a computer up with the command your server prints; \`sh devbox-ssh-setup.sh\` without arguments says what it takes."
+        run: gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --latest=false --title "devbox-ssh ${GITHUB_REF_NAME#ssh-v}" --notes "The SSH client of devbox and its setup script (docs/spec/18-ssh.md). Set a computer up with the command your server prints; \`sh devbox-ssh-setup.sh\` without arguments says what it takes."
         env:
           GH_TOKEN: ${{ github.token }}

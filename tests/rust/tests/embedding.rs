@@ -438,7 +438,7 @@ fn the_build_in_the_vm_is_kept_unless_another_is_asked_for() {
         system
             .ran()
             .iter()
-            .any(|command| command.args.last().is_some_and(|url| url.ends_with("/releases/latest")))
+            .any(|command| command.args.last().is_some_and(|url| url.contains("/releases?")))
     };
     let again = setup::up(&system, &UpOptions::default(), &mut Yes).unwrap();
     assert_eq!(again.outcome, Outcome::Unchanged, "{}", render::human(&again));
