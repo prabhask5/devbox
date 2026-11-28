@@ -30,7 +30,7 @@ static() {
   step "go mod tidy";   go mod tidy -diff
   step "golangci-lint"; go run "$GOLANGCI_LINT" run
   step "staticcheck";   go run "$STATICCHECK" ./...
-  # TODO(M11): drop -test once every package is used by a binary; until then code that only tests reach is allowed.
+  # TODO(M12): drop -test once every package is used by a binary; until then code that only tests reach is allowed.
   step "deadcode";      dead=$(go run "$DEADCODE" -test -filter 'devbox/(cmd|internal)/' ./...); [[ -z $dead ]] || { echo "$dead"; return 1; }
   step "govulncheck";   go run "$GOVULNCHECK" ./...
 

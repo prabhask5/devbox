@@ -7,7 +7,9 @@ devbox exposes a machine with the owner's code, credentials and agents to the in
 | Surface | Reachable from | Authentication |
 |---|---|---|
 | Gateway `:8080` | Traefik (Docker network) only; public via Cloudflare/Traefik | `/__devbox/health|status|events|skip`: none (no secrets in them). Waking: wake cookie (argon2id password → HMAC cookie). Proxied traffic: the upstream's own auth |
-| Gateway `:2222` | the owner's tunnel (cloudflared) only | SSH itself; may wake without a cookie |
+| Gateway SSH host (`hosts.ssh`, WebSocket on `:8080`) | public via Cloudflare/Traefik | the gateway's SSH server: public-key auth against its `ssh/authorized_keys`; only authenticated connections wake the VM or reach it; per-address limits (spec 18). `/setup`, the page and client downloads: none (no secrets). `POST /__devbox/ssh/pair`: the app password, with the login's rate limits |
+| Gateway `:2222` | the host's loopback (and whatever the owner points at it) | the same SSH server |
+| VM sshd `:ssh_port` | gateway only (host firewall) | the gateway's upstream key (`from=` the bridge address) and the owner's own keys |
 | code-server `:code_port` | gateway only (host firewall) | code-server password |
 | Hub `:hub_port` `/api/*` | gateway only | hub app session cookie (argon2id password → HMAC cookie, 180 days); `POST /api/logout` invalidates all sessions (the cookie signs a session generation, which logout raises); password rotation (`devbox password app`) does too, by rotating the cookie secret |
 | Hub `:hub_port` `/devbox/*` | gateway only | `Authorization: Bearer <hub token>` (32 random bytes, in host and hub secrets; constant-time compare) |
@@ -41,7 +43,7 @@ Each dependency and why (keep current when adding one):
 
 | Language | Dependency | Why |
 |---|---|---|
-| Go | `golang.org/x/crypto` (argon2, hkdf) | password hashing, web push key derivation |
+| Go | `golang.org/x/crypto` (argon2, hkdf, ssh) | password hashing, web push key derivation, the gateway's SSH server and its connection to the VM (spec 18) |
 | Go | `modernc.org/sqlite` | hub database without cgo |
 | Go | `golang.org/x/sys` | peer credentials of the hub's unix socket |
 | Go | `github.com/BurntSushi/toml` | config files |

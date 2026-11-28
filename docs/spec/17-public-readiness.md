@@ -1,6 +1,6 @@
 # 17 — Public readiness (no artifacts)
 
-devbox ships as a **public, solo-maintained open-source project**. The repository at `v1.0.0` must look like it was written that way from the start: no trace of the build process, no personal data, no scaffolding, no leftovers. This spec defines that end state, what exists only during development and when it goes, and the checks that enforce it. It applies continuously (every milestone ends clean) and completely at M12.
+devbox ships as a **public, solo-maintained open-source project**. The repository at `v1.0.0` must look like it was written that way from the start: no trace of the build process, no personal data, no scaffolding, no leftovers. This spec defines that end state, what exists only during development and when it goes, and the checks that enforce it. It applies continuously (every milestone ends clean) and completely at M13.
 
 ## End state at v1.0.0
 
@@ -23,14 +23,14 @@ The repository contains only:
 
 | Artifact | Exists because | Removed |
 |---|---|---|
-| `reference/` (prototype, cestmoi notes, design screenshots) | input for building | M12 — design screenshots move to `tests/e2e/visual/` (baselines) and `docs/images/` (README); prototype behaviour lives in specs and tests |
-| `docs/milestones.md` | build plan | M12 → `docs/roadmap.md` (short, future-facing) |
-| `docs/agent-workflow.md`, `.claude/commands/next-milestone.md`, `.claude/settings.json` | the milestone workflow | M12 — essentials folded into CONTRIBUTING; `.claude/` deleted |
-| `scripts/create-issues.sh`, the `milestone` label and milestone issues | tracking | M12 — script deleted, issues closed, label deleted |
-| "not implemented yet" commands, exit code 3 | scaffold | as each milestone delivers its commands; none at M12 |
-| `TODO(M<n>)` / `TODO(#<n>)` | tracked deferrals | as their milestone lands; none at M12 |
+| `reference/` (prototype, cestmoi notes, design screenshots) | input for building | M13 — design screenshots move to `tests/e2e/visual/` (baselines) and `docs/images/` (README); prototype behaviour lives in specs and tests |
+| `docs/milestones.md` | build plan | M13 → `docs/roadmap.md` (short, future-facing) |
+| `docs/agent-workflow.md`, `.claude/commands/next-milestone.md`, `.claude/settings.json` | the milestone workflow | M13 — essentials folded into CONTRIBUTING; `.claude/` deleted |
+| `scripts/create-issues.sh`, the `milestone` label and milestone issues | tracking | M13 — script deleted, issues closed, label deleted |
+| "not implemented yet" commands, exit code 3 | scaffold | as each milestone delivers its commands; none at M13 |
+| `TODO(M<n>)` / `TODO(#<n>)` | tracked deferrals | as their milestone lands; none at M13 |
 | milestone references and provisional wording in specs ("decided in M2", "planned", open questions) | decisions pending | as each decision is made — the milestone that decides rewrites the sentence as fact |
-| cestmoi-specific material (runbook, adoption details, personal hostnames) | first deployment | never committed outside `reference/`: M10's cutover runbook is the generic `docs/adopting-an-existing-vm.md` (with `example.com`); cestmoi specifics go in the M10 PR description only |
+| cestmoi-specific material (runbook, adoption details, personal hostnames) | first deployment | never committed outside `reference/`: M11's cutover runbook is the generic `docs/adopting-an-existing-vm.md` (with `example.com`); cestmoi specifics go in the M11 PR description only |
 | hub build outputs | continuous deployment | never in Releases: hub builds are workflow artifacts (retention 30 days, spec 11), so the Releases page holds only real tagged versions |
 | merged branches, stale workflow runs | process | delete-branch-on-merge on; nothing to clean |
 
@@ -50,13 +50,13 @@ The repository contains only:
 - Every skipped/ignored test states why; no commented-out code; no debug output.
 - Every GitHub Action is referenced by commit SHA (`check-hygiene.sh` fails on a tag or branch reference).
 
-## Repository settings (owner, checked at M12)
+## Repository settings (owner, checked at M13)
 
 Description, topics, website; branch ruleset on `main` requiring `required`, PRs only, no force pushes or deletion; squash merge only, PR title as commit title; delete branches on merge; Dependabot (gomod, cargo, npm, actions) and security alerts on; private vulnerability reporting on; Actions pinned by SHA.
 
 ## Automated enforcement
 
-`scripts/check-hygiene.sh` (normal mode on every PR) and `scripts/check-hygiene.sh --release` (default in CI from M12, and on every release tag). Release mode fails on any of:
+`scripts/check-hygiene.sh` (normal mode on every PR) and `scripts/check-hygiene.sh --release` (default in CI from M13, and on every release tag). Release mode fails on any of:
 
 - paths: `reference/`, `.claude/`, `docs/milestones.md`, `docs/agent-workflow.md`, `scripts/create-issues.sh`
 - the strings "not implemented yet", `TODO`, `FIXME`, `XXX`, `HACK` anywhere tracked
@@ -69,5 +69,5 @@ Plus a full-history secret scan (`gitleaks`) in the release workflow.
 ## Acceptance
 
 - [ ] `check-hygiene.sh --release` implements every rule above (tested against a fixture repo in `tests/` that violates each rule once).
-- [ ] At M12 it passes on `main`, becomes the default in CI, and runs on release tags; gitleaks full-history scan clean.
+- [ ] At M13 it passes on `main`, becomes the default in CI, and runs on release tags; gitleaks full-history scan clean.
 - [ ] The end-state table matches `git ls-files` at the top level (a test lists unexpected top-level paths).

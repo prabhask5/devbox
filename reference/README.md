@@ -1,6 +1,6 @@
 # reference/
 
-Read-only input for building devbox. **Port behaviour, not code.** Deleted before 1.0 (M12) once everything here is captured in specs and tests; git history keeps it.
+Read-only input for building devbox. **Port behaviour, not code.** Deleted before 1.0 (M13) once everything here is captured in specs and tests; git history keeps it.
 
 | Path | What |
 |---|---|

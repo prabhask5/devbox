@@ -8,7 +8,7 @@ Ordered. Each milestone lists the spec sections it implements; the acceptance cr
 - spikes and decisions: the conclusion is written into the spec **as fact** (replace "decided in M<n>", "planned", "open question" with what was decided); scratch code and notes deleted;
 - no unused code, exports, files or dependencies (`go mod tidy`, `staticcheck`, `deadcode`, `cargo machete`, `knip`); new dependencies listed in spec 14;
 - fixtures and golden files: only what tests use, minimal, anonymized (spec 17 personal-data rules); examples use `example.com`;
-- nothing personal or cestmoi-specific outside `reference/` (M10's material is generic; specifics go in PR descriptions);
+- nothing personal or cestmoi-specific outside `reference/` (M11's material is generic; specifics go in PR descriptions);
 - docs updated for what shipped (README for users, spec for behaviour), nothing describing behaviour that doesn't exist.
 
 **Order rationale**: contracts first so the three languages agree from day one; then the gateway (it gates all access and is the riskiest), then the hub and app, then the Rust tools, then setup (which needs everything else to exist), then deployment, then cestmoi's cutover. Every milestone after M1 extends the end-to-end harness (spec 15) with its scenarios, so the whole system is tested together continuously, not only at the end.
@@ -19,7 +19,7 @@ Specs: CLAUDE.md, 13, 14, 15
 - [x] Pinned toolchains; lint configs (`.golangci.yml`, `rustfmt.toml`, clippy lint set, `deny.toml`, eslint/prettier/tsconfig)
 - [x] `scripts/ci.sh` and the full CI (`static`, `go`, `rust`, `web`, `integration`, `e2e`, `build`, `budgets`, `required`) — jobs with nothing to test yet pass trivially; `budgets.sh` reports everything as pending — test: [`tests/go/scripts/budgets_test.go`](../tests/go/scripts/budgets_test.go)
 - [x] Dead-code and dependency hygiene in `static` from day one: `go mod tidy` diff, `staticcheck`, `deadcode`, `govulncheck`, `cargo machete`, `cargo deny`, `knip`, `pnpm audit --prod`; check for committed build outputs and stray executables (spec 17)
-- [x] `check-hygiene.sh --release` implements every spec-17 rule, tested against a fixture repo that violates each rule once (runs in normal mode until M12) — test: [`tests/go/scripts/hygiene_test.go`](../tests/go/scripts/hygiene_test.go)
+- [x] `check-hygiene.sh --release` implements every spec-17 rule, tested against a fixture repo that violates each rule once (runs in normal mode until M13) — test: [`tests/go/scripts/hygiene_test.go`](../tests/go/scripts/hygiene_test.go)
 - [x] `tests/` layout, `check-tests-location.sh` covering Go/Rust/TS — test: [`tests/go/scripts/tests_location_test.go`](../tests/go/scripts/tests_location_test.go)
 - [x] Release workflow skeleton, `install.sh` skeleton, Dependabot for gomod/cargo/npm/actions, Actions pinned by SHA — test: [`tests/go/scripts/install_test.go`](../tests/go/scripts/install_test.go)
 - [x] crates.io name check for the library crates (record the chosen names in spec 12)
@@ -49,7 +49,7 @@ Specs: 02, 14, 15 (fake Incus)
 Specs: 03, 11 (gateway part), 16
 - [x] Boot screen in Preact matching `reference/design/boot-*.png`; embedded; all states from fixture streams — [`tests/web/gateway-ui/`](../tests/web/gateway-ui), [`tests/fixtures/boot/`](../tests/fixtures/boot)
 - [x] Visual regression baselines for the boot screen (spec 16) — [`tests/e2e/visual/`](../tests/e2e/visual)
-- [x] `deploy/gateway/` Dockerfile (scratch, ≤ 15 MB) + compose.yml; `healthcheck` subcommand; non-root uid — [`scripts/check-image.sh`](../scripts/check-image.sh), [`tests/go/gateway/endpoints_test.go`](../tests/go/gateway/endpoints_test.go) (`TestBinary`)
+- [x] `deploy/gateway/` Dockerfile (scratch, ≤ 25 MB) + compose.yml; `healthcheck` subcommand; non-root uid — [`scripts/check-image.sh`](../scripts/check-image.sh), [`tests/go/gateway/endpoints_test.go`](../tests/go/gateway/endpoints_test.go) (`TestBinary`)
 - [ ] **Spike, then decide in spec 11**: Dokploy Compose with absolute bind mounts; how Dokploy reports to GitHub Deployments (add the fallback workflow if it doesn't) — needs a real Dokploy; spec 11 records what its documentation says
 - [ ] `docs/deploy-gateway.md`: Dokploy app step by step (provider, compose path, Auto Deploy, watch paths, no domains, no previews), rollback — written; the Dokploy steps wait for the spike above
 - [x] e2e harness v1: fake Incus + real gateway + fake code-server; scenario 1 (without sync) and 7 (health faults) from spec 15 — [`tests/e2e/harness`](../tests/e2e/harness), [`tests/e2e/wake.spec.ts`](../tests/e2e/wake.spec.ts), [`tests/e2e/health.spec.ts`](../tests/e2e/health.spec.ts)
@@ -115,21 +115,34 @@ Specs: 11 (hub part)
 - [ ] App shows deployed version and "Updated — tap to reload"
 - [ ] Cleanup pass; `scripts/check-hygiene.sh` green
 
-## M10 — First real deployment (the author's homelab)
+## M10 — SSH from anywhere
+Specs: 18 (and the SSH rows in 01, 02, 09, 11, 12, 13, 14, 15)
+- [ ] `internal/wsconn` (RFC 6455 framing for server and client) with fuzzing and a Cloudflare-Tunnel-style interop peer
+- [ ] Gateway SSH server on `x/crypto/ssh`: keys created in `state/ssh/` on first start, publickey auth against `ssh/authorized_keys` with reload, per-address limits, no wake before authentication, upstream connection with host-key pinning, generic channel/request relay with queue-and-replay across a wake, agent forwarding and forwards both ways; the TCP listener uses the same server (no raw splice left); new health problems
+- [ ] Boot-aware terminal: live phase screen for pty sessions, stderr lines otherwise, nothing when awake; golden transcripts
+- [ ] SSH host routing and endpoints: page, `/setup` with filled-in defaults, client downloads + `SHA256SUMS`, `POST /__devbox/ssh/pair` (app password, login rate limits); goldens
+- [ ] `cmd/devbox-ssh`: `proxy` (headers, pings, error messages, exit 255) and `version`; size budget
+- [ ] `cmd/devbox-ssh/setup.sh`: `add`/`remove`/`status` per the client contract; tests under dash and bash, plus the macOS `ssh-client` CI job (part of `required`)
+- [ ] `devbox up`: `--ssh-host`, SSH route, upstream key into the VM (`from=`), `vm.ssh_host_key`, `--ssh-keys` seeding; `down` undoes; `devbox ssh keys|status`; `connect` prints the setup command; doctor checks; contracts (`hosts.ssh`, `vm.ssh_host_key`, `gateway-ssh-keys-used`)
+- [ ] Gateway image ships the four compressed client builds; `release-ssh-client.yml` (tags `ssh-v*`: binaries, setup script, `SHA256SUMS`, attestations); after this milestone merges, the owner tags `ssh-v0.1.0`, which moi's `moi ssh connect` points at
+- [ ] e2e with the real OpenSSH client (shell, exec, scp, sftp, `-L`/`-R`/`-D`, agent forwarding, wake from asleep with the progress screen); SSH budgets (spec 13) added to `budgets.toml` and measured, `_mbps` minimums in `scripts/budgets.sh`
+- [ ] Cleanup pass; `scripts/check-hygiene.sh` green
+
+## M11 — First real deployment (the author's homelab)
 Specs: 09 (adoption), 10, `reference/cestmoi.md`
-- [ ] Generic guide `docs/adopting-an-existing-vm.md` (with `example.com`): deploy the gateway, `devbox up --adopt …`, DNS for the agents host, Uptime Kuma monitor, phone setup, rollback with `devbox down`. Host-specific commands for cestmoi go in the PR description, not the repo
+- [ ] Generic guide `docs/adopting-an-existing-vm.md` (with `example.com`): deploy the gateway, `devbox up --adopt …`, DNS for the agents and SSH hosts, Uptime Kuma monitor, phone setup, computer setup (`/setup`, replacing an older ProxyJump `Host devbox` entry), rollback with `devbox down`. Host-specific commands for cestmoi go in the PR description, not the repo
 - [ ] PR to the author's dotfiles repo restructuring it to the contract (spec 10): `devbox.toml`, `install.sh` (mise, Node/pnpm, Rust + wasm target), `bashrc`, `gitconfig`, `code-server/`, `agents/AGENTS.md`, `context/`; remove `bootstrap.sh`/`clone-all.sh` and everything devbox now does
 - [ ] Owner runs the cutover; a week of real use; issues found are fixed with regression tests
 - [ ] Cleanup pass; `scripts/check-hygiene.sh` green
 
-## M11 — Performance and hardening
+## M12 — Performance and hardening
 Specs: 13, 14
 - [ ] Every budget measured and enforced (no "pending")
 - [ ] Fuzzing: config/TOML parsing (Rust `cargo fuzz`, Go native fuzzing for proxy header handling, agent-event parsing, sync-progress parsing)
 - [ ] Security review against spec 14 (Incus allowlist, auth boundaries, secrets never in output — a test greps every output surface for the fixture secrets)
 - [ ] Cleanup pass; `scripts/check-hygiene.sh` green
 
-## M12 — Public release readiness (v1.0.0)
+## M13 — Public release readiness (v1.0.0)
 Specs: all, especially [17](spec/17-public-readiness.md) — this milestone removes every development artifact
 - [ ] `reference/` deleted: design screenshots moved to `tests/e2e/visual/` (baselines) and `docs/images/` (README, guides); every prototype behaviour confirmed covered by a spec + test; no link or mention of `reference/` left
 - [ ] Build-process artifacts removed: `docs/milestones.md` → `docs/roadmap.md`; `docs/agent-workflow.md` folded into CONTRIBUTING ("AI-assisted contributions") and deleted; `.claude/` deleted; `scripts/create-issues.sh` deleted; milestone issues closed and the `milestone` label deleted
