@@ -317,14 +317,14 @@ func TestWakeCorrectsTheClockAndSyncsOnce(t *testing.T) {
 	// A sync that cannot run is reported as an error result, and wakes of another version are refused.
 	h.runner.Answer = func(command string) (string, error) {
 		if command == "devbox sync --json" {
-			return "", errors.New("devbox: not implemented yet")
+			return "", errors.New("devbox: command not found")
 		}
 		return "", nil
 	}
 	clock.Advance(5 * time.Minute)
 	_, failed := wake("restore", clock.Now())
 	eventually(t, "the failed sync", func() bool { s := h.status().Sync; return s.State == proto.SyncStateStateDone && *s.RunID == failed })
-	if results := h.status().Sync.Results; len(results) != 1 || results[0].Status != proto.SyncStatusError || results[0].Detail != "devbox: not implemented yet" {
+	if results := h.status().Sync.Results; len(results) != 1 || results[0].Status != proto.SyncStatusError || results[0].Detail != "devbox: command not found" {
 		t.Errorf("failed sync: %+v", results)
 	}
 	req, _ := http.NewRequest("POST", h.base+"/devbox/wake", strings.NewReader(`{"v": 2, "now": 1, "kind": "restore"}`))

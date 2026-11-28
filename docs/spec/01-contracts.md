@@ -119,5 +119,5 @@ wake_to_deploy = false
 
 - [x] `scripts/gen.sh` produces Go, Rust and TS types for every schema; `check-generated.sh` fails on drift (CI `static`).
 - [x] Every example in `contracts/examples/` round-trips in Go, Rust and TS tests (`tests/go/proto`, `tests/rust/tests/contracts.rs`, `tests/web/contracts.test.ts`).
-- [x] Wrong version → actionable error naming both versions; unknown optional fields are ignored (forward compatible).
+- [x] Wrong version → actionable error naming both versions; unknown optional fields are ignored (forward compatible). (`tests/go/proto`, `tests/rust/tests/contracts.rs`)
 - [x] Config validation reports all errors with locations (golden test: `tests/fixtures/config/`, read by `tests/go/config` and `tests/rust/tests/config.rs`).

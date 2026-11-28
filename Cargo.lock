@@ -153,7 +153,7 @@ dependencies = [
 
 [[package]]
 name = "devbox-cli"
-version = "0.0.0"
+version = "1.0.0"
 dependencies = [
  "clap",
  "devbox-context",
@@ -193,7 +193,7 @@ dependencies = [
 
 [[package]]
 name = "devbox-tests"
-version = "0.0.0"
+version = "1.0.0"
 dependencies = [
  "devbox-cli",
  "devbox-core",

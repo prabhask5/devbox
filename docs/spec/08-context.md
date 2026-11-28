@@ -1,6 +1,6 @@
 # 08 — Developer context
 
-`devbox context [--commit] [--no-ai] [--print]` (Rust, crate `devbox-context`) writes a factual, current description of how the owner works into their dotfiles repo, for every AI agent to read. Runs from `devbox-context.timer` (every 3 h, `OnBootSec=10min`, `Persistent=true`), after a wake if the last run is older than 6 h, and on demand. Prototype: `reference/prototype/devbox/bin/devbox-context`.
+`devbox context [--commit] [--no-ai] [--print]` (Rust, crate `devbox-context`) writes a factual, current description of how the owner works into their dotfiles repo, for every AI agent to read. Runs from `devbox-context.timer` (every 3 h, `OnBootSec=10min`, `Persistent=true`), after a wake if the last run is older than 6 h, and on demand.
 
 ## Output (in `<dotfiles>/<context.dir>`, default `context/`; without dotfiles: `~/.local/share/devbox/context/`)
 

@@ -24,7 +24,7 @@ export const STATES: readonly { name: string; heading: string }[] = [
   { name: "stopping", heading: "Going to sleep…" },
 ];
 
-/** States the prototype did not have; their baselines come from the boot screen itself. */
+/** The states of a host that is not set up. */
 export const NEW_STATES: readonly { name: string; heading: string }[] = [
   { name: "unconfigured", heading: "devbox is not set up yet" },
 ];

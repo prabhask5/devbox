@@ -1,6 +1,6 @@
 # 04 — Hub
 
-`devbox-hub serve` (Go) runs in the VM as the systemd user service `devbox-hub` (linger enabled). It owns agent sessions, receives agent events, sends push notifications, serves the agents app, and reports idle/sync state to the gateway. Prototype: `reference/prototype/devbox/hub/server.js`.
+`devbox-hub serve` (Go) runs in the VM as the systemd user service `devbox-hub` (linger enabled). It owns agent sessions, receives agent events, sends push notifications, serves the agents app, and reports idle/sync state to the gateway.
 
 ## Processes and units
 

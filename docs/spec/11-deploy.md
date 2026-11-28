@@ -1,21 +1,21 @@
 # 11 — Deploy
 
-Both long-running components deploy continuously from `main`, and each deploy is visible in GitHub's **Deployments** UI (repo sidebar → Deployments; per-commit status).
+Both long-running components deploy continuously from `main`. Hub deploys are visible in GitHub's **Deployments** UI (repo sidebar → Deployments; per-commit status); gateway deploys are visible in Dokploy (the application's Deployments tab), which does not report to GitHub.
 
-| Component | Mechanism | Environment name in GitHub |
+| Component | Mechanism | Where a deploy shows |
 |---|---|---|
-| gateway | Dokploy Compose app with Auto Deploy, building `deploy/gateway/` from this repo | created by Dokploy's GitHub integration (verify name in M3 and record it here) |
-| hub (+ the VM-side `devbox` binary) | GitHub Actions builds and creates a Deployment; the updater in the VM installs it and reports status | `agents-hub` |
+| gateway | Dokploy Compose app with Auto Deploy, building `deploy/gateway/` from this repo | Dokploy only: it creates no GitHub Deployment, environment or commit status |
+| hub (+ the VM-side `devbox` binary) | GitHub Actions builds and creates a Deployment; the updater in the VM installs it and reports status | GitHub, environment `agents-hub` |
 
 A fork works the same way with its own repo, Dokploy app and environments (`deploy.repo` in the host config).
 
 ## Gateway via Dokploy
 
-The owner creates one Dokploy **Compose** application (documented step by step in `docs/deploy-gateway.md`, with screenshots):
+The owner creates one Dokploy **Compose** application (its settings are in `docs/deploy-gateway.md`):
 
 - Provider: GitHub, repository `<owner>/devbox`, branch `main`, compose path `deploy/gateway/compose.yml`.
-- **Auto Deploy: on.** **Watch paths**: `cmd/devbox-gateway/**`, `cmd/devbox-ssh/**`, `internal/wsconn/**`, `internal/gateway/**`, `internal/incus/**`, `internal/proto/**`, `internal/config/**`, `internal/schema/**`, `internal/secret/**`, `internal/password/**`, `internal/sys/**`, `internal/httpx/**`, `web/gateway-ui/**`, `web/shared/**`, `deploy/gateway/**`, `go.mod`, `go.sum`. Pushes elsewhere do not redeploy the gateway.
-- **No domains** (routing is written by `devbox up`, spec 09) and **no preview deployments**.
+- **Auto Deploy: on.** **Watch paths**: `cmd/devbox-gateway/**`, `cmd/devbox-ssh/**`, `internal/**`, `scripts/build-ssh-client.sh`, `deploy/gateway/**`, `go.mod`, `go.sum` — what the image is built from (the boot screen is the generated file under `internal/gateway/`). Pushes elsewhere do not redeploy the gateway. The globs are micromatch patterns matched against the files the pushed commits added, changed or removed; a push whose head commit message contains `[skip ci]` (or `[ci skip]`, `[no ci]`, `[skip actions]`, `[actions skip]`) is not deployed.
+- **No domains** (routing is written by `devbox up`, spec 09), **no File Mounts**, and *Isolated Deployments* and *Randomize* left off. (Preview deployments do not exist for Compose applications.)
 
 `deploy/gateway/compose.yml` builds `deploy/gateway/Dockerfile` with the repository root as context, names the container `devbox-gateway`, restarts it unless stopped, mounts `/etc/devbox` (read-only), `/var/lib/devbox/gateway` and `/var/lib/incus/unix.socket`, adds the group that owns the Incus socket (`DEVBOX_INCUS_GID`), publishes the SSH proxy on the host's loopback (`127.0.0.1:2222`) and joins the external `dokploy-network`. It sets no domains and publishes no HTTP port.
 
@@ -23,12 +23,16 @@ Dockerfile: two stages — build the Go binary (`CGO_ENABLED=0`, `-trimpath -ldf
 
 `devbox-gateway healthcheck` succeeds when the gateway answers `/__devbox/health` at all and prints its status: a gateway that reports problems (no config yet, the VM in trouble) is running, and restarting it would not help. `scripts/check-image.sh` (CI `build` and `budgets` jobs) builds the image and checks its size, its user, that it becomes healthy without a config, the health answer, the commit and a clean exit on SIGTERM.
 
-**Dokploy: what its documentation says, not yet verified on a real installation.**
+**What Dokploy does with it** — from its documentation and its source at `v0.31.4`:
 
-- *Bind mounts.* The Compose documentation warns: "Avoid using absolute host paths, as they will be cleaned up during deployments", and recommends `../files/…` (which Dokploy deletes with the service). The gateway needs `/etc/devbox`, its state directory and the Incus socket from fixed host paths that `devbox up` and Incus own, so `../files` cannot replace them. Whether Dokploy really touches absolute paths outside its own directories must be checked on the owner's Dokploy before the first deployment; until then use the plain Docker Compose path in `docs/deploy-gateway.md`.
-- *GitHub Deployments.* The documentation describes Auto Deploy through its GitHub App and Watch Paths for Compose applications, and mentions no reporting to GitHub (no Deployments, environments or commit statuses). Assume Dokploy does not report; a workflow that creates the deployment and follows Dokploy's API needs a Dokploy URL and token and is added with the first real deployment.
+- *How it runs.* A deployment deletes and clones again `/etc/dokploy/compose/<app>/code` (the branch's head, `--depth 1`), writes the application's environment to `.env` next to the compose file (which is how `DEVBOX_INCUS_GID` reaches it; nothing else of Dokploy's environment does), adds its own labels to the compose file in the checkout, and runs `docker compose -p <app> -f deploy/gateway/compose.yml up -d --build --remove-orphans` there.
+- *Bind mounts.* The Compose documentation warns: "Avoid using absolute host paths, as they will be cleaned up during deployments", and recommends `../files/…` (which Dokploy deletes with the application). The source does not bear the warning out for paths outside Dokploy's own directory: a deployment removes only the checkout, deleting the application only `/etc/dokploy/compose/<app>`, and a volume that starts with `/` is passed to Docker as written. `/etc/devbox`, the state directory and the Incus socket are fixed host paths that `devbox up` and Incus own, so `../files` could not replace them.
+- *Network and name.* Dokploy adds `dokploy-network` only to a service that has a domain in its UI; the gateway has none, so the compose file declares the external network itself. `container_name` is kept unless *Randomize* is on, and the commands of `docs/deploy-gateway.md` and the routes of `devbox up` use the name `devbox-gateway`. *Isolated Deployments* would put the gateway on a network of its own.
+- *File Mounts.* With any, Dokploy runs compose with `--project-directory` at the root of the checkout, and `build.context: ../..` no longer points at the repository: the application has none.
+- *GitHub.* Auto Deploy is the push webhook of Dokploy's GitHub App. Dokploy calls no Deployments, statuses or checks API (its only writes to GitHub are comments on pull requests for application previews), and its GitHub App has no permission for them: a gateway deploy is not visible on GitHub.
+- *Rollback.* Dokploy has none for Compose applications (rollbacks are a feature of its Applications) and does not keep the previous image: "Deploy" builds the head of the branch, "Rebuild" the same checkout again.
 
-A broken gateway deploy cuts access to code./agents.: Dokploy keeps the previous image for one-click rollback; `docs/deploy-gateway.md` explains it. The gateway's own tests and the e2e job (15) gate `main` first.
+A broken gateway deploy cuts access to code./agents.; going back is reverting the commit on `main`, which deploys again, or running the previous commit with plain Docker Compose on the host (`docs/deploy-gateway.md`). The gateway's own tests and the e2e job (15) gate `main` first.
 
 ## Hub via GitHub Deployments + VM updater
 
@@ -58,14 +62,16 @@ Agent sessions are not affected by a hub restart (04). The app shows "Updated �
 
 ## Releases
 
-Tags `v*` run `release.yml`: all binaries for amd64/arm64 (gateway, hub, devbox), checksums, attestations, a container image `ghcr.io/<owner>/devbox-gateway:<version>` (for non-Dokploy users), `install.sh` (installs `devbox` on a host, checksum-verified). `devbox up` on a host without a deployed release installs the latest tagged release into the VM.
+Tags `v*` run `release.yml`, after release-mode hygiene (17) and a full-history secret scan. `scripts/package-release.sh` makes what is attached, for amd64 and arm64: `devbox-linux-<arch>`, `devbox-gateway-linux-<arch>`, `devbox-hub-linux-<arch>`; `devbox-vm-linux-<arch>.tar.gz` with its `.sha256` (the hub and the CLI as `devbox up` installs them into the VM); `install.sh`, which installs the `devbox` of that release on a host after checking it against `SHA256SUMS` (`DEVBOX_VERSION`, `DEVBOX_INSTALL_DIR`); the SSH client and its setup script as below, downloading from this release; `SHA256SUMS` of all of it, with build provenance attestations. The binaries say the version of the tag. The gateway image is pushed as `ghcr.io/<owner>/devbox-gateway:<version>` (for hosts without Dokploy).
+
+A tag with a suffix (`v1.0.0-rc.1`) is published the same way as a pre-release and is nobody's latest: `devbox up` without `--release` or `--binaries` installs the newest `v…` release that is neither a draft nor a pre-release, found in the repository's list of releases (the repository's "latest release" on GitHub may be anything, the SSH client's included), and `…/releases/latest/download/install.sh` is the installer of the latest devbox because SSH client releases are published as not-latest. The nightly run takes a release by name and uses it as its users do: the CLI from `install.sh`, the VM from the archive, the SSH client from its download (15).
 
 ## Acceptance
 
 - [x] `deploy/gateway/compose.yml` + Dockerfile build in CI; image ≤ 25 MB; container starts unconfigured and reports health `problem: not configured`; `healthcheck` subcommand works in `scratch`. (`scripts/check-image.sh`, `TestBinary`)
 - [x] `deploy-hub.yml`: path filter, waits for CI success, uploads the artifact + attestations and creates the deployment with the right payload, never touches Releases. The steps that decide and tell are `scripts/deploy-hub.sh`, tested against a fake GitHub API (`tests/go/scripts/deploy_hub_test.go`); the workflow around them runs for the first time on the first push to `main` after it merges.
 - [x] Updater against a fake GitHub API + fake systemd (`sys`) in `tests/go/update/update_test.go`, and with the real programs in `TestARunningHubUpdatesItselfAndGoesBackFromABrokenBuild`: no-op when current; checksum mismatch → failure status, nothing switched; selftest failure → failure; unhealthy new hub → rollback + failure; success → status with environment URL; asleep → stays queued; expired artifact (> 30 days asleep) → failure status explaining that a newer push or `devbox up` reinstalls.
-- [ ] Settled: Dokploy bind mounts and GitHub Deployments behaviour documented here with evidence (M3).
+- [x] Dokploy's handling of bind mounts, networks, GitHub and rollback is recorded above from its documentation and its source at a named version; the nightly run deploys the same compose file with plain Docker Compose on a real host (15).
 
 ## SSH client releases
 

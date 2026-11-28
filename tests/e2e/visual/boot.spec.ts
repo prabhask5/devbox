@@ -2,8 +2,8 @@ import { expect, test } from "@playwright/test";
 import { NEW_STATES, STATES, VIEWPORT, fixture, read, show } from "./states.ts";
 
 // Visual regression (docs/spec/16-design.md): every boot screen state must look like the
-// approved design. The baselines of STATES are screenshots of the prototype with the same data
-// (baseline.spec.ts); a difference beyond the threshold needs the owner's approval.
+// approved design, which is the baselines next to this file. A difference beyond the threshold
+// needs the owner's approval, and new baselines (scripts/e2e.sh --update-baselines).
 test.use(VIEWPORT);
 
 const page = read("internal/gateway/boot.gen.html");

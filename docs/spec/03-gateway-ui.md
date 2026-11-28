@@ -1,6 +1,6 @@
 # 03 — Gateway UI (boot screen)
 
-A single small page served by the gateway for page loads while the target is not ready. TypeScript + Preact, built by Vite into one HTML file with inlined tokens, JS and CSS. `scripts/gen.sh` copies the build to `internal/gateway/boot.gen.html`, which is committed and embedded (`go:embed`), so building or testing the gateway needs no Node; `scripts/check-generated.sh` fails when it is stale. Prototype: `reference/prototype/host/devbox-gateway/boot.html` (screenshots in the reference README).
+A single small page served by the gateway for page loads while the target is not ready. TypeScript + Preact, built by Vite into one HTML file with inlined tokens, JS and CSS. `scripts/gen.sh` copies the build to `internal/gateway/boot.gen.html`, which is committed and embedded (`go:embed`), so building or testing the gateway needs no Node; `scripts/check-generated.sh` fails when it is stale.
 
 The server injects `{host, app: code|agents, needsAuth, error?, next?, upstreamDown?, unconfigured?}` into the page's `<script id="devbox-boot" type="application/json">` element (`next` is the page to return to after a failed sign-in). Live state comes from `GET /__devbox/events` (SSE); the page computes elapsed time with the server clock offset (`serverNow`).
 
@@ -23,9 +23,9 @@ Footer: last sleep time and reason. A collapsed "Details" shows the wake log.
 
 ## Design
 
-**Match the approved design in spec 16** (screenshots `reference/design/boot-*.png`). Dark only, tokens from `web/shared/tokens.json`. System font stack. Works at 320 px width; respects safe-area insets; `prefers-reduced-motion` stops the spinner/pulse animations. No external requests (no fonts, no CDNs).
+**Match the approved design in spec 16** (baselines `tests/e2e/visual/boot-*.png`). Dark only, tokens from `web/shared/tokens.json`. System font stack. Works at 320 px width; respects safe-area insets; `prefers-reduced-motion` stops the spinner/pulse animations. No external requests (no fonts, no CDNs).
 
-The row of buttons, the repo row and the footer are always in the layout, empty or not, as in the prototype, so the page does not jump between states. Up-to-date repos (`current`) and the repo being synced share the accent colour, as in the prototype.
+The row of buttons, the repo row and the footer are always in the layout, empty or not, so the page does not jump between states. Up-to-date repos (`current`) and the repo being synced share the accent colour.
 
 ## Acceptance
 
