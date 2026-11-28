@@ -44,7 +44,7 @@ func (h *harness) asleep() bool {
 	return status == "Stopped"
 }
 
-func lastStop(t *testing.T, h *harness) proto.LastStop {
+func lastStop(t testing.TB, h *harness) proto.LastStop {
 	t.Helper()
 	var stop proto.LastStop
 	data, err := os.ReadFile(filepath.Join(h.stateDir, "last-stop.json"))

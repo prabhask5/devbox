@@ -373,6 +373,13 @@ func (h *Hub) reconcile(ctx context.Context) {
 		} else {
 			claimed[l.Name] = true
 			h.observe(s, l, now)
+			if l.ID != id {
+				// Known by its name only: tagging it failed when it was adopted, or the tag was
+				// taken off. It is tagged again, so that a rename in tmux cannot lose it.
+				if err := h.opt.Tmux.SetID(ctx, l.Name, id); err != nil {
+					h.log.Warn("session not tagged", "session", l.Name, "error", err)
+				}
+			}
 		}
 		if !sameRecord(&before, &s.Session) {
 			h.persist(s)

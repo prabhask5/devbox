@@ -29,7 +29,7 @@ import (
 )
 
 // newKey makes a client key and its authorized_keys line.
-func newKey(t *testing.T) (ssh.Signer, string) {
+func newKey(t testing.TB) (ssh.Signer, string) {
 	t.Helper()
 	_, private, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -104,7 +104,7 @@ func (h *harness) mustSSH(signer ssh.Signer) *ssh.Client {
 }
 
 // run runs a command in a new session and returns what it wrote and its exit status.
-func run(t *testing.T, client *ssh.Client, command string) (stdout, stderr string, status int) {
+func run(t testing.TB, client *ssh.Client, command string) (stdout, stderr string, status int) {
 	t.Helper()
 	session, err := client.NewSession()
 	if err != nil {

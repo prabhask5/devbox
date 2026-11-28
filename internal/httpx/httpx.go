@@ -44,7 +44,7 @@ func RequestHost(r *http.Request) string {
 	if h, _, err := net.SplitHostPort(host); err == nil {
 		host = h
 	}
-	return strings.ToLower(host)
+	return strings.ToLower(strings.TrimSpace(host))
 }
 
 // SameOrigin reports whether a request that names its origin comes from the host it is sent

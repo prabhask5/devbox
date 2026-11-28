@@ -64,7 +64,7 @@ var cheapAppHash = func() string {
 // fakeVM stands in for what runs inside the VM: code-server, the hub and sshd. Its services
 // answer only while the fake Incus says the instance is running, and only when switched on.
 type fakeVM struct {
-	t     *testing.T
+	t     testing.TB
 	incus *incusfake.Server
 
 	code, hub *httptest.Server
@@ -116,7 +116,7 @@ func (vm *fakeVM) seen(request string) int {
 	return count
 }
 
-func newFakeVM(t *testing.T, incus *incusfake.Server) *fakeVM {
+func newFakeVM(t testing.TB, incus *incusfake.Server) *fakeVM {
 	vm := &fakeVM{t: t, incus: incus, hubVersion: proto.HubStatusVersion}
 	vm.codeUp.Store(true)
 	vm.hubUp.Store(true)
@@ -236,7 +236,7 @@ func newFakeVM(t *testing.T, incus *incusfake.Server) *fakeVM {
 	return vm
 }
 
-func port(t *testing.T, address string) string {
+func port(t testing.TB, address string) string {
 	t.Helper()
 	_, p, err := net.SplitHostPort(strings.TrimPrefix(address, "http://"))
 	if err != nil {
@@ -247,7 +247,7 @@ func port(t *testing.T, address string) string {
 
 // harness is a gateway under test with everything around it faked.
 type harness struct {
-	t         *testing.T
+	t         testing.TB
 	incus     *incusfake.Server
 	vm        *fakeVM
 	gw        *gateway.Gateway
@@ -330,7 +330,7 @@ func (b *syncBuffer) String() string {
 
 // start runs a gateway against a fake Incus and a fake VM. By default the VM is running and
 // the gateway is configured.
-func start(t *testing.T, options ...option) *harness {
+func start(t testing.TB, options ...option) *harness {
 	t.Helper()
 	s := setup{vmStatus: "Running", configured: true}
 	for _, option := range options {
@@ -458,7 +458,7 @@ type response struct {
 	body   string
 }
 
-func (r response) json(t *testing.T, into any) {
+func (r response) json(t testing.TB, into any) {
 	t.Helper()
 	if err := json.Unmarshal([]byte(r.body), into); err != nil {
 		t.Fatalf("not JSON: %v: %s", err, r.body)
@@ -466,7 +466,7 @@ func (r response) json(t *testing.T, into any) {
 }
 
 // boot returns the data the gateway injected into a boot screen.
-func (r response) boot(t *testing.T) map[string]any {
+func (r response) boot(t testing.TB) map[string]any {
 	t.Helper()
 	_, rest, found := strings.Cut(r.body, `<script id="devbox-boot" type="application/json">`)
 	if !found || !strings.HasPrefix(r.body, "<!doctype html>") || r.header.Get("Content-Type") != "text/html; charset=utf-8" {
@@ -531,7 +531,7 @@ func (h *harness) login() string {
 	return cookieFrom(h.t, resp, "devbox_wake")
 }
 
-func cookieFrom(t *testing.T, resp response, name string) string {
+func cookieFrom(t testing.TB, resp response, name string) string {
 	t.Helper()
 	for _, c := range (&http.Response{Header: resp.header}).Cookies() {
 		if c.Name == name {
@@ -557,7 +557,7 @@ func (h *harness) health() proto.GatewayHealth {
 }
 
 // eventually waits until condition holds, failing the test after a few seconds.
-func eventually(t *testing.T, what string, condition func() bool) {
+func eventually(t testing.TB, what string, condition func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(8 * time.Second)
 	for !condition() {
@@ -569,7 +569,7 @@ func eventually(t *testing.T, what string, condition func() bool) {
 }
 
 // never checks that condition stays false for long enough for several polls to pass.
-func never(t *testing.T, what string, condition func() bool) {
+func never(t testing.TB, what string, condition func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(200 * time.Millisecond)
 	for time.Now().Before(deadline) {
@@ -633,7 +633,7 @@ func (h *harness) dialWS(host, path string) (*socket, int) {
 	return &socket{conn, reader, resp.Header}, resp.StatusCode
 }
 
-func (s *socket) send(t *testing.T, text string) {
+func (s *socket) send(t testing.TB, text string) {
 	t.Helper()
 	if err := wsecho.WriteFrame(s.conn, wsecho.Text, []byte(text), true); err != nil {
 		t.Fatal(err)
@@ -650,7 +650,7 @@ func (s *socket) receive() (byte, string) {
 	return opcode, string(payload)
 }
 
-func (s *socket) echo(t *testing.T, text string) {
+func (s *socket) echo(t testing.TB, text string) {
 	t.Helper()
 	s.send(t, text)
 	if opcode, payload := s.receive(); opcode != 0x1 || payload != text {
@@ -664,7 +664,7 @@ type gatewayTimings = gateway.Timings
 
 // signedCookie returns a wake cookie signed with the test secret, the way the gateway signs
 // them: "<expiry in Unix ms>.<base64url HMAC-SHA256 of the expiry>".
-func signedCookie(t *testing.T, expiry time.Time) string {
+func signedCookie(t testing.TB, expiry time.Time) string {
 	t.Helper()
 	stamp := strconv.FormatInt(expiry.UnixMilli(), 10)
 	mac := hmac.New(sha256.New, []byte(cookieKey))

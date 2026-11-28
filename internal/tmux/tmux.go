@@ -125,7 +125,8 @@ func SafeName(text string) string {
 const wrapper = `"$@"; code=$?; printf '\n\033[2m[%s exited (%s) — this is now a shell]\033[0m\n' "$1" "$code"; exec bash -i`
 
 // New creates a detached session running argv in dir, with env added to its environment, and
-// stores id in its @devbox_id option.
+// stores id in its @devbox_id option. Without an id it is a session like one started by hand,
+// and its option is left alone: whoever adopts it may have tagged it already.
 func (s Server) New(ctx context.Context, name, id, dir string, env map[string]string, argv []string) error {
 	args := []string{"new-session", "-d", "-s", name, "-c", dir, "-x", "120", "-y", "40"}
 	for key, value := range env {
@@ -134,6 +135,9 @@ func (s Server) New(ctx context.Context, name, id, dir string, env map[string]st
 	args = append(args, "bash", "-ic", wrapper, "_")
 	if _, err := s.run(ctx, append(args, argv...)...); err != nil {
 		return err
+	}
+	if id == "" {
+		return nil
 	}
 	return s.SetID(ctx, name, id)
 }

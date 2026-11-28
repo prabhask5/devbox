@@ -21,7 +21,7 @@ import (
 )
 
 // matchesContract checks a response body against its schema, as every consumer will read it.
-func matchesContract(t *testing.T, contract, body string) {
+func matchesContract(t testing.TB, contract, body string) {
 	t.Helper()
 	contracts, err := schema.Load(proto.Schema)
 	if err != nil {

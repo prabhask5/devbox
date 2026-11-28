@@ -41,7 +41,7 @@ func median(runs int, env []string, want string, binary string, args ...string) 
 		err := cmd.Run()
 		took := time.Since(began)
 		if err != nil || !bytes.Contains(stdout.Bytes(), []byte(want)) {
-			return 0, fmt.Errorf("devbox %v: %v\n%s%s", args, err, stdout.String(), stderr.String())
+			return 0, fmt.Errorf("devbox %v: %w\n%s%s", args, err, stdout.String(), stderr.String())
 		}
 		if i >= 2 {
 			times = append(times, took)
