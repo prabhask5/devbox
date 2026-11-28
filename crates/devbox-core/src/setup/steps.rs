@@ -567,11 +567,23 @@ fn inside(
         .flatten()
         .filter_map(|agent| agent.as_str().map(str::to_owned))
         .collect();
-    let release = match (&c.options.binaries, &c.options.release) {
-        (Some(dir), _) => Release::Local(dir.clone()),
-        (None, Some(tag)) => Release::Tag(tag.clone()),
-        (None, None) => Release::Latest,
+    let same_vm = !created
+        && host.remembered["instance"] == json!(desired.instance)
+        && host.remembered["user"] == json!(desired.user);
+    // The build that was asked for; without one, the build the VM has (the hub keeps itself
+    // up to date from there), and the latest release for a VM that has none.
+    let asked = match (&c.options.binaries, &c.options.release) {
+        (Some(dir), _) => Some(Release::Local(dir.clone())),
+        (None, Some(tag)) => Some(Release::Tag(tag.clone())),
+        (None, None) => None,
     };
+    let installed = host.remembered["release"].as_str().filter(|_| same_vm);
+    let same_build =
+        asked.as_ref().is_none_or(|asked| host.remembered["asked"] == json!(format!("{asked:?}")));
+    let release = asked
+        .clone()
+        .or_else(|| installed.map(|name| Release::Installed(name.to_owned())))
+        .unwrap_or(Release::Latest);
     let repo = desired.config["deploy"]["repo"].as_str().unwrap_or(DEFAULT_REPO).to_owned();
     let hub_toml = format!(
         "# Written by `devbox up`.\nversion = 1\nlisten = \":{}\"\n\n[hosts]\ncode = \"{}\"\nagents = \"{}\"\n\n[deploy]\nrepo = \"{repo}\"\n",
@@ -587,18 +599,15 @@ fn inside(
     } else {
         None
     };
-    let stamp =
-        Provision::fingerprint(desired, &agents, &release, &hub_toml, github_token.is_some());
-    let same_vm = !created
-        && host.remembered["instance"] == json!(desired.instance)
-        && host.remembered["user"] == json!(desired.user);
+    let stamp = Provision::fingerprint(desired, &agents, &hub_toml, github_token.is_some());
     let dotfiles_url = desired.config["provision"]["dotfiles"].as_str().map(str::to_owned);
-    if same_vm && host.remembered["stamp"] == json!(stamp) {
+    if same_vm && same_build && host.remembered["stamp"] == json!(stamp) {
         step.say(format!("up to date: installed as {} in {}", desired.user, desired.instance));
     } else {
         let source = match &release {
             Release::Local(dir) => format!("from {}", dir.display()),
             Release::Tag(tag) => format!("release {tag} of {repo}"),
+            Release::Installed(name) => format!("{name}, which is installed"),
             Release::Latest => format!("the latest release of {repo}"),
         };
         let agent_list = if agents.is_empty() { "no agents".to_owned() } else { agents.join(", ") };
@@ -612,6 +621,7 @@ fn inside(
         let provision = Provision {
             agents,
             release,
+            asked: asked.map(|asked| format!("{asked:?}")),
             repo,
             hub_toml,
             github_token,

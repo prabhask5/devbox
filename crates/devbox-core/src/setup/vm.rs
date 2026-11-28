@@ -38,6 +38,8 @@ pub(crate) enum Release {
     Local(PathBuf),
     /// A release of the repository, by tag.
     Tag(String),
+    /// The build the VM has already, by the name it is installed under.
+    Installed(String),
     /// The repository's latest release, found out when installing.
     Latest,
 }
@@ -47,6 +49,8 @@ pub(crate) enum Release {
 pub(crate) struct Provision {
     pub agents: Vec<String>,
     pub release: Release,
+    /// The build that was asked for, when one was: remembered, to tell when another is.
+    pub asked: Option<String>,
     pub repo: String,
     pub hub_toml: String,
     /// The host's GitHub token, for `gh` in the VM and for the hub's deployments.
@@ -61,15 +65,13 @@ impl Provision {
     pub fn fingerprint(
         desired: &Desired,
         agents: &[String],
-        release: &Release,
         hub_toml: &str,
         token: bool,
     ) -> String {
-        let release = format!("{release:?}");
         let settings =
             format!("{} {} {} {token}", desired.user, desired.ports[0], agents.join(","));
         let mut parts: Vec<&[u8]> = FILES.iter().map(|(_, content)| content.as_bytes()).collect();
-        parts.extend([release.as_bytes(), settings.as_bytes(), hub_toml.as_bytes()]);
+        parts.extend([settings.as_bytes(), hub_toml.as_bytes()]);
         files::fingerprint(&parts)
     }
 }
@@ -268,7 +270,7 @@ pub(crate) fn provision(
             }
             local
         }
-        Release::Tag(tag) => tag.clone(),
+        Release::Tag(tag) | Release::Installed(tag) => tag.clone(),
         Release::Latest => latest_release(system, &provision.repo)?,
     };
     let env = format!(
@@ -314,6 +316,10 @@ pub(crate) fn provision(
         record["user"] = json!(desired.user);
         record["stamp"] = json!(provision.stamp);
         record["agents"] = json!(provision.agents);
+        record["release"] = json!(release);
+        if let Some(asked) = &provision.asked {
+            record["asked"] = json!(asked);
+        }
     })
 }
 

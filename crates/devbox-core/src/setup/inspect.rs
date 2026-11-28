@@ -517,15 +517,13 @@ fn firewall_check(system: &dyn System, config: &Value, checks: &mut Checks) {
         &[port("code_port"), port("hub_port"), port("ssh_port")],
     );
     // Asked of the manager `up` used; one of an embedder's is not here to be asked.
-    let manager = match config["firewall"]["manager"].as_str() {
-        None => crate::firewall::detect(system),
-        Some(name) => match crate::firewall::named(name) {
-            Some(manager) => manager,
-            None => {
-                checks.skip("firewall", title, &format!("the firewall is managed by {name}"));
-                return;
-            }
-        },
+    let named = config["firewall"]["manager"].as_str();
+    let Some(manager) =
+        named.map_or_else(|| Some(crate::firewall::detect(system)), crate::firewall::named)
+    else {
+        let by = named.unwrap_or_default();
+        checks.skip("firewall", title, &format!("the firewall is managed by {by}"));
+        return;
     };
     match manager.check(system, &rule) {
         _ if manager.describe() == "none" => {
