@@ -120,7 +120,7 @@ devbox-ssh version
 - Errors go to stderr as one line starting with `devbox-ssh:` and exit 255 (what `ssh` expects from a proxy): DNS, TCP, TLS, and handshake answers that are not 101, each with what to do (`HTTP 403: Cloudflare Access protects <host>; pass its service token with --header`, `HTTP 404: <host> does not serve SSH; check the URL`, `HTTP 502/503: the server is not reachable right now`).
 - It works against the gateway and against any Cloudflare Tunnel SSH hostname.
 
-`internal/wsconn` holds the RFC 6455 framing for both sides (the gateway's HTTP proxying stays a byte copy, 02): masking, fragmentation, control frames, close codes, at most 1 MiB per frame read and 32 KiB per frame written. It is fuzzed (`go test -fuzz` corpus in `tests/go/wsconn`).
+`internal/wsconn` holds the RFC 6455 framing for both sides (the gateway's HTTP proxying stays a byte copy, 02): masking, fragmentation, control frames, close codes, at most 1 MiB per frame read and 32 KiB per frame written. It is fuzzed (`FuzzFrames` in `tests/go/wsconn`, whose seeds run with every `go test`).
 
 ## Client setup (`devbox-ssh-setup.sh`)
 
@@ -212,12 +212,12 @@ All are measured by the `budgets` job (spec 13); `scripts/budgets.sh` learns min
 
 ## Acceptance
 
-- [ ] `internal/wsconn`: framing round-trips, fragmentation, ping/pong, close codes, limits; fuzz target with a seed corpus; interop with a Cloudflare-Tunnel-style peer (a test server that behaves like the tunnel's `ssh://` ingress). (`tests/go/wsconn`)
+- [x] `internal/wsconn`: framing round-trips, fragmentation, ping/pong, close codes, limits; fuzz target with a seed corpus; interop with a Cloudflare-Tunnel-style peer (a test server that behaves like the tunnel's `ssh://` ingress). (`tests/go/wsconn`)
 - [ ] Gateway SSH: keys created on first start with the right modes, `authorized_keys` reload, wrong user / unknown key / key with options refused, auth limits, **no wake before authentication**, upstream host-key pinning, VM rejecting the upstream key → health problem. (`tests/go/gateway/ssh_test.go`, fake VM sshd built on `x/crypto/ssh`)
 - [ ] Relay with the real OpenSSH client (`ssh`, `scp`, `sftp`) against a fake VM sshd: shell with pty, exec with exit status and signals, stderr, scp and sftp both ways, `-L`, `-R`, `-D`, agent forwarding, `ProxyCommand devbox-ssh proxy` over the WebSocket and the TCP listener, queued channels replayed after a wake. (`tests/go/e2e/ssh_test.go`)
 - [ ] Boot-aware transcripts (restore, cold, joined, failure, timeout, dumb terminal, non-UTF-8, non-interactive) golden byte for byte; awake VM: zero extra bytes.
 - [ ] SSH host endpoints: page, `/setup` with filled-in defaults, client downloads and checksums, pairing (success, duplicate key, bad key types, short RSA, wrong password, rate limit, cross-site Origin) golden.
-- [ ] `devbox-ssh`: proxy against the gateway and the tunnel-style peer, `--header`, pings on a quiet stream, each error message golden, exit codes, size budget.
+- [x] `devbox-ssh`: proxy against the gateway and the tunnel-style peer, `--header`, pings on a quiet stream, each error message golden, exit codes, size budget. (`tests/go/sshclient`; the size is checked there for all four platforms and joins `budgets.toml` with the other SSH budgets.)
 - [ ] Setup script under `dash` and `bash` on Linux and under `/bin/sh` on a macOS runner (CI job `ssh-client`), against a fake gateway and a fake `$HOME`: fresh machine, existing key, existing covering `Include`, conflicting `Host devbox` block, alias among other patterns, re-run unchanged, refused key with hint, checksum mismatch refused, `remove` restoring `~/.ssh/config` byte for byte, `status`. Generated files golden.
 - [ ] `devbox up` writes the SSH route and installs the upstream key and the recorded VM host key; `--dry-run` golden; `down` removes them; `devbox ssh keys|status` golden; doctor checks.
 - [ ] Budgets above in `budgets.toml`, measured in the `budgets` job.

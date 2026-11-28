@@ -178,6 +178,8 @@ func dialThroughProxy(ctx context.Context, request *http.Request, hostPort strin
 		_ = conn.Close()
 		return failed(err)
 	}
+	// The answer to CONNECT has no body: after it, the connection is the server's.
+	_ = response.Body.Close()
 	if response.StatusCode != http.StatusOK {
 		_ = conn.Close()
 		return failed(errors.New("it answered CONNECT with " + response.Status))

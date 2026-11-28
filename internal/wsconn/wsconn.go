@@ -204,7 +204,7 @@ func (c *Conn) nextFrame() error {
 		if extended[0]&0x80 != 0 {
 			return c.fail(CloseProtocol, "a frame length with its highest bit set")
 		}
-		length = int64(binary.BigEndian.Uint64(extended[:]))
+		length = int64(binary.BigEndian.Uint64(extended[:])) //nolint:gosec // the highest bit was refused just above
 	}
 	// A server reads masked frames and a client unmasked ones; RFC 6455 says to refuse the rest.
 	if masked == c.client {
@@ -297,7 +297,7 @@ func (c *Conn) writeFrameLocked(opcode byte, payload []byte) error {
 	}
 	switch {
 	case len(payload) < 126:
-		frame = append(frame, maskBit|byte(len(payload)))
+		frame = append(frame, maskBit|byte(len(payload))) //nolint:gosec // less than 126
 	case len(payload) <= 0xFFFF:
 		frame = append(frame, maskBit|126)
 		frame = binary.BigEndian.AppendUint16(frame, uint16(len(payload))) //nolint:gosec // checked just above

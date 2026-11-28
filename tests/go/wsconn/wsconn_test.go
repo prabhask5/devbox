@@ -156,7 +156,7 @@ func TestAMessageInSeveralFramesWithAPingInBetweenIsOneStream(t *testing.T) {
 
 	// A close frame ends the stream, and is answered with one.
 	_, _ = client.Write(masked(true, 0x8, []byte{0x03, 0xe8}))
-	if _, err := server.Read(received); err != io.EOF {
+	if _, err := server.Read(received); !errors.Is(err, io.EOF) {
 		t.Errorf("after a close: %v", err)
 	}
 	if opcode, payload, err := wsecho.ReadFrame(frames); err != nil || opcode != 0x8 || !bytes.Equal(payload, []byte{0x03, 0xe8}) {
