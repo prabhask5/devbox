@@ -82,6 +82,11 @@ func (g *Gateway) health() proto.GatewayHealth {
 		if g.stopErr != "" && now.Sub(g.stopErrAt) < g.t.StopFailedFor {
 			add("last sleep failed: " + g.stopErr)
 		}
+		if g.sshd != nil {
+			for _, problem := range g.sshd.problems(now, g.t.WakeFailedFor) {
+				add(problem)
+			}
+		}
 		if g.vm == proto.VMStateRunning && g.phase == proto.GatewayPhaseIdle && !g.upSince.IsZero() && now.Sub(g.upSince) >= g.t.SettleFor {
 			if now.Sub(g.codeOKAt) > stale {
 				add("VM is up but code-server is not responding")

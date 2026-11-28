@@ -1,10 +1,7 @@
 package gateway_test
 
 import (
-	"bufio"
 	"encoding/json"
-	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -330,120 +327,5 @@ func TestAManualStartIsNoticedAndGetsAFullIdlePeriod(t *testing.T) {
 	eventually(t, "the odd state to be noticed", func() bool { return h.status().VM == proto.VMStateError })
 	if health := h.health(); !reflect.DeepEqual(health.Problems, []string{`VM is in state "Frozen"`}) {
 		t.Errorf("health: %+v", health)
-	}
-}
-
-func TestSSHWakesTheVMAndWaitsForTheBanner(t *testing.T) {
-	h := start(t, stoppedVM(true))
-	h.incus.SetDelays(100*time.Millisecond, 0)
-	h.vm.sshClosesAtOnce.Store(true) // the port accepts before sshd is back
-
-	conn, err := net.Dial("tcp", h.sshAddr)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn.Close()
-	// An SSH client sends its banner at once; sshd must receive it after its own is out.
-	fmt.Fprint(conn, "SSH-2.0-TestClient\n")
-	reader := bufio.NewReader(conn)
-
-	eventually(t, "the wake", func() bool { status, _ := h.incus.Instance("devbox"); return status == "Running" })
-	if wake := h.wakeDone(); wake.Reason != "ssh" {
-		t.Errorf("wake reason: %s", wake.Reason)
-	}
-	_ = conn.SetReadDeadline(time.Now().Add(150 * time.Millisecond))
-	if line, err := reader.ReadString('\n'); err == nil {
-		t.Fatalf("got %q although sshd has not sent its banner", line)
-	}
-
-	h.vm.sshClosesAtOnce.Store(false)
-	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	if line, _ := reader.ReadString('\n'); line != "SSH-2.0-FakeSSH\r\n" {
-		t.Fatalf("banner: %q", line)
-	}
-	if line, _ := reader.ReadString('\n'); line != "echo SSH-2.0-TestClient\n" {
-		t.Fatalf("the client's first bytes did not reach sshd intact: %q", line)
-	}
-	fmt.Fprint(conn, strings.Repeat("k", 6000)+"\n")
-	if line, _ := reader.ReadString('\n'); len(line) != len("echo ")+6001 {
-		t.Fatalf("echo of 6001 bytes: %d bytes", len(line))
-	}
-	if got := h.vm.sshReceived.Load(); got != int64(len("SSH-2.0-TestClient\n"))+6001 {
-		t.Errorf("sshd received %d bytes", got)
-	}
-
-	// The bytes the client sent are in the traffic log.
-	var tuning struct{ BytesPerMinute []struct{ Bytes int64 } }
-	eventually(t, "the SSH traffic in the log", func() bool {
-		h.get(codeHost, "/__devbox/history", cookie(signedCookie(t, time.Now().Add(time.Hour)))).json(t, &tuning)
-		var total int64
-		for _, minute := range tuning.BytesPerMinute {
-			total += minute.Bytes
-		}
-		return total == h.vm.sshReceived.Load()
-	})
-
-	// Putting the VM to sleep ends the session.
-	<-h.gw.Sleep("test")
-	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	if _, err := reader.ReadString('\n'); err == nil {
-		t.Error("the SSH session survived the VM going to sleep")
-	}
-}
-
-func TestSSHToARunningVMConnectsAtOnceAndCleansUp(t *testing.T) {
-	h := start(t)
-	h.awake()
-	conn, err := net.Dial("tcp", h.sshAddr)
-	if err != nil {
-		t.Fatal(err)
-	}
-	reader := bufio.NewReader(conn)
-	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	if line, _ := reader.ReadString('\n'); line != "SSH-2.0-FakeSSH\r\n" {
-		t.Fatalf("banner: %q", line)
-	}
-	if got := len(h.incus.StateChanges()); got != 0 {
-		t.Errorf("%d state changes for an SSH connection to a running VM", got)
-	}
-	conn.Close()
-
-	// sshd going away ends the client's connection too.
-	conn, err = net.Dial("tcp", h.sshAddr)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn.Close()
-	reader = bufio.NewReader(conn)
-	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	if line, _ := reader.ReadString('\n'); line != "SSH-2.0-FakeSSH\r\n" {
-		t.Fatalf("banner: %q", line)
-	}
-	h.vm.ssh.Close()
-	fmt.Fprint(conn, "x\n")
-	h.shutdown()
-	if _, err := reader.ReadString('\n'); err == nil {
-		if _, err = reader.ReadString('\n'); err == nil {
-			t.Error("the connection is still open after the gateway stopped")
-		}
-	}
-}
-
-func TestSSHGivesUpWhenSSHDNeverAnswers(t *testing.T) {
-	h := start(t, withTimings(func(t *gatewayTimings) { t.SSHTimeout = 150 * time.Millisecond }))
-	h.awake()
-	h.vm.sshUp.Store(false)
-	conn, err := net.Dial("tcp", h.sshAddr)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn.Close()
-	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	began := time.Now()
-	if n, err := conn.Read(make([]byte, 1)); err == nil || n != 0 {
-		t.Errorf("read %d bytes, %v", n, err)
-	}
-	if waited := time.Since(began); waited < 100*time.Millisecond || waited > 3*time.Second {
-		t.Errorf("gave up after %v", waited)
 	}
 }

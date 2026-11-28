@@ -91,6 +91,7 @@ type Gateway struct {
 	clock sys.Clock
 	fs    sys.FS
 	log   *slog.Logger
+	sshd  *sshServer // nil when its keys could not be read or made
 
 	// Read on every request without locking.
 	loaded       atomic.Pointer[loaded]
@@ -191,6 +192,11 @@ func New(opt Options) *Gateway {
 // the VM is left exactly as it is (a wake or stop already under way is not interrupted).
 func (g *Gateway) Run(ctx context.Context) error {
 	var background sync.WaitGroup
+	if sshd, err := newSSHServer(g); err != nil {
+		g.log.Error("the SSH server is off: its keys cannot be read or made", "error", err)
+	} else {
+		g.sshd = sshd
+	}
 	loops := []func(context.Context){g.pollLoop, g.configLoop, g.minuteLoop}
 	if g.t.DeployPoll > 0 {
 		loops = append(loops, g.deployLoop)
@@ -282,6 +288,9 @@ func (g *Gateway) configLoop(ctx context.Context) {
 			return
 		case <-ticker.C:
 			g.reload()
+			if g.sshd != nil {
+				g.sshd.reloadKeys()
+			}
 		}
 	}
 }

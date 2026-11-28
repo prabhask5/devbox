@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/prabhask5/devbox/tests/fakes/sshd"
 	"io"
 	"log/slog"
 	"net"
@@ -31,6 +32,9 @@ import (
 	incusfake "github.com/prabhask5/devbox/tests/fakes/incus"
 	"github.com/prabhask5/devbox/tests/fakes/wsecho"
 )
+
+// vmUser is the user of the VM, the only name SSH lets in.
+const vmUser = "dev"
 
 const (
 	codeHost   = "code.example.com"
@@ -55,11 +59,9 @@ type fakeVM struct {
 	incus *incusfake.Server
 
 	code, hub *httptest.Server
-	ssh       net.Listener
+	sshd      *sshd.Server // a real SSH server; with Up off its port accepts and sends no banner
 
-	codeUp, hubUp, sshUp atomic.Bool
-	sshClosesAtOnce      atomic.Bool  // sshd's port accepts but sends no banner
-	sshReceived          atomic.Int64 // bytes clients sent to sshd
+	codeUp, hubUp atomic.Bool
 
 	mu          sync.Mutex
 	hubStatus   proto.HubStatus
@@ -109,7 +111,6 @@ func newFakeVM(t *testing.T, incus *incusfake.Server) *fakeVM {
 	vm := &fakeVM{t: t, incus: incus, hubVersion: proto.HubStatusVersion}
 	vm.codeUp.Store(true)
 	vm.hubUp.Store(true)
-	vm.sshUp.Store(true)
 	vm.hubStatus = proto.HubStatus{
 		Version: "hub-commit", Uptime: 100,
 		Idle: proto.HubIdle{Busy: false, Reasons: []string{}, IdleSeconds: 0},
@@ -215,45 +216,15 @@ func newFakeVM(t *testing.T, incus *incusfake.Server) *fakeVM {
 	hub.HandleFunc("GET /manifest.webmanifest", func(w http.ResponseWriter, _ *http.Request) { fmt.Fprint(w, "{}") })
 	vm.hub = httptest.NewServer(vm.guard(&vm.hubUp, "hub", hub))
 
-	var err error
-	if vm.ssh, err = net.Listen("tcp", "127.0.0.1:0"); err != nil {
-		t.Fatal(err)
-	}
-	go vm.serveSSH()
+	vm.sshd = sshd.Start(t, vmUser)
+	vm.sshd.Running = vm.running
 	t.Cleanup(func() {
 		vm.code.CloseClientConnections()
 		vm.hub.CloseClientConnections()
 		vm.code.Close()
 		vm.hub.Close()
-		vm.ssh.Close()
 	})
 	return vm
-}
-
-// serveSSH plays sshd: a banner, then every line the client sends comes back prefixed.
-func (vm *fakeVM) serveSSH() {
-	for {
-		conn, err := vm.ssh.Accept()
-		if err != nil {
-			return
-		}
-		go func() {
-			defer conn.Close()
-			if !vm.running() || !vm.sshUp.Load() || vm.sshClosesAtOnce.Load() {
-				return
-			}
-			fmt.Fprint(conn, "SSH-2.0-FakeSSH\r\n")
-			reader := bufio.NewReader(conn)
-			for {
-				line, err := reader.ReadString('\n')
-				vm.sshReceived.Add(int64(len(line)))
-				if err != nil {
-					return
-				}
-				fmt.Fprint(conn, "echo "+line)
-			}
-		}()
-	}
 }
 
 func port(t *testing.T, address string) string {
@@ -273,6 +244,8 @@ type harness struct {
 	gw     *gateway.Gateway
 	clock  *sys.FakeClock // nil when the gateway runs on the real clock
 	github string         // the GitHub API the gateway reads deployments from; "" is the real one
+	// vmForgetsGateway leaves the gateway's key out of the VM, as before `devbox up` put it there.
+	vmForgetsGateway bool
 
 	configDir, stateDir string
 	base                string // http://127.0.0.1:<port>
@@ -401,6 +374,16 @@ func (h *harness) run(clock sys.Clock, timings gateway.Timings) {
 	ctx, cancel := context.WithCancel(context.Background())
 	h.stop, h.stopped = cancel, make(chan error, 1)
 	go func() { h.stopped <- h.gw.Run(ctx) }()
+	// What `devbox up` does: the VM lets the gateway's own key in.
+	upstream := filepath.Join(h.stateDir, "ssh", "upstream_ed25519_key.pub")
+	var key []byte
+	eventually(h.t, "the gateway's SSH keys", func() bool {
+		key, _ = os.ReadFile(upstream)
+		return strings.HasSuffix(string(key), "\n")
+	})
+	if !h.vmForgetsGateway {
+		h.vm.sshd.Authorize(string(key))
+	}
 }
 
 // shutdown stops the gateway and waits for Run to return.
@@ -430,7 +413,10 @@ address = "127.0.0.1"
 code_port = %s
 hub_port = %s
 ssh_port = %s
-%s`, port(h.t, h.vm.code.URL), port(h.t, h.vm.hub.URL), port(h.t, h.vm.ssh.Addr().String()), extra)
+ssh_host_key = %q
+[provision]
+user = %q
+%s`, port(h.t, h.vm.code.URL), port(h.t, h.vm.hub.URL), port(h.t, h.vm.sshd.Addr()), h.vm.sshd.HostKey(), vmUser, extra)
 	h.writeFile(filepath.Join(h.configDir, "devbox.toml"), config, 0o644)
 }
 
