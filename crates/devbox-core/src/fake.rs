@@ -48,6 +48,8 @@ pub struct FakeInstance {
     pub executed: Vec<(Vec<String>, Option<u32>)>,
     /// The body it was created from; `Null` for one that was there before.
     pub created_from: Value,
+    /// Whether a start threw its saved memory away, by not asking for it to be restored.
+    pub lost_memory: bool,
 }
 
 impl FakeInstance {
@@ -63,6 +65,7 @@ impl FakeInstance {
             files: BTreeMap::new(),
             executed: Vec::new(),
             created_from: Value::Null,
+            lost_memory: false,
         }
     }
 
@@ -314,6 +317,11 @@ impl FakeIncus {
                         if !self.failures.contains_key(&action) {
                             match action.as_str() {
                                 "start" | "restart" => {
+                                    // As Incus does: memory that was saved is restored only
+                                    // when the start asks for it, and is lost otherwise.
+                                    if instance.stateful && body["stateful"] != true {
+                                        instance.lost_memory = true;
+                                    }
                                     "Running".clone_into(&mut instance.status);
                                     instance.stateful = false;
                                 }

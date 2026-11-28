@@ -118,7 +118,7 @@ func TestFakeAnswersLikeIncus(t *testing.T) {
 	}
 
 	fake.Fail(incusfake.FailRestore, "Failed to restore instance state")
-	code, body = raw(t, fake, "PUT", "/1.0/instances/devbox/state", `{"action": "start", "timeout": -1}`)
+	code, body = raw(t, fake, "PUT", "/1.0/instances/devbox/state", `{"action": "start", "timeout": -1, "stateful": true}`)
 	check("state-change.json", 202, code, body)
 	operation := body["operation"].(string)
 	code, body = raw(t, fake, "GET", operation+"/wait?timeout=5", "")
@@ -167,8 +167,11 @@ func TestClientReadsStartsAndStops(t *testing.T) {
 	if got, err := client.Get(ctx); err != nil || got != (incus.Instance{Status: "Stopped", Stateful: true}) {
 		t.Fatalf("Get: %+v, %v", got, err)
 	}
-	if err := client.Start(ctx, false); err != nil {
+	if err := client.Start(ctx, true); err != nil {
 		t.Fatal(err)
+	}
+	if fake.Discarded("devbox") != 0 {
+		t.Error("a start that asks for the saved memory threw it away")
 	}
 	if got, _ := client.Get(ctx); got != (incus.Instance{Status: "Running"}) {
 		t.Errorf("after start: %+v", got)
@@ -179,15 +182,18 @@ func TestClientReadsStartsAndStops(t *testing.T) {
 	if got, _ := client.Get(ctx); got != (incus.Instance{Status: "Stopped", Stateful: true}) {
 		t.Errorf("after stateful stop: %+v", got)
 	}
-	if err := client.Start(ctx, true); err != nil {
+	if err := client.Start(ctx, false); err != nil {
 		t.Fatal(err)
+	}
+	if fake.Discarded("devbox") != 1 {
+		t.Error("a fresh boot kept the saved memory")
 	}
 	if err := client.Stop(ctx, false, 30); err != nil {
 		t.Fatal(err)
 	}
 
 	want := []map[string]any{
-		{"action": "start", "timeout": float64(-1)},
+		{"action": "start", "timeout": float64(-1), "stateful": true},
 		{"action": "stop", "timeout": float64(120), "stateful": true},
 		{"action": "start", "timeout": float64(-1), "stateful": false},
 		{"action": "stop", "timeout": float64(30)},
@@ -206,14 +212,14 @@ func TestClientErrorsAreTyped(t *testing.T) {
 	fake, client := setup(t, "Stopped", true)
 
 	fake.Fail(incusfake.FailRestore, "Failed to restore instance state")
-	err := client.Start(ctx, false)
+	err := client.Start(ctx, true)
 	if !incus.IsKind(err, incus.API) || err.Error() != "incus: Failed to restore instance state" {
 		t.Errorf("failed operation: %v", err)
 	}
-	if err := client.Start(ctx, true); err != nil {
+	if err := client.Start(ctx, false); err != nil {
 		t.Errorf("a fresh boot after a failed restore: %v", err)
 	}
-	if err := client.Start(ctx, false); !incus.IsKind(err, incus.API) || err.Error() != "incus: The instance is already running" {
+	if err := client.Start(ctx, true); !incus.IsKind(err, incus.API) || err.Error() != "incus: The instance is already running" {
 		t.Errorf("starting a running instance: %v", err)
 	}
 

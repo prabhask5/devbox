@@ -161,7 +161,16 @@ impl Inside<'_> {
             None => return fail(format!("there is no instance {}", self.instance)),
             Some("Running") => {}
             Some(_) => {
-                self.incus.change_state(self.instance, "start", false, Duration::from_secs(300))?;
+                // A VM that sleeps with its memory saved wakes up where it was: Incus restores
+                // only when the start asks for it, and throws the memory away otherwise.
+                let asleep =
+                    self.incus.instance(self.instance)?.is_some_and(|found| found.stateful);
+                self.incus.change_state(
+                    self.instance,
+                    "start",
+                    asleep,
+                    Duration::from_secs(300),
+                )?;
             }
         }
         for _ in 0..90 {

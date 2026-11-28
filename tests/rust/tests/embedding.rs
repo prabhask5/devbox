@@ -459,3 +459,22 @@ fn the_build_in_the_vm_is_kept_unless_another_is_asked_for() {
     let again = setup::up(&system, &UpOptions::default(), &mut Yes).unwrap();
     assert_eq!(again.outcome, Outcome::Unchanged);
 }
+
+#[test]
+fn a_sleeping_vm_that_has_to_be_started_wakes_up_where_it_was() {
+    let system = dokploy();
+    setup::up(&system, &fresh(), &mut Yes).unwrap();
+    // It sleeps with its memory saved, and `up` has something to install into it.
+    system.incus(|incus| {
+        let vm = incus.instances.get_mut("devbox").unwrap();
+        "Stopped".clone_into(&mut vm.status);
+        vm.stateful = true;
+    });
+    let fewer = UpOptions { no_agents: vec!["opencode".to_owned()], ..UpOptions::default() };
+    assert_eq!(setup::up(&system, &fewer, &mut Yes).unwrap().outcome, Outcome::Applied);
+    system.incus(|incus| {
+        let vm = &incus.instances["devbox"];
+        assert_eq!(vm.status, "Running");
+        assert!(!vm.lost_memory, "starting the VM to provision it threw its saved memory away");
+    });
+}

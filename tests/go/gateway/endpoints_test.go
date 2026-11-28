@@ -249,7 +249,7 @@ func TestStateSurvivesARestart(t *testing.T) {
 		t.Errorf("after the restart: last stop %+v, typical %+v", after.LastStop, after.Typical)
 	}
 	// A restart of the gateway never touches the VM.
-	if got := kinds(h.incus.StateChanges()); !reflect.DeepEqual(got, []string{"start", "stop stateful=true"}) {
+	if got := kinds(h.incus.StateChanges()); !reflect.DeepEqual(got, []string{"start stateful=true", "stop stateful=true"}) {
 		t.Errorf("state changes: %v", got)
 	}
 	// Damaged state files mean a fresh start, not a crash.

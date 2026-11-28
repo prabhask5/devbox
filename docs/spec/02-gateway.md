@@ -20,7 +20,7 @@ ssh ─► tunnel ─► gateway :2222 ─► VM:22
 
 ## Incus client
 
-REST over the unix socket `/var/lib/incus/unix.socket` (mounted), in `internal/incus`. Calls: `GET /1.0/instances/<name>` (`stateful` flag), `GET …/state`, `PUT …/state` with `start` / `stop {stateful, timeout}`, waiting on `/1.0/operations/<id>/wait`. The client checks every request against that list before sending it and refuses anything else (14). Background poll every 15 s keeps the VM state current (manual `incus start/stop` is noticed; a status other than Running or Stopped is `error`). Errors are typed: unreachable socket, API error (including a failed operation), timeout, forbidden call. Messages never include the socket path.
+REST over the unix socket `/var/lib/incus/unix.socket` (mounted), in `internal/incus`. Calls: `GET /1.0/instances/<name>` (`stateful` flag), `GET …/state`, `PUT …/state` with `start {stateful}` / `stop {stateful, timeout}`, waiting on `/1.0/operations/<id>/wait`. The client checks every request against that list before sending it and refuses anything else (14). Background poll every 15 s keeps the VM state current (manual `incus start/stop` is noticed; a status other than Running or Stopped is `error`). Errors are typed: unreachable socket, API error (including a failed operation), timeout, forbidden call. Messages never include the socket path.
 
 ## State machine
 
@@ -30,7 +30,7 @@ REST over the unix socket `/var/lib/incus/unix.socket` (mounted), in `internal/i
 
 | Phase | Done when | On failure |
 |---|---|---|
-| `start` | Incus start operation completes (restore if `stateful`, else cold boot) | a failed **restore** retries once with `stateful: false` (a corrupt saved state must never lock the owner out); then error |
+| `start` | Incus start operation completes: `stateful: true` for an instance with saved memory (a restore), `stateful: false` otherwise (a cold boot). The request always says which: Incus restores only when asked, and a start that does not ask throws the saved memory away | a failed **restore** retries once with `stateful: false` (a corrupt saved state must never lock the owner out); then error |
 | `code` | `GET VM:code_port/healthz` → 200 | error after 180 s |
 | `hub` | `GET VM:hub_port/devbox/status` → 200 (authenticated, 14) | after 60 s: phase `skipped`, continue |
 | `sync` | `POST /devbox/wake {now, kind}` → `runId`; poll status until that run is `done` | after `gateway.sync_wait`: `skipped`, sync continues in the VM |

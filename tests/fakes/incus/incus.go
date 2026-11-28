@@ -55,6 +55,8 @@ type Server struct {
 type instance struct {
 	status   string
 	stateful bool
+	// discarded counts the starts that threw saved memory away.
+	discarded int
 }
 
 type operation struct {
@@ -114,7 +116,18 @@ func (s *Server) Resume() error {
 func (s *Server) SetInstance(name, status string, stateful bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.instances[name] = &instance{status, stateful}
+	s.instances[name] = &instance{status: status, stateful: stateful}
+}
+
+// Discarded returns how many times the saved memory of an instance was thrown away by a start
+// that did not ask for it to be restored.
+func (s *Server) Discarded(name string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if i := s.instances[name]; i != nil {
+		return i.discarded
+	}
+	return 0
 }
 
 // Instance returns an instance's status and whether it has saved memory.
@@ -285,7 +298,12 @@ func (s *Server) apply(i *instance, action string, body map[string]any) string {
 	stateful, hasStateful := body["stateful"].(bool)
 	switch action {
 	case "start":
-		restoring := i.stateful && (!hasStateful || stateful)
+		// As Incus does: saved memory is restored only when the start asks for it; any other
+		// start throws it away and boots.
+		restoring := i.stateful && hasStateful && stateful
+		if i.stateful && !restoring {
+			i.discarded++
+		}
 		switch {
 		case i.status == "Running":
 			return "The instance is already running"

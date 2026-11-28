@@ -191,7 +191,7 @@ func (g *Gateway) wakeSteps(ctx context.Context, w *wakeRun, note func(string)) 
 			g.update(func() { g.setRunning() })
 			return errSkipped
 		}
-		err := client.Start(ctx, false)
+		err := client.Start(ctx, w.kind == proto.WakeKindRestore)
 		if err != nil && w.kind == proto.WakeKindRestore && incus.IsKind(err, incus.API) {
 			// A broken saved state must never lock the owner out: boot fresh instead.
 			note(fmt.Sprintf("Restore failed (%v); booting fresh instead", err))
@@ -199,7 +199,7 @@ func (g *Gateway) wakeSteps(ctx context.Context, w *wakeRun, note func(string)) 
 				w.kind, w.fellBack = proto.WakeKindCold, true
 				w.eta = estimate(g.history, w.kind)
 			})
-			err = client.Start(ctx, true)
+			err = client.Start(ctx, false)
 		}
 		if err != nil {
 			return err
