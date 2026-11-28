@@ -174,14 +174,12 @@ fn the_installer_puts_everything_in_its_place_and_can_be_run_again() {
         vm.home(".config/devbox/AGENTS.md")
     );
     let sudoers = std::fs::read_to_string(vm.path("root/etc/sudoers.d/devbox")).unwrap();
-    assert_eq!(
-        sudoers,
-        "dev ALL=(root) NOPASSWD: /usr/local/sbin/devbox-set-clock\n"
-    );
+    assert_eq!(sudoers, "dev ALL=(root) NOPASSWD: /usr/local/sbin/devbox-set-clock\n");
     // The one program the user may run as root takes a number and nothing else.
     let set_clock = vm.path("root/usr/local/sbin/devbox-set-clock");
     assert_eq!(mode(&set_clock), 0o755);
-    let refused = std::process::Command::new("sh").arg(&set_clock).arg("1; reboot").output().unwrap();
+    let refused =
+        std::process::Command::new("sh").arg(&set_clock).arg("1; reboot").output().unwrap();
     assert_eq!(refused.status.code(), Some(2));
     assert_eq!(mode(&vm.path("root/etc/sudoers.d/devbox")), 0o440);
 

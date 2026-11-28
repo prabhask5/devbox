@@ -47,6 +47,10 @@ diagnose() {
     echo "== gateway health"; gateway "https://code.$domain/__devbox/health"
     echo "== incus list"; sudo incus list
     echo "== incus info"; sudo incus info devbox --show-log
+    echo "== qemu log"; sudo tail -n 60 /var/log/incus/devbox/qemu.log
+    echo "== incus log"; sudo journalctl -u incus --no-pager -n 60
+    echo "== console"; sudo timeout 20 incus console devbox --show-log | tail -n 120
+    echo "== host"; uname -a; grep -m1 'model name' /proc/cpuinfo; grep -o -w -m1 -E 'vmx|svm' /proc/cpuinfo; cat /sys/module/kvm_intel/parameters/nested /sys/module/kvm_amd/parameters/nested; sudo dmesg | grep -i -E 'kvm|hyper' | tail -n 30
     echo "== in the VM"
     echo "before the sleep: ${before:-}"
     sudo timeout 120 incus exec devbox -- sh -c 'cat /proc/sys/kernel/random/boot_id; uptime; date; df -h /; grep " / " /proc/mounts; ps aux | head -n 60; systemctl --failed --no-pager; systemctl status "code-server@dev" --no-pager -n 40; journalctl -b -p warning --no-pager -n 120; dmesg | tail -n 80'
