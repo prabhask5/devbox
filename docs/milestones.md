@@ -130,8 +130,8 @@ Specs: 18 (and the SSH rows in 01, 02, 09, 11, 12, 13, 14, 15)
 
 ## M11 — First real deployment (the author's homelab)
 Specs: 09 (adoption), 10, `reference/cestmoi.md`
-- [ ] Generic guide `docs/adopting-an-existing-vm.md` (with `example.com`): deploy the gateway, `devbox up --adopt …`, DNS for the agents and SSH hosts, Uptime Kuma monitor, phone setup, computer setup (`/setup`, replacing an older ProxyJump `Host devbox` entry), rollback with `devbox down`. Host-specific commands for cestmoi go in the PR description, not the repo
-- [ ] PR to the author's dotfiles repo restructuring it to the contract (spec 10): `devbox.toml`, `install.sh` (mise, Node/pnpm, Rust + wasm target), `bashrc`, `gitconfig`, `code-server/`, `agents/AGENTS.md`, `context/`; remove `bootstrap.sh`/`clone-all.sh` and everything devbox now does
+- [x] Generic guide `docs/adopting-an-existing-vm.md` (with `example.com`): deploy the gateway, `devbox up --adopt …`, DNS for the agents and SSH hosts, Uptime Kuma monitor, phone setup, computer setup (`/setup`, replacing an older ProxyJump `Host devbox` entry), rollback with `devbox down`. Host-specific commands for cestmoi go in the PR description, not the repo
+- [x] PR to the author's dotfiles repo restructuring it to the contract (spec 10): `devbox.toml`, `install.sh` (mise, Node/pnpm, Rust + wasm target), `bashrc`, `gitconfig`, `code-server/`, `agents/AGENTS.md`, `context/`; remove `bootstrap.sh`/`clone-all.sh` and everything devbox now does
 - [ ] Owner runs the cutover; a week of real use; issues found are fixed with regression tests
 - [ ] Cleanup pass; `scripts/check-hygiene.sh` green
 
