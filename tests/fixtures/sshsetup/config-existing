@@ -1,0 +1,17 @@
+# devbox-ssh-setup: include
+Include ~/.ssh/config.d/*
+# my servers
+Host *
+  ServerAliveInterval 60
+
+# devbox-ssh-setup: disabled begin devbox
+#- Host devbox
+#-   HostName 192.0.2.7
+#-   User old
+#-   # a comment inside
+#- 
+#-   ForwardAgent yes
+#- 
+# devbox-ssh-setup: disabled end devbox
+Host work devbox-old
+  HostName work.example.com

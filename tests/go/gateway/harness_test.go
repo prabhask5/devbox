@@ -52,6 +52,15 @@ var cheapHash = func() string {
 	return fmt.Sprintf("$argon2id$v=19$m=64,t=1,p=1$%s$%s", base64.RawStdEncoding.EncodeToString(salt), base64.RawStdEncoding.EncodeToString(hash))
 }()
 
+// appPass is the agents app's password, whose hash the host keeps too: pairing asks for it.
+const appPass = "FAKE-app-password"
+
+var cheapAppHash = func() string {
+	salt := []byte("FAKEsaltFAKEsalt")
+	hash := argon2.IDKey([]byte(appPass), salt, 1, 64, 1, 32)
+	return fmt.Sprintf("$argon2id$v=19$m=64,t=1,p=1$%s$%s", base64.RawStdEncoding.EncodeToString(salt), base64.RawStdEncoding.EncodeToString(hash))
+}()
+
 // fakeVM stands in for what runs inside the VM: code-server, the hub and sshd. Its services
 // answer only while the fake Incus says the instance is running, and only when switched on.
 type fakeVM struct {
@@ -238,12 +247,13 @@ func port(t *testing.T, address string) string {
 
 // harness is a gateway under test with everything around it faked.
 type harness struct {
-	t      *testing.T
-	incus  *incusfake.Server
-	vm     *fakeVM
-	gw     *gateway.Gateway
-	clock  *sys.FakeClock // nil when the gateway runs on the real clock
-	github string         // the GitHub API the gateway reads deployments from; "" is the real one
+	t         *testing.T
+	incus     *incusfake.Server
+	vm        *fakeVM
+	gw        *gateway.Gateway
+	clock     *sys.FakeClock // nil when the gateway runs on the real clock
+	github    string         // the GitHub API the gateway reads deployments from; "" is the real one
+	clientDir string         // the devbox-ssh builds the SSH host serves
 	// vmForgetsGateway leaves the gateway's key out of the VM, as before `devbox up` put it there.
 	vmForgetsGateway bool
 
@@ -326,7 +336,7 @@ func start(t *testing.T, options ...option) *harness {
 	for _, option := range options {
 		option(&s)
 	}
-	h := &harness{t: t, incus: incusfake.StartT(t), configDir: t.TempDir(), stateDir: t.TempDir(), logs: &syncBuffer{}}
+	h := &harness{t: t, incus: incusfake.StartT(t), configDir: t.TempDir(), stateDir: t.TempDir(), clientDir: t.TempDir(), logs: &syncBuffer{}}
 	h.incus.SetInstance("devbox", s.vmStatus, s.stateful)
 	h.vm = newFakeVM(t, h.incus)
 	h.vm.codeUp.Store(!s.codeDown)
@@ -367,8 +377,8 @@ func (h *harness) run(clock sys.Clock, timings gateway.Timings) {
 	h.base, h.sshAddr = "http://"+httpListener.Addr().String(), sshListener.Addr().String()
 	h.gw = gateway.New(gateway.Options{
 		ConfigDir: h.configDir, StateDir: h.stateDir, IncusSocket: h.incus.Socket(), Version: "test-commit",
-		GitHubAPI: h.github,
-		HTTP:      httpListener, SSH: sshListener, FS: sys.OS(), Clock: clock, Timings: timings,
+		GitHubAPI: h.github, SSHClientDir: h.clientDir,
+		HTTP: httpListener, SSH: sshListener, FS: sys.OS(), Clock: clock, Timings: timings,
 		Log: slog.New(slog.NewTextHandler(h.logs, nil)),
 	})
 	ctx, cancel := context.WithCancel(context.Background())
@@ -422,7 +432,7 @@ user = %q
 
 func (h *harness) writeSecrets(hash string, mode os.FileMode) {
 	h.t.Helper()
-	secrets := fmt.Sprintf("version = 1\nwake_password_hash = '%s'\ncookie_secret = %q\nhub_token = %q\n", hash, cookieKey, hubToken)
+	secrets := fmt.Sprintf("version = 1\nwake_password_hash = '%s'\ncookie_secret = %q\nhub_token = %q\napp_password_hash = '%s'\n", hash, cookieKey, hubToken, cheapAppHash)
 	h.writeFile(filepath.Join(h.configDir, "secrets.toml"), secrets, mode)
 }
 

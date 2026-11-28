@@ -51,6 +51,7 @@ Each job runs one stage of `scripts/ci.sh` (`scripts/ci.sh static`, `scripts/ci.
 | `static` | tests-location, secrets, hygiene, generated contracts up to date, docs links, gofmt/vet/golangci-lint/staticcheck/deadcode/govulncheck/`go mod tidy` diff, rustfmt/clippy (with `disallowed-methods` in the library crates)/cargo deny/cargo machete, prettier/eslint/tsc/knip/pnpm audit |
 | `go` | `go test -race ./...` |
 | `rust` | `cargo test --workspace` |
+| `ssh-client` | on a macOS runner: the client setup script under `/bin/sh` (`tests/go/sshsetup`), `devbox-ssh` and `internal/wsconn` (spec 18) |
 | `compat` | what moi needs of the library crates (spec 12): they build with moi's Rust, the `tests/compat/moi-consumer` scenarios, moi's `cargo deny` policy, no async runtime / HTTP crate / TLS stack, `cargo publish --dry-run` |
 | `web` | Vitest + builds + bundle budgets |
 | `integration` | real tmux + git + fakes (Go and Rust integration suites) |

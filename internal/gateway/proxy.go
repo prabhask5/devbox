@@ -104,6 +104,10 @@ func countsAsActivity(path string) bool {
 }
 
 func (g *Gateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
+	if strings.HasPrefix(r.URL.Path, "/__devbox/ssh/") {
+		g.serveSSHAPI(w, r)
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/__devbox/") {
 		g.serveDevbox(w, r)
 		return

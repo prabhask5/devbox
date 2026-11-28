@@ -1,0 +1,7 @@
+devbox.example.com carries SSH for a devbox.
+
+To connect from a Mac or a Linux computer, run on that computer:
+
+  curl -fsSL https://devbox.example.com/setup | sh
+
+and then: ssh devbox

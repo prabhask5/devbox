@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/http"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -17,9 +16,7 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/prabhask5/devbox/internal/httpx"
 	"github.com/prabhask5/devbox/internal/proto"
-	"github.com/prabhask5/devbox/internal/wsconn"
 )
 
 // The gateway's SSH server (spec 18). It answers SSH itself on the TCP listener and on the
@@ -826,21 +823,6 @@ func (s *sshSession) upstreamRequests(requests <-chan *ssh.Request) {
 			_ = request.Reply(ok && err == nil, answer)
 		}
 	}
-}
-
-// serveSSHHost answers a request for the SSH host: the SSH stream in a WebSocket.
-func (g *Gateway) serveSSHHost(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/" || !wsconn.IsUpgrade(r) || g.sshd == nil {
-		http.NotFound(w, r)
-		return
-	}
-	source := httpx.ClientAddress(r)
-	conn, err := wsconn.Accept(w, r)
-	if err != nil {
-		return
-	}
-	// The request's context ends with this function; the session ends with its connection.
-	g.sshd.serve(context.WithoutCancel(r.Context()), conn, source)
 }
 
 // sshLoop accepts connections on the TCP listener of the SSH server.

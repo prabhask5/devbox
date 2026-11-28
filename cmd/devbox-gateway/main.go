@@ -39,6 +39,7 @@ func run(args []string) int {
 	configDir := flags.String("config-dir", "/etc/devbox", "directory holding devbox.toml and secrets.toml")
 	stateDir := flags.String("state-dir", "/var/lib/devbox/gateway", "directory for wake history and other state")
 	incusSocket := flags.String("incus-socket", "/var/lib/incus/unix.socket", "the Incus unix socket")
+	sshClientDir := flags.String("ssh-client-dir", "/usr/share/devbox/ssh-client", "the devbox-ssh builds the setup script downloads, with their SHA256SUMS")
 	listen := flags.String("listen", "", "HTTP listen address (default: gateway.listen from the config, or :8080)")
 	sshListen := flags.String("ssh-listen", "", `SSH proxy listen address (default: gateway.ssh_listen from the config, or :2222); "off" turns it off`)
 	flags.Usage = func() {
@@ -74,7 +75,8 @@ func run(args []string) int {
 	options := gateway.Options{
 		ConfigDir: *configDir, StateDir: *stateDir, IncusSocket: *incusSocket, Version: buildVersion(),
 		GitHubAPI: os.Getenv("DEVBOX_GITHUB_API"), GitHubToken: os.Getenv("GITHUB_TOKEN"),
-		FS: sys.OS(), Clock: sys.SystemClock(), Timings: gateway.DefaultTimings(), Log: log,
+		SSHClientDir: *sshClientDir,
+		FS:           sys.OS(), Clock: sys.SystemClock(), Timings: gateway.DefaultTimings(), Log: log,
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()

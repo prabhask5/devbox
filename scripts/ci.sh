@@ -25,6 +25,11 @@ static() {
   step "docs links";             python3 scripts/check-links.py
   step "generated contracts";    web_install; scripts/check-generated.sh
 
+  # The setup script runs on other people's computers, under whatever /bin/sh they have.
+  step "shellcheck"
+  if command -v shellcheck >/dev/null; then shellcheck --shell=sh cmd/devbox-ssh/setup.sh
+  elif [[ -n ${CI:-} ]]; then echo "shellcheck is not installed"; return 1
+  else echo "shellcheck is not installed here: skipped (CI runs it)"; fi
   step "gofmt";         unformatted=$(gofmt -l .); [[ -z $unformatted ]] || { echo "$unformatted"; return 1; }
   step "go vet";        go vet ./...
   step "go mod tidy";   go mod tidy -diff
@@ -72,6 +77,15 @@ compat() {
   cargo_tool deny "$CARGO_DENY" --log-level error --manifest-path "$consumer/Cargo.toml" --config tests/compat/moi-deny.toml check licenses bans sources
   # moi takes the crates from crates.io: they must package and build from the package alone.
   step "cargo publish (dry run)"; scripts/publish-crates.sh --dry-run
+}
+
+# The SSH client side on a Mac (the `ssh-client` job): the setup script under macOS's /bin/sh
+# with its sed, awk and shasum, and the client against a tunnel.
+ssh_client() {
+  step "the setup script under /bin/sh"
+  SETUP_SHELLS=/bin/sh go test -count=1 ./tests/go/sshsetup
+  step "devbox-ssh"
+  go test -count=1 ./tests/go/sshclient ./tests/go/wsconn
 }
 
 web() {
@@ -149,12 +163,13 @@ budgets() {
 }
 
 stages=("$@")
-[[ ${#stages[@]} -gt 0 ]] || stages=(static go rust compat web integration e2e build budgets)
+[[ ${#stages[@]} -gt 0 ]] || stages=(static go rust compat web integration e2e build budgets) # ssh-client runs on a Mac
 for stage in "${stages[@]}"; do
   case $stage in
     static|rust|compat|web|integration|e2e|build|budgets) "$stage" ;;
     go) go_ ;;
-    *) echo "unknown stage: $stage (static go rust compat web integration e2e build budgets)"; exit 2 ;;
+    ssh-client) ssh_client ;;
+    *) echo "unknown stage: $stage (static go rust compat ssh-client web integration e2e build budgets)"; exit 2 ;;
   esac
 done
 printf '\n\033[1;32mall green\033[0m\n'

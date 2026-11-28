@@ -1,0 +1,4 @@
+ok=1
+user=dev
+host=devbox.example.com
+host_key=ssh-ed25519 AAAA…the gateway's host key
