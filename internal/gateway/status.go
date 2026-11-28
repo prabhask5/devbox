@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/prabhask5/devbox/internal/proto"
 )
@@ -65,7 +66,9 @@ func (g *Gateway) health() proto.GatewayHealth {
 		add(loaded.problem)
 	}
 	if s := loaded.settings; s != nil {
-		stale := 4 * g.t.Poll
+		// A few polls without an answer, and never less than a second: a machine that is busy
+		// for a moment is not an Incus that is gone.
+		stale := max(4*g.t.Poll, time.Second)
 		if now.Sub(g.incusOKAt) > stale {
 			if g.incusErr != "" {
 				add("Incus API unreachable: " + g.incusErr)

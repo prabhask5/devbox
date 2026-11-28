@@ -716,35 +716,57 @@ func (s *sshSession) pipe(client ssh.Channel, clientRequests <-chan *ssh.Request
 	if count {
 		toVM = counted{to: vm, g: s.g}
 	}
-	var fromVM sync.WaitGroup
-	fromVM.Add(3)
+	// The VM answers a request before it sends what follows from it (the exit status of a
+	// command that is over at once, the close): the client must get them in that order too.
+	// So an answer that is on its way to the client is waited for before anything else of the
+	// VM's is sent after it.
+	var order sync.Mutex
+	// Both streams of a direction end before its end is passed on: the library's channel
+	// does not take a write and the end of writing at the same time.
+	var fromVM, vmOutput, clientOutput sync.WaitGroup
+	fromVM.Add(2)
+	vmOutput.Add(2)
+	clientOutput.Add(2)
 	go func() {
-		defer fromVM.Done()
+		defer vmOutput.Done()
 		_, _ = io.Copy(client, vm)
-		_ = client.CloseWrite()
 	}()
 	go func() {
-		defer fromVM.Done()
+		defer vmOutput.Done()
 		_, _ = io.Copy(client.Stderr(), vm.Stderr())
 	}()
 	go func() {
 		defer fromVM.Done()
+		vmOutput.Wait()
+		_ = client.CloseWrite()
+	}()
+	go func() {
+		defer fromVM.Done()
 		for request := range vmRequests {
+			order.Lock()
 			forward(client, request) // the exit status comes this way, before the close
+			order.Unlock()
 		}
+	}()
+	go func() {
+		defer clientOutput.Done()
+		_, _ = io.Copy(toVM, client)
+	}()
+	go func() {
+		defer clientOutput.Done()
+		_, _ = io.Copy(vm.Stderr(), client.Stderr())
 	}()
 	sent := make(chan struct{})
 	go func() {
-		_, _ = io.Copy(toVM, client)
+		clientOutput.Wait()
 		_ = vm.CloseWrite()
 		close(sent)
 	}()
 	go func() {
-		_, _ = io.Copy(vm.Stderr(), client.Stderr())
-	}()
-	go func() {
 		for request := range clientRequests {
+			order.Lock()
 			forward(vm, request)
+			order.Unlock()
 		}
 		// The client closed the channel: once what it sent is through, so is the VM's side.
 		<-sent
@@ -752,7 +774,9 @@ func (s *sshSession) pipe(client ssh.Channel, clientRequests <-chan *ssh.Request
 	}()
 	// The VM's side is over when its output has ended and its last request is through.
 	fromVM.Wait()
+	order.Lock()
 	_ = client.Close()
+	order.Unlock()
 }
 
 // clientRequests relays the client's connection-wide requests: port forwards and the like.

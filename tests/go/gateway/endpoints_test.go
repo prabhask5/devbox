@@ -100,7 +100,7 @@ func TestHealthReportsEveryProblem(t *testing.T) {
 		h.awake()
 		h.incus.Pause()
 		never(t, "a problem before the poll is stale", func() bool { return len(problems(h)) > 0 })
-		h.clock.Advance(time.Second) // more than four poll intervals of 25 ms
+		h.clock.Advance(2 * time.Second) // more than four poll intervals, and more than the second a busy machine is given
 		settled(h, "Incus API unreachable: incus: connect: no such file or directory")
 		if err := h.incus.Resume(); err != nil {
 			t.Fatal(err)
