@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -65,7 +66,22 @@ func (h *Hub) Status() proto.HubStatus {
 		Idle: h.idle, Sync: h.sync,
 	}
 	status.Sync.Results = append([]proto.SyncResult{}, h.sync.Results...)
+	status.Deploy = h.lastDeploy()
 	return status
+}
+
+// lastDeploy is what the updater wrote about the last update (`devbox-hub update`, a separate
+// program so that it can restart the hub); nil when there has been none.
+func (h *Hub) lastDeploy() *proto.DeployState {
+	data, err := os.ReadFile(filepath.Join(h.opt.StateDir, "deploy.json")) //nolint:gosec // the hub's own state directory
+	if err != nil {
+		return nil
+	}
+	var deploy proto.DeployState
+	if err := json.Unmarshal(data, &deploy); err != nil {
+		return nil
+	}
+	return &deploy
 }
 
 // startSync starts a repo sync unless one is running and returns the id of the run.
