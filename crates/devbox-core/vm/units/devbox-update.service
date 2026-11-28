@@ -1,0 +1,8 @@
+[Unit]
+Description=devbox: install the latest deployed build of the hub
+
+[Service]
+Type=oneshot
+# The build that is installed, not the one being replaced: the path is resolved when it starts.
+ExecStart=%h/.local/bin/devbox-hub update
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin

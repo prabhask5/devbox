@@ -16,13 +16,15 @@ use crate::{config, password};
 const BUNDLE: &str = "/var/lib/devbox-install";
 
 /// The files of the bundle that are the same for every VM: path in the bundle and content.
-const FILES: [(&str, &str); 9] = [
+const FILES: [(&str, &str); 11] = [
     ("install.sh", include_str!("../../vm/install.sh")),
     ("dotfiles.sh", include_str!("../../vm/dotfiles.sh")),
     ("units/devbox-tmux.service", include_str!("../../vm/units/devbox-tmux.service")),
     ("units/devbox-hub.service", include_str!("../../vm/units/devbox-hub.service")),
     ("units/devbox-context.service", include_str!("../../vm/units/devbox-context.service")),
     ("units/devbox-context.timer", include_str!("../../vm/units/devbox-context.timer")),
+    ("units/devbox-update.service", include_str!("../../vm/units/devbox-update.service")),
+    ("units/devbox-update.timer", include_str!("../../vm/units/devbox-update.timer")),
     ("code-server/settings.json", include_str!("../../vm/code-server/settings.json")),
     ("agents/AGENTS.md", include_str!("../../vm/agents/AGENTS.md")),
     ("cloud-init.yaml.tmpl", CLOUD_INIT),

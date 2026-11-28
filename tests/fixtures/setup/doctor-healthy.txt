@@ -15,6 +15,7 @@
   ✓ The agents hub runs — active
   ✓ The tmux server for agent sessions runs — active
   ✓ The developer context is refreshed on a timer — active
+  ✓ New builds of the hub are looked for on a timer — active
   ✓ claude is installed — yes
   ✓ claude reports to the hub — yes
   ✓ codex is installed — yes

@@ -39,6 +39,7 @@ type Timings struct {
 	StopFailedFor time.Duration // a failed sleep is a health problem this long
 	SettleFor     time.Duration // a running VM has this long before unanswered services are a problem
 	OverIdleBy    time.Duration // staying awake this long past the idle limit is a problem
+	DeployPoll    time.Duration // between looks for a build of the hub that waits for a sleeping VM
 }
 
 // DefaultTimings are the production values.
@@ -61,6 +62,7 @@ func DefaultTimings() Timings {
 		StopFailedFor: time.Hour,
 		SettleFor:     3 * time.Minute,
 		OverIdleBy:    10 * time.Minute,
+		DeployPoll:    5 * time.Minute,
 	}
 }
 
@@ -70,6 +72,8 @@ type Options struct {
 	StateDir    string // holds wake history, the last stop and traffic counts
 	IncusSocket string // the Incus unix socket
 	Version     string // commit the binary was built from
+	GitHubAPI   string // the GitHub API deployments are read from; "" is api.github.com
+	GitHubToken string // for a private repository's deployments; "" asks without one
 
 	HTTP net.Listener // serves the proxy and /__devbox/*
 	SSH  net.Listener // serves the SSH proxy; nil turns it off
@@ -188,6 +192,9 @@ func New(opt Options) *Gateway {
 func (g *Gateway) Run(ctx context.Context) error {
 	var background sync.WaitGroup
 	loops := []func(context.Context){g.pollLoop, g.configLoop, g.minuteLoop}
+	if g.t.DeployPoll > 0 {
+		loops = append(loops, g.deployLoop)
+	}
 	if g.opt.SSH != nil {
 		loops = append(loops, g.sshLoop)
 	}

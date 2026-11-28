@@ -102,7 +102,7 @@ build() {
   for arch in $archs; do
     for cmd in devbox-gateway devbox-hub; do
       step "go build $cmd linux/$arch"
-      CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath -ldflags "-s -w -X main.version=$(git rev-parse --short HEAD)" \
+      CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath -ldflags "-s -w -X main.version=${DEVBOX_VERSION:-$(git rev-parse --short HEAD)}" \
         -o "bin/$cmd-linux-$arch" "./cmd/$cmd"
     done
   done

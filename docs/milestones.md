@@ -109,11 +109,11 @@ Specs: 09, 10, 12
 
 ## M9 — Hub continuous deployment
 Specs: 11 (hub part)
-- [ ] `deploy-hub.yml`: path filter, after CI success, build + release + attestations + GitHub Deployment (`agents-hub`), prune
-- [ ] `devbox-hub update` + `devbox-update.{service,timer}`: poll, verify (checksums + attestation), install, selftest, switch, restart, health, rollback, statuses; asleep → queued; optional wake-to-deploy in the gateway
-- [ ] Fake GitHub API tests for every path; e2e scenario 6
-- [ ] App shows deployed version and "Updated — tap to reload"
-- [ ] Cleanup pass; `scripts/check-hygiene.sh` green
+- [x] `deploy-hub.yml`: path filter, after CI success, build + release + attestations + GitHub Deployment (`agents-hub`), prune
+- [x] `devbox-hub update` + `devbox-update.{service,timer}`: poll, verify (checksums + attestation), install, selftest, switch, restart, health, rollback, statuses; asleep → queued; optional wake-to-deploy in the gateway
+- [x] Fake GitHub API tests for every path; e2e scenario 6
+- [x] App shows deployed version and "Updated — tap to reload"
+- [x] Cleanup pass; `scripts/check-hygiene.sh` green
 
 ## M10 — SSH from anywhere
 Specs: 18 (and the SSH rows in 01, 02, 09, 11, 12, 13, 14, 15)
@@ -124,7 +124,7 @@ Specs: 18 (and the SSH rows in 01, 02, 09, 11, 12, 13, 14, 15)
 - [ ] `cmd/devbox-ssh`: `proxy` (headers, pings, error messages, exit 255) and `version`; size budget
 - [ ] `cmd/devbox-ssh/setup.sh`: `add`/`remove`/`status` per the client contract; tests under dash and bash, plus the macOS `ssh-client` CI job (part of `required`)
 - [ ] `devbox up`: `--ssh-host`, SSH route, upstream key into the VM (`from=`), `vm.ssh_host_key`, `--ssh-keys` seeding; `down` undoes; `devbox ssh keys|status`; `connect` prints the setup command; doctor checks; contracts (`hosts.ssh`, `vm.ssh_host_key`, `gateway-ssh-keys-used`)
-- [ ] Gateway image ships the four compressed client builds; `release-ssh-client.yml` (tags `ssh-v*`: binaries, setup script, `SHA256SUMS`, attestations); after this milestone merges, the owner tags `ssh-v0.1.0`, which moi's `moi ssh connect` points at
+- [ ] Gateway image ships the four compressed client builds (Dokploy watch paths and `docs/deploy-gateway.md` gain `cmd/devbox-ssh/**` and `internal/wsconn/**`); `release-ssh-client.yml` (tags `ssh-v*`: binaries, setup script, `SHA256SUMS`, attestations); after this milestone merges, the owner tags `ssh-v0.1.0`, which moi's `moi ssh connect` points at
 - [ ] e2e with the real OpenSSH client (shell, exec, scp, sftp, `-L`/`-R`/`-D`, agent forwarding, wake from asleep with the progress screen); SSH budgets (spec 13) added to `budgets.toml` and measured, `_mbps` minimums in `scripts/budgets.sh`
 - [ ] Cleanup pass; `scripts/check-hygiene.sh` green
 

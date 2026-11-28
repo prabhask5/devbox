@@ -9,7 +9,7 @@ use devbox_core::system::Output;
 pub const HEALTH_OK: &str = r#"{"v":1,"status":"ok","problems":[],"vm":"running","phase":"idle","checkedAt":1790000000000}"#;
 
 /// What the checks inside a VM print when everything is as it should be.
-pub const VM_FINE: &str = "code_server=active\nhub=active\ntmux=active\ncontext_timer=active\nagent_claude=yes\nagent_codex=yes\nagent_opencode=yes\nhooks_claude=yes\nhooks_codex=yes\nhooks_opencode=yes\nsync=2026-09-21T14:00:00Z\ncontext=2026-09-21T12:00:00Z\ndotfiles=0 0\n";
+pub const VM_FINE: &str = "code_server=active\nhub=active\ntmux=active\ncontext_timer=active\nupdate_timer=active\nagent_claude=yes\nagent_codex=yes\nagent_opencode=yes\nhooks_claude=yes\nhooks_codex=yes\nhooks_opencode=yes\nsync=2026-09-21T14:00:00Z\ncontext=2026-09-21T12:00:00Z\ndotfiles=0 0\n";
 
 /// A program that succeeds and prints `text`.
 #[allow(clippy::unnecessary_wraps)] // the shape a program handler answers in
