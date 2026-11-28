@@ -1,0 +1,40 @@
+name: Release SSH client
+
+# Tags ssh-v* publish the SSH client on its own: the four devbox-ssh builds, the setup script
+# (devbox-ssh-setup.sh, with this release as where it downloads the client from) and
+# SHA256SUMS, with build provenance attestations (docs/spec/18-ssh.md). Other tools point at
+# these files by tag, so a release is never changed after it is made.
+
+on:
+  push:
+    tags: ["ssh-v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+        with: { go: true }
+      - name: The client and the setup script work
+        run: go test -count=1 ./tests/go/sshclient ./tests/go/sshsetup ./tests/go/wsconn
+      - name: Build
+        run: scripts/release-ssh-client.sh "$GITHUB_REF_NAME" dist
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/devbox-ssh-*.gz
+            dist/devbox-ssh-setup.sh
+      - name: Publish
+        run: gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --title "devbox-ssh ${GITHUB_REF_NAME#ssh-v}" --notes "The SSH client of devbox and its setup script (docs/spec/18-ssh.md). Set a computer up with the command your server prints; \`sh devbox-ssh-setup.sh\` without arguments says what it takes."
+        env:
+          GH_TOKEN: ${{ github.token }}
