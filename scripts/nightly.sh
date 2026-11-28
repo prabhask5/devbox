@@ -47,6 +47,9 @@ diagnose() {
     echo "== gateway health"; gateway "https://code.$domain/__devbox/health"
     echo "== incus list"; sudo incus list
     echo "== incus info"; sudo incus info devbox --show-log
+    echo "== in the VM"
+    echo "before the sleep: ${before:-}"
+    sudo timeout 120 incus exec devbox -- sh -c 'cat /proc/sys/kernel/random/boot_id; uptime; date; df -h /; grep " / " /proc/mounts; ps aux | head -n 60; systemctl --failed --no-pager; systemctl status "code-server@dev" --no-pager -n 40; journalctl -b -p warning --no-pager -n 120; dmesg | tail -n 80'
     echo "== gateway log"; docker logs --tail 200 devbox-gateway
     echo "== traefik log"; docker logs --tail 50 traefik
   } > "$out/diagnosis.txt" 2>&1
@@ -116,6 +119,7 @@ sudo DEVBOX_REAL_INCUS=/var/lib/incus/unix.socket DEVBOX_REAL_INSTANCE=devbox DE
 
 step "something running in the VM, to find again after the sleep"
 in_vm sudo -u dev -H tmux new-session -d -s nightly 'sleep 1000000'
+in_vm sync
 before=$(in_vm sh -c 'cat /proc/sys/kernel/random/boot_id; pgrep -f "sleep 1000000" | head -n 1')
 
 step "sign in and sleep, memory saved"

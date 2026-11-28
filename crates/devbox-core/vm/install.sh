@@ -118,11 +118,23 @@ for link in "$home/.codex/AGENTS.md" "$home/.config/opencode/AGENTS.md"; do
 done
 
 step "clock"
-# After a restore the VM's clock is behind; the hub sets it, and may do exactly that as root.
+# After a restore the VM's clock is behind; the hub sets it, and may do exactly that as root:
+# one program that takes a time in seconds and nothing else. (sudo allows a program, not a
+# pattern of arguments: newer versions refuse wildcards there.)
+set_clock=/usr/local/sbin/devbox-set-clock
+mkdir -p "${DEVBOX_ROOT:-}/usr/local/sbin"
+cat >"${DEVBOX_ROOT:-}$set_clock" <<'CLOCK'
+#!/bin/sh
+# Sets the clock to the given Unix time, for the devbox hub after the VM is restored.
+case "${1:-}" in '' | *[!0-9]*) echo "usage: devbox-set-clock <unix seconds>" >&2; exit 2 ;; esac
+date -s "@$1" >/dev/null || exit 1
+systemctl restart systemd-timesyncd 2>/dev/null || true
+CLOCK
+chmod 755 "${DEVBOX_ROOT:-}$set_clock"
 sudoers=${DEVBOX_ROOT:-}/etc/sudoers.d/devbox
 rm -f "$sudoers"
 cat >"$sudoers" <<SUDO
-$DEVBOX_USER ALL=(root) NOPASSWD: /usr/bin/date -s @*, /usr/bin/systemctl restart systemd-timesyncd
+$DEVBOX_USER ALL=(root) NOPASSWD: $set_clock
 SUDO
 chmod 440 "$sudoers"
 
