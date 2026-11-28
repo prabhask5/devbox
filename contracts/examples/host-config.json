@@ -4,13 +4,15 @@
   "domain": "example.com",
   "hosts": {
     "code": "code.example.com",
-    "agents": "agents.example.com"
+    "agents": "agents.example.com",
+    "ssh": "devbox.example.com"
   },
   "vm": {
     "address": "10.77.0.10",
     "code_port": 8080,
     "hub_port": 8090,
-    "ssh_port": 22
+    "ssh_port": 22,
+    "ssh_host_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKE"
   },
   "sleep": {
     "idle": "15m",

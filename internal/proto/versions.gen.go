@@ -4,21 +4,22 @@ package proto
 
 // Versions of the contracts this build reads and writes.
 const (
-	AgentEventVersion       = 1
-	DotfilesManifestVersion = 1
-	GatewayEventVersion     = 1
-	GatewayHealthVersion    = 1
-	GatewayStatusVersion    = 1
-	HostConfigVersion       = 1
-	HostSecretsVersion      = 1
-	HubConfigVersion        = 1
-	HubSecretsVersion       = 1
-	HubStateVersion         = 1
-	HubStatusVersion        = 1
-	HubWakeResponseVersion  = 1
-	HubWakeVersion          = 1
-	PushPayloadVersion      = 1
-	ScreenFrameVersion      = 1
-	SessionVersion          = 1
-	SyncProgressVersion     = 1
+	AgentEventVersion         = 1
+	DotfilesManifestVersion   = 1
+	GatewayEventVersion       = 1
+	GatewayHealthVersion      = 1
+	GatewaySshKeysUsedVersion = 1
+	GatewayStatusVersion      = 1
+	HostConfigVersion         = 1
+	HostSecretsVersion        = 1
+	HubConfigVersion          = 1
+	HubSecretsVersion         = 1
+	HubStateVersion           = 1
+	HubStatusVersion          = 1
+	HubWakeResponseVersion    = 1
+	HubWakeVersion            = 1
+	PushPayloadVersion        = 1
+	ScreenFrameVersion        = 1
+	SessionVersion            = 1
+	SyncProgressVersion       = 1
 )

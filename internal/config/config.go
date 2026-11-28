@@ -30,15 +30,21 @@ func Host(name string, data []byte) (cfg *proto.HostConfig, warnings []string, e
 	return parse[proto.HostConfig](name, data, "HostConfig", proto.HostConfigVersion, func(file map[string]any) []schema.Problem {
 		hosts, _ := file["hosts"].(map[string]any)
 		domain, _ := file["domain"].(string)
-		for _, app := range []string{"code", "agents"} {
+		for app, label := range map[string]string{"code": "code", "agents": "agents", "ssh": "devbox"} {
 			if _, set := hosts[app]; !set {
-				hosts[app] = app + "." + domain
+				hosts[app] = label + "." + domain
 			}
 		}
+		var problems []schema.Problem
 		if hosts["code"] == hosts["agents"] {
-			return []schema.Problem{{Path: "hosts.agents", Message: "must differ from hosts.code"}}
+			problems = append(problems, schema.Problem{Path: "hosts.agents", Message: "must differ from hosts.code"})
 		}
-		return nil
+		for _, other := range []string{"code", "agents"} {
+			if hosts["ssh"] == hosts[other] {
+				problems = append(problems, schema.Problem{Path: "hosts.ssh", Message: "must differ from hosts." + other})
+			}
+		}
+		return problems
 	})
 }
 

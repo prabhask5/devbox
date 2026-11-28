@@ -34,6 +34,11 @@ fn contract(name: &str, example: &str) -> Option<(&'static str, i64, Value)> {
             versions::GATEWAY_HEALTH_VERSION,
             reencode::<proto::GatewayHealth>(example),
         ),
+        "gateway-ssh-keys-used" => (
+            "GatewaySshKeysUsed",
+            versions::GATEWAY_SSH_KEYS_USED_VERSION,
+            reencode::<proto::GatewaySshKeysUsed>(example),
+        ),
         "gateway-status" => (
             "GatewayStatus",
             versions::GATEWAY_STATUS_VERSION,

@@ -40,6 +40,11 @@
           "description": "Agents app hostname. Default: `agents.<domain>`.",
           "type": "string",
           "format": "hostname"
+        },
+        "ssh": {
+          "description": "SSH hostname (SSH over WebSocket, the setup script and pairing). Default: `devbox.<domain>`.",
+          "type": "string",
+          "format": "hostname"
         }
       },
       "default": {}
@@ -76,6 +81,11 @@
           "format": "uint16",
           "minimum": 1,
           "default": 22
+        },
+        "ssh_host_key": {
+          "description": "The VM's SSH host key, as one `ssh-ed25519 AAAA…` line, recorded by `devbox up`. The gateway connects to no other. Absent until `devbox up` has run.",
+          "type": "string",
+          "format": "devbox-nonempty"
         }
       }
     },

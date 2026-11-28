@@ -13,7 +13,8 @@
   },
   "hosts": {
     "agents": "agents.example.com",
-    "code": "code.example.com"
+    "code": "code.example.com",
+    "ssh": "devbox.example.com"
   },
   "instance": "devbox",
   "provision": {

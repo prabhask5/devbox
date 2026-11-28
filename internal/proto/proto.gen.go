@@ -651,6 +651,40 @@ func (j *GatewayPhase) UnmarshalJSON(value []byte) error {
 	return nil
 }
 
+// When each paired SSH key was last used, kept by the gateway in its state
+// directory (`ssh/keys-used.json`) and read by `devbox ssh keys`.
+type GatewaySSHKeysUsed struct {
+	// Last use (Unix time, ms) by key fingerprint (`SHA256:…`).
+	Keys GatewaySSHKeysUsedKeys `json:"keys"`
+
+	// Contract version of this message.
+	V int `json:"v"`
+}
+
+// Last use (Unix time, ms) by key fingerprint (`SHA256:…`).
+type GatewaySSHKeysUsedKeys map[string]int
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *GatewaySSHKeysUsed) UnmarshalJSON(value []byte) error {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(value, &raw); err != nil {
+		return err
+	}
+	if _, ok := raw["keys"]; raw != nil && !ok {
+		return fmt.Errorf("field keys in GatewaySSHKeysUsed: required")
+	}
+	if _, ok := raw["v"]; raw != nil && !ok {
+		return fmt.Errorf("field v in GatewaySSHKeysUsed: required")
+	}
+	type Plain GatewaySSHKeysUsed
+	var plain Plain
+	if err := json.Unmarshal(value, &plain); err != nil {
+		return err
+	}
+	*j = GatewaySSHKeysUsed(plain)
+	return nil
+}
+
 // State of the gateway and the VM, served at /__devbox/status and pushed over
 // /__devbox/events.
 type GatewayStatus struct {
@@ -877,6 +911,10 @@ type HostConfigHosts struct {
 
 	// Editor hostname. Default: `code.<domain>`.
 	Code *string `json:"code,omitempty,omitzero"`
+
+	// SSH hostname (SSH over WebSocket, the setup script and pairing). Default:
+	// `devbox.<domain>`.
+	SSH *string `json:"ssh,omitempty,omitzero"`
 }
 
 // How `devbox up` built the VM, so that it can build it again without being asked
@@ -1095,6 +1133,10 @@ type HostConfigVM struct {
 
 	// Hub port.
 	HubPort int `json:"hub_port"`
+
+	// The VM's SSH host key, as one `ssh-ed25519 AAAA…` line, recorded by `devbox
+	// up`. The gateway connects to no other. Absent until `devbox up` has run.
+	SSHHostKey *string `json:"ssh_host_key,omitempty,omitzero"`
 
 	// sshd port.
 	SSHPort int `json:"ssh_port"`
