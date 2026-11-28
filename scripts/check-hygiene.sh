@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Repo hygiene: no implementation leftovers, no development artifacts (docs/spec/17-public-readiness.md).
 #   scripts/check-hygiene.sh            normal mode: every PR during development
-#   scripts/check-hygiene.sh --release  release mode: the artifact-free end state (CI default from M12, release tags)
+#   scripts/check-hygiene.sh --release  release mode: the artifact-free end state (CI default from M13, release tags)
 # HYGIENE_DENYLIST (release mode, CI secret): personal identifiers, one per line or comma-separated, that must not
 # appear outside LICENSE, CHANGELOG.md and repository URLs. The list is a secret so it is never committed.
 set -euo pipefail

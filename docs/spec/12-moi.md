@@ -9,7 +9,7 @@ Why not one repository: devbox is Go + Rust + TypeScript with its own continuous
 | | `devbox` (this repo) | `moi devbox` (moi repo) |
 |---|---|---|
 | Who uses it | anyone with Incus + Docker | servers managed by moi |
-| Commands | `up`, `down`, `status`, `doctor`, `connect`, `password` (host); `sync`, `context` (VM) | `up`, `down`, `status`, `doctor`, `connect`, `password` — the host commands only |
+| Commands | `up`, `down`, `status`, `doctor`, `connect`, `password`, `ssh keys\|status` (host); `sync`, `context` (VM) | `up`, `down`, `status`, `doctor`, `connect`, `password`, `ssh keys\|status` — the host commands only |
 | Implementation | `devbox-cli` over `devbox-core` | moi's `devbox` module over the same `devbox-core` |
 | Output | human + `--json` | **byte-identical** to `devbox` for the same inputs (both call the same renderers) |
 | System access | `devbox_core::system::Host` (the real machine) | moi's `host::Host` through an adapter in moi |

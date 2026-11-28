@@ -4,8 +4,9 @@
 
 ```
 client ─► Cloudflare/Traefik ─► gateway :8080 ─┬─ Host = hosts.agents → VM:hub_port   (hub)
+                                                ├─ Host = hosts.ssh    → gateway SSH server → VM:22   (spec 18)
                                                 └─ any other Host     → VM:code_port  (code-server)
-ssh ─► tunnel ─► gateway :2222 ─► VM:22
+local / own tunnel ─► gateway :2222 ─► gateway SSH server ─► VM:22
 ```
 
 ## Configuration and lifecycle
@@ -41,7 +42,7 @@ REST over the unix socket `/var/lib/incus/unix.socket` (mounted), in `internal/i
 
 ## Routing a request
 
-`/__devbox/*` is always served by the gateway, never proxied. Otherwise:
+`/__devbox/*` is always served by the gateway, never proxied. Requests for `hosts.ssh` are never proxied either: that host serves the SSH WebSocket, the setup script, the client downloads and pairing (spec 18). Otherwise:
 
 1. Page load (`GET` + `Accept: text/html`) and the target is not ready, or a wake is in progress and the request has no skip cookie for this wake → serve the boot screen (03) with HTTP 200. If the client holds a valid wake cookie, request a wake (idempotent: joins the running one).
 2. Other request and target not ready → `503` with `gateway-status` JSON plus `authed` (so the hub app can show its own asleep state). **Such a request never wakes the VM**, signed in or not: the app's background fetches must not, and its Wake button calls `POST /__devbox/wake`.
@@ -74,7 +75,7 @@ sleep  ⇐  min(gatewayIdle, hubIdle) ≥ sleep.idle  ∧  uptime ≥ sleep.min_
 
 ## SSH
 
-TCP listener on `gateway.ssh_listen`. On connect: leave the client's bytes unread, request a wake if needed, wait (≤ 180 s) until sshd on the VM sends an `SSH-` banner (an accepting port is not proof), then open a fresh connection to sshd and splice both sockets (`io.Copy` both ways, counting client bytes). Either side closing ends the other; putting the VM to sleep and stopping the gateway close every SSH and WebSocket connection. Putting the VM to sleep also ends every proxied request still being answered — the hub's event streams above all — so an open app learns at once that the devbox is asleep instead of waiting on a silent connection.
+The gateway runs its own SSH server (spec 18) on the WebSocket of `hosts.ssh` and on the TCP listener `gateway.ssh_listen`. A connection is authenticated by the gateway first; **only an authenticated connection requests a wake**. The gateway then waits (≤ 180 s) until sshd on the VM sends an `SSH-` banner (an accepting port is not proof), opens its own SSH connection to the VM and relays the session, showing the wake's progress in the terminal while it waits. Client bytes count as activity. Putting the VM to sleep and stopping the gateway close every SSH and WebSocket connection. Putting the VM to sleep also ends every proxied request still being answered — the hub's event streams above all — so an open app learns at once that the devbox is asleep instead of waiting on a silent connection.
 
 ## Authentication for waking
 
@@ -82,7 +83,7 @@ TCP listener on `gateway.ssh_listen`. On connect: leave the client's bytes unrea
 - Rate limit: 6 attempts/min per client address (`CF-Connecting-IP`, else the first `X-Forwarded-For`, else the peer), and after 50 wrong passwords within an hour every login is refused for 30 minutes (14).
 - `POST /__devbox/wake`, `/sleep` and `/skip` accept only `Content-Type: application/json` (415 otherwise), which another site cannot send without a preflight. They answer `{"ok": true}` (202 for wake and sleep, 200 for skip); `sleep` answers 409 unless the VM is running and idle. Errors are `{"error": "<message>"}`; these small answers carry no `v`.
 - Only a valid wake cookie may wake the VM (page loads, `POST /__devbox/wake`, `POST /__devbox/sleep`). The cookie grants nothing else: code-server's and the hub's own authentication still apply.
-- SSH connections may wake the VM without the cookie (SSH reaches the gateway only through the owner's tunnel, which has its own authentication).
+- SSH connections may wake the VM without the cookie once the gateway's SSH server has authenticated them with a paired key (spec 18).
 
 ## Endpoints
 
@@ -112,6 +113,8 @@ Computed from state; never touches the VM. HTTP 200 with `status: ok`, or 503 wi
 | `last sleep failed: <error>` | a stop failed in the last hour and none succeeded since |
 | `VM is up but code-server is not responding` | VM running ≥ 3 min, `phase = idle`, no answer for > 4 poll intervals |
 | `VM is up but the agents hub is not responding` | same, for the hub |
+| `the VM rejected the gateway's SSH key` | an upstream SSH login was refused in the last 30 min and none succeeded since (spec 18) |
+| `the VM's SSH host key changed` | the VM's host key differs from `vm.ssh_host_key` (spec 18) |
 | `VM stayed awake long past the idle limit` | VM running ≥ 3 min, idle more than `sleep.idle + 10m`, mode ≠ off |
 
 Asleep is healthy. The strings are stable (tests match them exactly); Uptime Kuma's "Devbox" HTTP monitor points here.

@@ -21,5 +21,6 @@ Read [CLAUDE.md](../../CLAUDE.md) first. Each file states behaviour and ends wit
 | 15 | [Testing](15-testing.md) | fakes, layers, the end-to-end harness, CI jobs |
 | 16 | [Design](16-design.md) | the approved UI (prototype screenshots), tokens, components |
 | 17 | [Public readiness](17-public-readiness.md) | the artifact-free end state, what goes when, enforcement |
+| 18 | [SSH from anywhere](18-ssh.md) | SSH over WebSocket, the gateway's SSH server and boot-aware terminal, `devbox-ssh` and the one-command client setup |
 
 The working prototype these specs were derived from is in [`reference/prototype/`](../../reference/prototype/) (Node + bash, tested against mocks). cestmoi's current setup is described in [`reference/cestmoi.md`](../../reference/cestmoi.md).

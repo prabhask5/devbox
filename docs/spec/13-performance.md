@@ -12,7 +12,11 @@ The budgets are for Linux, where devbox runs, and are enforced there (CI). On an
 | Gateway throughput, proxied 1 KB GET | ≥ 20k req/s | 4 cores, loopback |
 | Gateway WebSocket echo added latency p99 | 1 ms | same |
 | Gateway idle RSS / CPU | 20 MB / 0.1 % | the real binary for 60 s with nobody using it, polling a fake Incus and a fake VM (one run) |
-| Gateway image size | 15 MB | `docker image inspect` |
+| Gateway image size | 25 MB | `docker image inspect` (includes the four compressed `devbox-ssh` builds, spec 18) |
+| Gateway SSH relay added keystroke round trip p99 | 1 ms | `tests/perf/gateway`: OpenSSH-style client → gateway SSH server → fake VM sshd vs. client → fake sshd |
+| Gateway SSH relay bulk throughput | ≥ 100 MB/s | same, 1 GiB through one channel |
+| Gateway SSH: awake VM, accept → relaying | 5 ms | same, excluding the two SSH handshakes |
+| `devbox-ssh` size / RSS while proxying | 6 MB / 15 MB | darwin/arm64 build; RSS during the throughput run |
 | Wake overhead beyond Incus + VM | 300 ms | fake Incus with instant start: request → ready, minus fake delays |
 | Hook relay wall time p50 / p99 | 5 ms / 15 ms | `devbox-hub event` invoked 200 times against a running hub |
 | Hub idle RSS / CPU (10 sessions, no viewers) | 30 MB / 0.3 % | 10-minute run with real tmux |

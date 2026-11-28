@@ -14,12 +14,12 @@ A fork works the same way with its own repo, Dokploy app and environments (`depl
 The owner creates one Dokploy **Compose** application (documented step by step in `docs/deploy-gateway.md`, with screenshots):
 
 - Provider: GitHub, repository `<owner>/devbox`, branch `main`, compose path `deploy/gateway/compose.yml`.
-- **Auto Deploy: on.** **Watch paths**: `cmd/devbox-gateway/**`, `internal/gateway/**`, `internal/incus/**`, `internal/proto/**`, `internal/config/**`, `internal/schema/**`, `internal/secret/**`, `internal/password/**`, `internal/sys/**`, `internal/httpx/**`, `web/gateway-ui/**`, `web/shared/**`, `deploy/gateway/**`, `go.mod`, `go.sum`. Pushes elsewhere do not redeploy the gateway.
+- **Auto Deploy: on.** **Watch paths**: `cmd/devbox-gateway/**`, `cmd/devbox-ssh/**`, `internal/wsconn/**`, `internal/gateway/**`, `internal/incus/**`, `internal/proto/**`, `internal/config/**`, `internal/schema/**`, `internal/secret/**`, `internal/password/**`, `internal/sys/**`, `internal/httpx/**`, `web/gateway-ui/**`, `web/shared/**`, `deploy/gateway/**`, `go.mod`, `go.sum`. Pushes elsewhere do not redeploy the gateway.
 - **No domains** (routing is written by `devbox up`, spec 09) and **no preview deployments**.
 
 `deploy/gateway/compose.yml` builds `deploy/gateway/Dockerfile` with the repository root as context, names the container `devbox-gateway`, restarts it unless stopped, mounts `/etc/devbox` (read-only), `/var/lib/devbox/gateway` and `/var/lib/incus/unix.socket`, adds the group that owns the Incus socket (`DEVBOX_INCUS_GID`), publishes the SSH proxy on the host's loopback (`127.0.0.1:2222`) and joins the external `dokploy-network`. It sets no domains and publishes no HTTP port.
 
-Dockerfile: two stages — build the Go binary (`CGO_ENABLED=0`, `-trimpath -ldflags "-s -w"`), final image `scratch` with only the binary and CA certificates, user `65532:65532`, and a `HEALTHCHECK` that runs `/devbox-gateway healthcheck`. The boot screen is a committed generated file (`internal/gateway/boot.gen.html`, 03), so the image build needs no Node. The builder image is pinned by digest. Image ≤ 15 MB. The binary reports its commit (`/__devbox/status.version`): Go records it from the checkout's `.git`, which is part of the build context (`deploy/gateway/Dockerfile.dockerignore` keeps `.git`, `go.mod`, `go.sum`, `cmd/` and `internal/` and nothing else); `--build-arg VERSION=…` overrides it.
+Dockerfile: two stages — build the Go binary (`CGO_ENABLED=0`, `-trimpath -ldflags "-s -w"`), final image `scratch` with only the binary and CA certificates, user `65532:65532`, and a `HEALTHCHECK` that runs `/devbox-gateway healthcheck`. The boot screen is a committed generated file (`internal/gateway/boot.gen.html`, 03), so the image build needs no Node. The build stage also builds `devbox-ssh` for `darwin`/`linux` × `amd64`/`arm64` from the same commit and puts them, gzip-compressed, with their `SHA256SUMS` in `/ssh-client/` of the image, where the gateway serves them (spec 18). The builder image is pinned by digest. Image ≤ 25 MB. The binary reports its commit (`/__devbox/status.version`): Go records it from the checkout's `.git`, which is part of the build context (`deploy/gateway/Dockerfile.dockerignore` keeps `.git`, `go.mod`, `go.sum`, `cmd/` and `internal/` and nothing else); `--build-arg VERSION=…` overrides it.
 
 `devbox-gateway healthcheck` succeeds when the gateway answers `/__devbox/health` at all and prints its status: a gateway that reports problems (no config yet, the VM in trouble) is running, and restarting it would not help. `scripts/check-image.sh` (CI `build` and `budgets` jobs) builds the image and checks its size, its user, that it becomes healthy without a config, the health answer, the commit and a clean exit on SIGTERM.
 
@@ -62,7 +62,17 @@ Tags `v*` run `release.yml`: all binaries for amd64/arm64 (gateway, hub, devbox)
 
 ## Acceptance
 
-- [x] `deploy/gateway/compose.yml` + Dockerfile build in CI; image ≤ 15 MB; container starts unconfigured and reports health `problem: not configured`; `healthcheck` subcommand works in `scratch`. (`scripts/check-image.sh`, `TestBinary`)
+- [x] `deploy/gateway/compose.yml` + Dockerfile build in CI; image ≤ 25 MB; container starts unconfigured and reports health `problem: not configured`; `healthcheck` subcommand works in `scratch`. (`scripts/check-image.sh`, `TestBinary`)
 - [x] `deploy-hub.yml`: path filter, waits for CI success, uploads the artifact + attestations and creates the deployment with the right payload, never touches Releases. The steps that decide and tell are `scripts/deploy-hub.sh`, tested against a fake GitHub API (`tests/go/scripts/deploy_hub_test.go`); the workflow around them runs for the first time on the first push to `main` after it merges.
 - [x] Updater against a fake GitHub API + fake systemd (`sys`) in `tests/go/update/update_test.go`, and with the real programs in `TestARunningHubUpdatesItselfAndGoesBackFromABrokenBuild`: no-op when current; checksum mismatch → failure status, nothing switched; selftest failure → failure; unhealthy new hub → rollback + failure; success → status with environment URL; asleep → stays queued; expired artifact (> 30 days asleep) → failure status explaining that a newer push or `devbox up` reinstalls.
 - [ ] Settled: Dokploy bind mounts and GitHub Deployments behaviour documented here with evidence (M3).
+
+## SSH client releases
+
+Tags `ssh-v*` run `release-ssh-client.yml`: it builds `devbox-ssh` for `darwin`/`linux` × `amd64`/`arm64` (static, `-trimpath -ldflags "-s -w"`), and attaches to a GitHub release:
+- the four binaries, gzip-compressed, as `devbox-ssh-<os>-<arch>.gz`;
+- `devbox-ssh-setup.sh`, with generic defaults and a client base pointing at the same release;
+- `SHA256SUMS`;
+- build provenance attestations.
+
+Like `crates-v*`, these tags are independent of `v*` releases, so moi can point at a stable client release (moi spec 16) before devbox 1.0. `v*` releases attach the same files.

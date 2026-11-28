@@ -21,7 +21,7 @@ Small pure-function unit tests may live next to the code (`*_test.go` in the sam
 
 - **Fake Incus** (`tests/fakes/incus`): speaks the subset of the Incus REST API devbox uses over a unix socket — instances, state, operations with configurable delays and failures (start fails, restore fails, stop fails, stop stateful fails, socket down), exec/file endpoints for provisioning. Request log for assertions. `tests/fixtures/incus/` holds the reference responses: what a real Incus 6.0 answered in the nightly run for the reads, the Incus 6.0 API definition for state changes and operations. The fake is tested to answer with the same shapes, and — like Incus — restores saved memory only when a start asks for it. The nightly real-VM run checks the client against a real Incus.
 - **WebSocket echo** (`tests/fakes/wsecho`): a minimal RFC 6455 endpoint and frame codec, so tests push real frames through the gateway without a WebSocket library.
-- **Fake VM**: lightweight servers standing in for code-server (`/healthz`, pages, WebSocket echo), sshd (banner after a delay), and either a fake hub or the **real hub** binary.
+- **Fake VM**: lightweight servers standing in for code-server (`/healthz`, pages, WebSocket echo), sshd (an SSH server built on `golang.org/x/crypto/ssh`, with its banner after a delay, a shell, exec, sftp, forwards and agent forwarding, spec 18), and either a fake hub or the **real hub** binary.
 - **Fake GitHub**: repos list, deployments + statuses, releases + assets, attestations (or a stub verifier), rate-limit headers.
 - **Fake push service** (`tests/fakes/push`): a push service and a browser in one. It creates subscriptions, accepts RFC 8291 messages, validates the VAPID token (signature, audience, expiry, subject), decrypts with the subscription's private key, and can answer 410.
 - **Fake agents** (`tests/fakes/agents/agent.sh`, put on `PATH` as `claude`, `codex` and `opencode`): they print a little of the agent's screen and emit its hook payloads (`tests/fixtures/hooks/payloads/`) through the real relay, driven by lines typed into their terminal (a prompt, `tool`, `ask` and then an answer key, `stop`, `error`, `quit`, `crash`).
@@ -34,7 +34,7 @@ One command (`scripts/e2e.sh`) starts: fake Incus → real gateway (with config 
 2. Agents app: sign in, start a fake Claude session, permission prompt → push delivered (fake service decrypts it) after the delay → tap the notification URL → Yes → session continues → Stop → finished push.
 3. Idle: no traffic, hub idle → gateway sleeps the VM (fake Incus records a stateful stop) → hub request → asleep JSON → wake from the app.
 4. Busy agent prevents sleep; needs_input doesn't.
-5. SSH through the gateway wakes the VM.
+5. SSH through the gateway wakes the VM: the real OpenSSH client with `ProxyCommand devbox-ssh proxy` against the editor's TLS front's SSH host, showing the wake in a pty and then a shell on the fake VM.
 6. Hub deploy: fake GitHub deployment → updater installs a newer build → status success; broken build → rollback + failure. Run with the real `devbox-hub` (two builds, one that does not start), a real tmux and a stand-in for systemd: `TestARunningHubUpdatesItselfAndGoesBackFromABrokenBuild`.
 7. Gateway health transitions as faults are injected (Incus down, hub down, wake failure).
 
@@ -54,6 +54,7 @@ Each job runs one stage of `scripts/ci.sh` (`scripts/ci.sh static`, `scripts/ci.
 | `compat` | what moi needs of the library crates (spec 12): they build with moi's Rust, the `tests/compat/moi-consumer` scenarios, moi's `cargo deny` policy, no async runtime / HTTP crate / TLS stack, `cargo publish --dry-run` |
 | `web` | Vitest + builds + bundle budgets |
 | `integration` | real tmux + git + fakes (Go and Rust integration suites) |
+| `ssh-client` | macOS runner: the setup script under `/bin/sh` against a fake gateway and a fake `$HOME`, and the darwin `devbox-ssh` build proxying to a local gateway (spec 18) |
 | `e2e` | the harness scenarios with Playwright (WebKit iPhone + Chromium) |
 | `build` | gateway image, hub/devbox static binaries (amd64 + arm64, one native runner per architecture; `devbox` is built for the musl targets) |
 | `budgets` | spec 13 |

@@ -44,6 +44,7 @@ So that all three generators produce the same shapes, the schemas keep to a comm
 | `session` | hub → app/CLI | one session (05); carries `v` wherever it appears |
 | `screen-frame` | hub → app (SSE) | `{v, text?, cols?, rows?, reason?}`; no `text` means there is no screen, and `reason` (`external`, `gone`) says why |
 | `sync-progress` | `devbox sync --json` → hub | NDJSON lines `{v, type, …}`: `start{total}`, `begin{name}`, `repo{name,status,detail}`, `done` |
+| `gateway-ssh-keys-used` | gateway state `ssh/keys-used.json` → `devbox ssh keys` | `{v, keys: {<SHA256 fingerprint>: <last use, Unix ms>}}` (spec 18) |
 | `push-payload` | hub → service worker | `{v, title, body, url, tag, badge}` |
 | `host-config` | `/etc/devbox/devbox.toml` | written by `devbox up`, read by CLI + gateway |
 | `host-secrets` | `/etc/devbox/secrets.toml` | wake password hash, cookie secret, hub token; optionally `app_password_hash`, the host's copy of the app password's hash for a VM that is built again (the gateway does not read it) |
@@ -63,7 +64,7 @@ The validator is devbox's own (`internal/schema`, `devbox_core::schema`): it cov
 
 1. TOML syntax errors are reported as `<file>: line <n>: <message>`; date and time values are rejected (no contract uses them).
 2. A `version` other than the one this build reads is the only error reported: `devbox.toml: version 2 is not supported (this devbox reads version 1); update devbox` (or `…; update the file to version 1` for an older file).
-3. Every schema problem is reported. Then defaults are applied, computed defaults filled in (`hosts.code`, `hosts.agents`) and rules across keys checked (`hosts.agents: must differ from hosts.code`).
+3. Every schema problem is reported. Then defaults are applied, computed defaults filled in (`hosts.code`, `hosts.agents`, `hosts.ssh`) and rules across keys checked (`hosts.agents: must differ from hosts.code`; the three hosts must all differ).
 4. **Unknown keys are warnings, not errors** (`devbox.toml: sleap: unknown key, ignored`): the gateway, the hub and the CLI update independently, so a file written by a newer one must still load.
 
 `hub.toml` holds `listen`, `[hosts] code/agents` (required), `[tmux] socket` and `[deploy] repo/environment`; `hub.secrets.toml` holds `app_password_hash`, `cookie_secret`, `hub_token` and, optionally, `vapid_public_key`, `vapid_private_key` and `github_token`.
@@ -75,13 +76,15 @@ version = 1
 instance = "devbox"                 # Incus instance name
 domain = "example.com"
 [hosts]
-code = "code.example.com"           # defaults: code.<domain>, agents.<domain>
+code = "code.example.com"           # defaults: code.<domain>, agents.<domain>, devbox.<domain>
 agents = "agents.example.com"
+ssh = "devbox.example.com"          # SSH over WebSocket (spec 18)
 [vm]
 address = "10.77.0.10"              # static address on the Incus bridge (required, like version and domain)
 code_port = 8080
 hub_port = 8090
 ssh_port = 22
+ssh_host_key = "ssh-ed25519 AAAA…"  # the VM's SSH host key, recorded by `devbox up`; the gateway pins it (spec 18)
 [sleep]
 idle = "15m"
 min_up = "5m"
@@ -89,7 +92,7 @@ mode = "stateful"                   # stateful | shutdown | off
 activity_bytes_per_min = 4096
 [gateway]
 listen = ":8080"
-ssh_listen = ":2222"                # "" disables SSH proxying
+ssh_listen = ":2222"                # the gateway's SSH server on TCP (spec 18); "" turns the TCP listener off
 sync_wait = "90s"
 [routing]
 provider = "traefik-file"           # traefik-file | none
