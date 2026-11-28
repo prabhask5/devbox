@@ -202,7 +202,11 @@ impl Inside<'_> {
 /// The last lines of what a script printed, for an error message.
 fn tail(output: &ExecOutput) -> String {
     let all = format!("{}{}", output.stdout, output.stderr);
-    let lines: Vec<&str> = all.lines().filter(|line| !line.trim().is_empty()).collect();
+    // Without the progress bars of downloads, which would be all there is to see.
+    let lines: Vec<&str> = all
+        .lines()
+        .filter(|line| !line.trim().is_empty() && !line.trim_start().starts_with('#'))
+        .collect();
     lines[lines.len().saturating_sub(12)..].join("\n")
 }
 

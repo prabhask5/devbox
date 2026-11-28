@@ -17,6 +17,19 @@ uid=$(id -u "$DEVBOX_USER")
 as_user() {
   sudo -u "$DEVBOX_USER" -H env "XDG_RUNTIME_DIR=/run/user/$uid" "PATH=$home/.local/bin:/usr/local/bin:/usr/bin:/bin" "$@"
 }
+# The bundle is root's alone (it holds secrets), so the user cannot read it: its files are
+# read by root and written by the user. give -m <mode> <file...> <target file or directory>
+give() {
+  local mode=$2 target file; shift 2
+  target=${@: -1}
+  for file in "${@:1:$#-1}"; do
+    if [ -d "$target" ]; then
+      as_user install -m "$mode" /dev/stdin "${target%/}/$(basename "$file")" <"$file"
+    else
+      as_user install -m "$mode" /dev/stdin "$target" <"$file"
+    fi
+  done
+}
 step() { echo "== $*"; }
 
 step "packages"
@@ -40,7 +53,7 @@ CONFIG
 chmod 600 "$config"
 for file in settings.json keybindings.json; do
   target=$home/.local/share/code-server/User/$file
-  [ -e "$target" ] || [ ! -f "$bundle/code-server/$file" ] || as_user install -m 644 "$bundle/code-server/$file" "$target"
+  [ -e "$target" ] || [ ! -f "$bundle/code-server/$file" ] || give -m 644 "$bundle/code-server/$file" "$target"
 done
 systemctl enable --now "code-server@$DEVBOX_USER" >/dev/null 2>&1
 systemctl restart "code-server@$DEVBOX_USER"
@@ -62,7 +75,7 @@ step "devbox $RELEASE"
 releases=$home/.local/lib/devbox/releases
 as_user mkdir -p "$releases/$RELEASE" "$home/.local/bin" "$home/.config/devbox" "$home/.local/state/devbox" "$home/code"
 if [ -d "$bundle/bin" ]; then
-  as_user install -m 755 "$bundle/bin/devbox-hub" "$bundle/bin/devbox" "$releases/$RELEASE/"
+  give -m 755 "$bundle/bin/devbox-hub" "$bundle/bin/devbox" "$releases/$RELEASE/"
 elif [ ! -x "$releases/$RELEASE/devbox-hub" ]; then
   arch=$(dpkg --print-architecture)
   url=https://github.com/$REPO/releases/download/$RELEASE/devbox-vm-linux-$arch.tar.gz
@@ -85,17 +98,17 @@ AGENT
 chmod 755 "$home/.local/bin/agent"
 
 step "hub configuration"
-as_user install -m 644 "$bundle/hub.toml" "$home/.config/devbox/hub.toml"
+give -m 644 "$bundle/hub.toml" "$home/.config/devbox/hub.toml"
 secrets=$home/.config/devbox/hub.secrets.toml
 # The hub adds its web push keys to this file on its first start; they are the devices' subscriptions.
 kept=$(grep -E '^(# Web push keys|vapid_(public|private)_key = )' "$secrets" 2>/dev/null || true)
-as_user install -m 600 "$bundle/hub.secrets.toml" "$secrets"
+give -m 600 "$bundle/hub.secrets.toml" "$secrets"
 [ -z "$kept" ] || printf '\n%s\n' "$kept" >>"$secrets"
 rm -f "$bundle/hub.secrets.toml"
 
 step "agent hooks and instructions"
 as_user "$home/.local/bin/devbox-hub" hooks install
-as_user install -m 644 "$bundle/agents/AGENTS.md" "$home/.config/devbox/AGENTS.md"
+give -m 644 "$bundle/agents/AGENTS.md" "$home/.config/devbox/AGENTS.md"
 as_user mkdir -p "$home/.claude" "$home/.codex" "$home/.config/opencode"
 [ -e "$home/.claude/CLAUDE.md" ] || as_user sh -c "printf '@~/.config/devbox/AGENTS.md\n' > '$home/.claude/CLAUDE.md'"
 for link in "$home/.codex/AGENTS.md" "$home/.config/opencode/AGENTS.md"; do
@@ -125,7 +138,7 @@ for _ in 1 2 3 4 5 6 7 8 9 10; do
   sleep 1
 done
 as_user mkdir -p "$home/.config/systemd/user"
-as_user install -m 644 "$bundle"/units/* "$home/.config/systemd/user/"
+give -m 644 "$bundle"/units/* "$home/.config/systemd/user/"
 as_user systemctl --user daemon-reload
 as_user systemctl --user enable --now devbox-tmux.service devbox-hub.service devbox-context.timer >/dev/null 2>&1
 as_user systemctl --user restart devbox-hub.service
