@@ -290,6 +290,26 @@ fn undo(system: &dyn System, options: &DownOptions) -> Result<Vec<String>, Setup
         .iter()
         .map(|(_, manifest)| &manifest["instance"])
         .find(|instance| instance.is_object());
+    // A VM that stays no longer lets the gateway in. (The gateway's keys and the computers
+    // paired with it stay in its state directory: a later `up` brings SSH back as it was.)
+    let record = super::vm::remembered(system, paths);
+    let config = super::existing_config(system, paths).unwrap_or(Value::Null);
+    let leaves = saved.is_some_and(|saved| saved["created"] == true) && destroy;
+    if let (Some(user), Some(name), true, false) = (
+        super::vm_user(&config, &record),
+        config["instance"].as_str().or(record["instance"].as_str()),
+        record["ssh"]["upstream"].is_string(),
+        leaves,
+    ) {
+        let incus = Incus::new(system, &paths.incus_socket);
+        if !real {
+            done.push(format!("take the gateway's SSH key out of {name}"));
+        } else if super::vm::distrust(&incus, name, &user)? {
+            done.push(format!("took the gateway's SSH key out of {name}"));
+        } else {
+            done.push(format!("{name} is not running: the gateway's SSH key stays in it, where it lets nobody in without the gateway"));
+        }
+    }
     if let Some(saved) = saved {
         let incus = Incus::new(system, &paths.incus_socket);
         let name = saved["name"].as_str().unwrap_or_default();

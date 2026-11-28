@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -31,6 +32,8 @@ const exitProxy = 255
 const usage = "usage: devbox-ssh proxy <https-url> [--header 'Name: value']...\n       devbox-ssh version\n"
 
 func main() {
+	// A proxy holds nothing but the bytes in flight: the collector keeps it that small.
+	debug.SetMemoryLimit(8 << 20)
 	t := timings{dial: 30 * time.Second, ping: 20 * time.Second}
 	// For tests of the pings, which cannot wait 20 seconds for one.
 	if every, err := time.ParseDuration(os.Getenv("DEVBOX_SSH_PING")); err == nil && every > 0 {

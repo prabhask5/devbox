@@ -1,4 +1,4 @@
-# Written by `devbox up`: the editor and the agents app, through the devbox gateway.
+# Written by `devbox up`: the editor, the agents app and SSH, through the devbox gateway.
 http:
   routers:
     devbox-code:
@@ -9,6 +9,12 @@ http:
       tls: {}
     devbox-agents:
       rule: Host(`agents.example.com`)
+      entryPoints:
+        - websecure
+      service: devbox-gateway
+      tls: {}
+    devbox-ssh:
+      rule: Host(`devbox.example.com`)
       entryPoints:
         - websecure
       service: devbox-gateway

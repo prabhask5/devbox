@@ -19,6 +19,16 @@ if [[ ${1:-} == --measure ]]; then
   mkdir -p target/budgets
   echo "gateway_image_mb = $mb" >>target/budgets/measured.toml
 fi
+# The SSH client builds the gateway hands out are in it, each with its checksums.
+shipped=$(docker create "$image")
+client=$(docker cp "$shipped:/usr/share/devbox/ssh-client/SHA256SUMS" - | tar -xO)
+docker rm "$shipped" >/dev/null
+for platform in darwin-amd64 darwin-arm64 linux-amd64 linux-arm64; do
+  for name in "devbox-ssh-$platform" "devbox-ssh-$platform.gz"; do
+    grep -q "  $name\$" <<<"$client" || fail "the image's SHA256SUMS does not list $name"
+  done
+done
+
 user=$(docker image inspect "$image" --format '{{.Config.User}}')
 [[ $user == 65532:65532 ]] || fail "the image runs as '$user', not 65532:65532"
 

@@ -410,3 +410,87 @@ pub(crate) fn dotfiles(
     }
     remember(system, paths, |record| record["dotfiles"] = json!(url))
 }
+
+/// The script that lets one key in for a user, replacing an older line of the gateway's, and
+/// prints the VM's SSH host key.
+const TRUST: &str = r#"set -e
+u="$1"; h=$(getent passwd "$u" | cut -d: -f6); [ -n "$h" ]
+mkdir -p "$h/.ssh"; touch "$h/.ssh/authorized_keys"
+{ grep -v ' devbox-gateway$' "$h/.ssh/authorized_keys" || true; [ -z "$2" ] || printf '%s\n' "$2"; } >"$h/.ssh/authorized_keys.devbox"
+mv "$h/.ssh/authorized_keys.devbox" "$h/.ssh/authorized_keys"
+chown -R "$u:" "$h/.ssh"; chmod 700 "$h/.ssh"; chmod 600 "$h/.ssh/authorized_keys"
+cat /etc/ssh/ssh_host_ed25519_key.pub
+"#;
+
+/// Lets the gateway's SSH key into the VM, from one address only, and remembers the VM's SSH
+/// host key, which the gateway will connect to and to no other.
+pub(crate) fn trust(
+    system: &dyn System,
+    paths: &Paths,
+    incus: &Incus,
+    desired: &Desired,
+    key: &str,
+    from: &str,
+) -> Result<(), SetupError> {
+    let inside = Inside { incus, instance: &desired.instance };
+    inside.ready(system)?;
+    let line = format!("from=\"{from}\",no-X11-forwarding {key} devbox-gateway");
+    let ran =
+        inside.root(&["sh", "-c", TRUST, "sh", &desired.user, &line], Duration::from_secs(60))?;
+    let host_key: Vec<&str> = ran.stdout.split_whitespace().take(2).collect();
+    if ran.code != 0 || host_key.len() != 2 || !host_key[0].starts_with("ssh-") {
+        return fail(format!(
+            "the gateway's SSH key could not be put into the VM, or the VM has no SSH host key to read:\n{}\nIs an SSH server installed in the VM? `devbox up` installs one into a VM it creates; in a VM you brought, install openssh-server and run this again.",
+            tail(&ran)
+        ));
+    }
+    remember(system, paths, |record| {
+        record["ssh"]["upstream"] = json!(key);
+        record["ssh"]["from"] = json!(from);
+        record["ssh"]["host_key"] = json!(host_key.join(" "));
+    })
+}
+
+/// Takes the gateway's key out of the VM again; `false` when the VM is not running to be asked.
+pub(crate) fn distrust(incus: &Incus, instance: &str, user: &str) -> Result<bool, SetupError> {
+    if incus.instance(instance)?.is_none_or(|found| found.status != "Running") {
+        return Ok(false);
+    }
+    let inside = Inside { incus, instance };
+    let ran = inside.root(&["sh", "-c", TRUST, "sh", user, ""], Duration::from_secs(60))?;
+    Ok(ran.code == 0)
+}
+
+/// The host config with the VM's SSH host key in it, once it is known.
+pub(crate) fn with_host_key(system: &dyn System, paths: &Paths, content: &[u8]) -> Vec<u8> {
+    let text = String::from_utf8_lossy(content);
+    let record = remembered(system, paths);
+    let Some(key) = record["ssh"]["host_key"].as_str() else { return content.to_vec() };
+    if text.contains("\nssh_host_key = ") {
+        return content.to_vec();
+    }
+    // The keys of a section are in alphabetical order: this one goes before ssh_port.
+    text.replacen("\nssh_port = ", &format!("\nssh_host_key = {key:?}\nssh_port = "), 1)
+        .into_bytes()
+}
+
+/// Lets the owner's own keys in through the gateway's SSH server, and remembers that it did.
+/// The file is the gateway's: it keeps its owner and stays private.
+pub(crate) fn seed(system: &dyn System, paths: &Paths, lines: &[String]) -> Result<(), SetupError> {
+    let path = paths.gateway_ssh().join("authorized_keys");
+    let failed = |err: std::io::Error| SetupError(format!("{}: {err}", path.display()));
+    let mut text = read(system, &path).unwrap_or_default();
+    if !text.is_empty() && !text.ends_with('\n') {
+        text.push('\n');
+    }
+    for line in lines {
+        text.push_str(line);
+        text.push('\n');
+    }
+    let owner = system.metadata(&path).map(|meta| (meta.uid, meta.gid)).ok();
+    system.write(&path, text.as_bytes(), 0o600).map_err(failed)?;
+    if let Some((uid, gid)) = owner {
+        system.set_owner(&path, uid, gid).map_err(failed)?;
+    }
+    remember(system, paths, |record| record["ssh"]["seeded"] = json!(true))
+}

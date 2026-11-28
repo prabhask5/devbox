@@ -34,7 +34,7 @@ One command (`scripts/e2e.sh`) starts: fake Incus → real gateway (with config 
 2. Agents app: sign in, start a fake Claude session, permission prompt → push delivered (fake service decrypts it) after the delay → tap the notification URL → Yes → session continues → Stop → finished push.
 3. Idle: no traffic, hub idle → gateway sleeps the VM (fake Incus records a stateful stop) → hub request → asleep JSON → wake from the app.
 4. Busy agent prevents sleep; needs_input doesn't.
-5. SSH through the gateway wakes the VM: the real OpenSSH client with `ProxyCommand devbox-ssh proxy` against the editor's TLS front's SSH host, showing the wake in a pty and then a shell on the fake VM.
+5. SSH through the gateway wakes the VM: the real OpenSSH client with `ProxyCommand devbox-ssh proxy` against the SSH host behind a TLS front, showing the wake in a pty and then a shell on the fake VM. It runs with the Go tests (`tests/go/gateway/openssh_test.go`), which have the fake sshd, not in Playwright.
 6. Hub deploy: fake GitHub deployment → updater installs a newer build → status success; broken build → rollback + failure. Run with the real `devbox-hub` (two builds, one that does not start), a real tmux and a stand-in for systemd: `TestARunningHubUpdatesItselfAndGoesBackFromABrokenBuild`.
 7. Gateway health transitions as faults are injected (Incus down, hub down, wake failure).
 

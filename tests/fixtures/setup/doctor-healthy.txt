@@ -7,9 +7,11 @@
   ✓ There is room on disk for its memory — size.state = 6GiB for 5GiB of memory
   · The firewall lets the gateway reach the VM — no firewall manager is used here: the rule is left to you
   ✓ The gateway container runs — devbox-gateway: running
-  ✓ Both hosts are routed to the gateway — /etc/dokploy/traefik/dynamic/devbox.yml
+  ✓ The three hosts are routed to the gateway — /etc/dokploy/traefik/dynamic/devbox.yml
   ✓ code.example.com resolves — 203.0.113.7
   ✓ agents.example.com resolves — 203.0.113.7
+  ✓ devbox.example.com resolves — 203.0.113.7
+  ✓ SSH is answered through the public host — https://devbox.example.com
   ✓ The gateway is healthy, asked through the public host — ok
   ✓ code-server runs — active
   ✓ The agents hub runs — active
@@ -22,6 +24,8 @@
   ✓ codex reports to the hub — yes
   ✓ opencode is installed — yes
   ✓ opencode reports to the hub — yes
+  ✓ The VM lets the gateway's SSH key in — from the bridge only
+  ✓ The VM's SSH host key is the one the gateway connects to — recorded in the host config
   ✓ The repositories have been synced — 2026-09-21T14:00:00Z
   ✓ The developer context has been written — 2026-09-21T12:00:00Z
   ✓ The dotfiles are committed and pushed — 0 uncommitted file(s), 0 unpushed commit(s)

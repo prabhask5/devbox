@@ -118,14 +118,9 @@ pub fn existing_router(yaml: &str, host: &str) -> Option<RouterSettings> {
 
 /// The Traefik dynamic file that routes both hosts to the gateway.
 #[must_use]
-pub fn traefik_routes(
-    code_host: &str,
-    agents_host: &str,
-    service_url: &str,
-    settings: &RouterSettings,
-) -> String {
-    let mut out = "# Written by `devbox up`: the editor and the agents app, through the devbox gateway.\nhttp:\n  routers:\n".to_owned();
-    for (name, host) in [("devbox-code", code_host), ("devbox-agents", agents_host)] {
+pub fn traefik_routes(hosts: [&str; 3], service_url: &str, settings: &RouterSettings) -> String {
+    let mut out = "# Written by `devbox up`: the editor, the agents app and SSH, through the devbox gateway.\nhttp:\n  routers:\n".to_owned();
+    for (name, host) in ["devbox-code", "devbox-agents", "devbox-ssh"].into_iter().zip(hosts) {
         let _ = writeln!(out, "    {name}:\n      rule: Host(`{host}`)\n      entryPoints:");
         for entry_point in &settings.entry_points {
             let _ = writeln!(out, "        - {entry_point}");
@@ -303,17 +298,15 @@ mod tests {
         };
         assert_eq!(
             traefik_routes(
-                "code.example.com",
-                "agents.example.com",
+                ["code.example.com", "agents.example.com", "devbox.example.com"],
                 "http://devbox-gateway:8080",
                 &simple
             ),
-            "# Written by `devbox up`: the editor and the agents app, through the devbox gateway.\nhttp:\n  routers:\n    devbox-code:\n      rule: Host(`code.example.com`)\n      entryPoints:\n        - websecure\n      service: devbox-gateway\n      tls: {}\n    devbox-agents:\n      rule: Host(`agents.example.com`)\n      entryPoints:\n        - websecure\n      service: devbox-gateway\n      tls: {}\n  services:\n    devbox-gateway:\n      loadBalancer:\n        servers:\n          - url: http://devbox-gateway:8080\n"
+            "# Written by `devbox up`: the editor, the agents app and SSH, through the devbox gateway.\nhttp:\n  routers:\n    devbox-code:\n      rule: Host(`code.example.com`)\n      entryPoints:\n        - websecure\n      service: devbox-gateway\n      tls: {}\n    devbox-agents:\n      rule: Host(`agents.example.com`)\n      entryPoints:\n        - websecure\n      service: devbox-gateway\n      tls: {}\n    devbox-ssh:\n      rule: Host(`devbox.example.com`)\n      entryPoints:\n        - websecure\n      service: devbox-gateway\n      tls: {}\n  services:\n    devbox-gateway:\n      loadBalancer:\n        servers:\n          - url: http://devbox-gateway:8080\n"
         );
         let resolver = existing_router(BEFORE, "code.example.com").unwrap();
         let routes = traefik_routes(
-            "code.example.com",
-            "agents.example.com",
+            ["code.example.com", "agents.example.com", "devbox.example.com"],
             "http://devbox-gateway:8080",
             &resolver,
         );

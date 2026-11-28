@@ -1,0 +1,11 @@
+SSH — devbox.example.com
+
+  Route        routed to the gateway
+  Host key     SHA256:FAKEGATEWAYHOSTKEY
+  VM           lets the gateway's key in
+               its host key is recorded for the gateway
+  Paired       1 computer(s) (`devbox ssh keys`)
+
+To set up a computer (macOS or Linux):
+
+  curl -fsSL https://devbox.example.com/setup | sh

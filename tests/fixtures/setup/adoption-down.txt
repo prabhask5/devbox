@@ -3,4 +3,5 @@ removed /etc/devbox/devbox.toml
 restored /etc/dokploy/traefik/dynamic/devbox.yml
 restored /etc/host-firewall/rules4.txt
 ran systemctl restart host-firewall
+took the gateway's SSH key out of devbox
 restored the Incus configuration of devbox

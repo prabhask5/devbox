@@ -9,12 +9,14 @@
     ~ root disk size.state: (unset) → 6GiB (room for 5GiB of memory)
  4. Provision the VM
     + install as dev in devbox: base packages, code-server on :8080, claude, codex, opencode, devbox-hub and devbox (the latest release of prabhask5/devbox), their services, agent hooks, the hub's config and secrets
+    + let the gateway's SSH key into the VM, from 10.77.0.1 only, and record the VM's SSH host key
  5. Dotfiles
     + clone git@github.com:dev/dotfiles into ~/dotfiles (a checkout that is there is kept) and apply its devbox.toml: packages, shell, git, editor, agent instructions, install hook
  6. Host config
     + write /etc/devbox/devbox.toml: code.example.com → devbox (10.77.0.10)
+    + let 1 SSH key(s) of yours in through the gateway (/var/lib/devbox/gateway/ssh/authorized_keys)
  7. Routing
-    ~ replace /etc/dokploy/traefik/dynamic/devbox.yml: code.example.com and agents.example.com → http://devbox-gateway:8080 (what is there is saved for `devbox down`)
+    ~ replace /etc/dokploy/traefik/dynamic/devbox.yml: code.example.com, agents.example.com and devbox.example.com → http://devbox-gateway:8080 (what is there is saved for `devbox down`)
  8. Firewall
     + host-firewall: containers → 10.77.0.10 tcp 22,8080,8090 in /etc/host-firewall/rules4.txt, applied with `systemctl restart host-firewall`
  9. Monitor
@@ -22,4 +24,4 @@
 10. Verify
     ask https://code.example.com/__devbox/health through the public path, as a browser would
 
-6 changes.
+8 changes.

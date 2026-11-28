@@ -55,6 +55,11 @@ enum Command {
     },
     /// Print the URLs, an SSH config snippet and how to install the phone app
     Connect,
+    /// The computers that may log in over SSH, and how SSH stands
+    Ssh {
+        #[command(subcommand)]
+        command: SshCommand,
+    },
     /// Rotate a password
     Password {
         /// Which password to rotate
@@ -86,6 +91,41 @@ enum Command {
     },
 }
 
+#[derive(Subcommand)]
+enum SshCommand {
+    /// List the paired keys, add one or remove one
+    Keys {
+        #[command(subcommand)]
+        action: Option<KeysAction>,
+        /// Print it as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// The SSH host, its route, the gateway's host key and what sets a computer up
+    Status {
+        /// Print it as JSON
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum KeysAction {
+    /// Let a key in without pairing: a public key line, or a file that holds one
+    Add {
+        /// The key, or the file
+        key: String,
+        /// The computer's name [default: the key's comment]
+        #[arg(long)]
+        name: Option<String>,
+    },
+    /// Take a key away, by its name or its fingerprint
+    Remove {
+        /// The name or the fingerprint
+        which: String,
+    },
+}
+
 #[derive(Args)]
 struct UpArgs {
     /// The domain: the editor is at code.<domain>, the agents app at agents.<domain>
@@ -97,6 +137,9 @@ struct UpArgs {
     /// The agents app's host, when it is not agents.<domain>
     #[arg(long, value_name = "HOST")]
     agents_host: Option<String>,
+    /// The SSH host, when it is not devbox.<domain>
+    #[arg(long, value_name = "HOST")]
+    ssh_host: Option<String>,
     /// The Incus instance [default: devbox]
     #[arg(long, value_name = "NAME")]
     instance: Option<String>,
@@ -206,6 +249,7 @@ impl Command {
             Self::Status { .. } => "status",
             Self::Doctor { .. } => "doctor",
             Self::Connect => "connect",
+            Self::Ssh { .. } => "ssh",
             Self::Password { .. } => "password",
             Self::Sync { .. } => "sync",
             Self::Context { .. } => "context",
@@ -372,6 +416,7 @@ fn up_options(system: &dyn System, args: &UpArgs) -> UpOptions {
         domain: args.domain.clone(),
         code_host: args.code_host.clone(),
         agents_host: args.agents_host.clone(),
+        ssh_host: args.ssh_host.clone(),
         instance: args.instance.clone(),
         adopt: args.adopt,
         cpu: args.cpu,
@@ -522,6 +567,28 @@ fn maintain(
         Command::Doctor { json } => {
             let report = setup::doctor(system, &options);
             Ok((shown(&report, *json), if report.ok() { 0 } else { EXIT_UNHEALTHY }))
+        }
+        Command::Ssh { command } => {
+            let options = setup::ssh::SshOptions { paths: options.paths.clone() };
+            let failed = |error: setup::SetupError| error.to_string();
+            match command {
+                SshCommand::Keys { action: None, json } => setup::ssh::keys(system, &options)
+                    .map(|report| (shown(&report, *json), 0))
+                    .map_err(failed),
+                SshCommand::Keys { action: Some(KeysAction::Add { key, name }), json } => {
+                    setup::ssh::add_key(system, &options, key, name.as_deref())
+                        .map(|report| (shown(&report, *json), 0))
+                        .map_err(failed)
+                }
+                SshCommand::Keys { action: Some(KeysAction::Remove { which }), json } => {
+                    setup::ssh::remove_key(system, &options, which)
+                        .map(|report| (shown(&report, *json), 0))
+                        .map_err(failed)
+                }
+                SshCommand::Status { json } => setup::ssh::status(system, &options)
+                    .map(|report| (shown(&report, *json), 0))
+                    .map_err(failed),
+            }
         }
         Command::Connect => setup::connect(system, &options)
             .map(|report| (render::human(&report), 0))

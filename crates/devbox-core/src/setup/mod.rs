@@ -22,6 +22,7 @@ mod backup;
 pub mod files;
 mod inspect;
 mod rotate;
+pub mod ssh;
 mod steps;
 mod vm;
 
@@ -93,6 +94,12 @@ impl Paths {
         self.etc.join("secrets.toml")
     }
 
+    /// Where the gateway keeps its SSH keys and the keys it lets in.
+    #[must_use]
+    pub fn gateway_ssh(&self) -> PathBuf {
+        self.state.join("gateway/ssh")
+    }
+
     /// What `up` remembers about the VM it provisioned.
     #[must_use]
     pub fn provisioned(&self) -> PathBuf {
@@ -120,6 +127,8 @@ pub struct UpOptions {
     pub code_host: Option<String>,
     /// The agents app's host, when it is not `agents.<domain>`.
     pub agents_host: Option<String>,
+    /// The SSH host, when it is not `devbox.<domain>`.
+    pub ssh_host: Option<String>,
     /// The Incus instance.
     pub instance: Option<String>,
     /// Use an instance that exists already; it is never recreated.
@@ -214,6 +223,10 @@ fn fail<T>(message: impl Into<String>) -> Result<T, SetupError> {
 pub(crate) enum Action {
     /// Write a file, saving what was there.
     Write { path: PathBuf, content: Vec<u8>, mode: u32, owner: Option<(u32, u32)> },
+    /// Let the gateway's SSH key into the VM, from the bridge only, and read the VM's host key.
+    Trust { key: String, from: String },
+    /// Let the owner's own keys in through the gateway's SSH server, once.
+    Seed(Vec<String>),
     /// Have the firewall manager put the rule in force.
     Firewall(Rule),
     /// Create the instance.
@@ -262,6 +275,7 @@ pub(crate) struct Desired {
     pub instance: String,
     pub code_host: String,
     pub agents_host: String,
+    pub ssh_host: String,
     pub address: String,
     pub ports: [u16; 3],
     pub user: String,
@@ -301,6 +315,7 @@ impl Plan {
         ConnectReport {
             code_host: self.desired.code_host.clone(),
             agents_host: self.desired.agents_host.clone(),
+            ssh_host: self.desired.ssh_host.clone(),
             user: Some(self.desired.user.clone()),
         }
     }
@@ -470,8 +485,19 @@ fn apply(
             let done = match action {
                 Action::Write { path, content, mode, owner } => {
                     saved.file(path);
-                    write(system, path, content, *mode, *owner)
+                    // The VM's SSH host key is known once the VM has been asked for it, which
+                    // is after the plan was made: the config that is written has it.
+                    if *path == paths.config() {
+                        let content = vm::with_host_key(system, paths, content);
+                        write(system, path, &content, *mode, *owner)
+                    } else {
+                        write(system, path, content, *mode, *owner)
+                    }
                 }
+                Action::Trust { key, from } => {
+                    vm::trust(system, paths, &incus, &plan.desired, key, from)
+                }
+                Action::Seed(lines) => vm::seed(system, paths, lines),
                 Action::Firewall(rule) => {
                     let manager = &plan.desired.firewall;
                     // Remembered before it is done: `down` asks the manager to take it back.
@@ -630,6 +656,14 @@ pub(crate) fn secrets_file(
 /// The user in the VM: what the config's `[provision]` says, else what `up` remembers.
 pub(crate) fn vm_user(config: &Value, record: &Value) -> Option<String> {
     config["provision"]["user"].as_str().or(record["user"].as_str()).map(str::to_owned)
+}
+
+/// The machine's time, in seconds since 1970.
+pub(crate) fn now(system: &dyn System) -> i64 {
+    system
+        .now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |since| i64::try_from(since.as_secs()).unwrap_or(0))
 }
 
 /// The time as a name for a backup directory: `20260921T141320Z`.

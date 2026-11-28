@@ -292,10 +292,21 @@ fn desired(c: &Context, host: &Host) -> Result<Desired, SetupError> {
     };
     settings["domain"] = json!(domain);
     settings["instance"] = json!(instance);
+    let ssh_host = c
+        .options
+        .ssh_host
+        .clone()
+        .or_else(|| was(&["hosts", "ssh"]).filter(|_| same_domain))
+        .unwrap_or_else(|| format!("devbox.{domain}"));
     settings["hosts"] = json!({
         "code": host_name(&c.options.code_host, "code"),
         "agents": host_name(&c.options.agents_host, "agents"),
+        "ssh": ssh_host,
     });
+    // Recorded when the VM was last asked for it; the gateway connects to no other.
+    if let Some(key) = host.remembered["ssh"]["host_key"].as_str() {
+        settings["vm"]["ssh_host_key"] = json!(key);
+    }
     settings["vm"]["address"] = json!(address);
     if let Some(idle) = &c.options.idle {
         settings["sleep"]["idle"] = json!(idle);
@@ -321,6 +332,7 @@ fn desired(c: &Context, host: &Host) -> Result<Desired, SetupError> {
         instance,
         code_host: resolved["hosts"]["code"].as_str().unwrap_or_default().to_owned(),
         agents_host: resolved["hosts"]["agents"].as_str().unwrap_or_default().to_owned(),
+        ssh_host: resolved["hosts"]["ssh"].as_str().unwrap_or_default().to_owned(),
         address,
         ports: [port("code_port"), port("hub_port"), port("ssh_port")],
         user,
@@ -631,6 +643,8 @@ fn inside(
         step.act(line, Action::Provision(Box::new(provision)));
     }
 
+    trust(c, host, same_vm, &mut step)?;
+
     let mut dotfiles = Step::new(5, "Dotfiles");
     match dotfiles_url {
         None => dotfiles.say(
@@ -647,6 +661,86 @@ fn inside(
         ),
     }
     Ok((step, dotfiles))
+}
+
+/// The address the gateway's connections to the VM come from: the host's own on the VM's bridge.
+fn bridge_address(c: &Context, host: &Host) -> Result<Option<String>, SetupError> {
+    let devices = host.instance.as_ref().map_or(&host.profile, |found| &found.expanded_devices);
+    let nic = device_of(devices, is_nic).map(|(_, device)| device);
+    let Some(bridge) =
+        nic.and_then(|device| device.get("network").or_else(|| device.get("parent")))
+    else {
+        return Ok(None);
+    };
+    let address = c.incus.network(bridge)?.and_then(|config| config.get("ipv4.address").cloned());
+    Ok(address.map(|address| address.split('/').next().unwrap_or_default().to_owned()))
+}
+
+/// The second half of step 4: the VM lets the gateway's own SSH key in, from the bridge and
+/// nowhere else, and says which host key it has (spec 18).
+fn trust(c: &Context, host: &Host, same_vm: bool, step: &mut Step) -> Result<(), SetupError> {
+    let path = c.paths.gateway_ssh().join("upstream_ed25519_key.pub");
+    let Some(public) = read(c.system, &path) else {
+        step.say(format!(
+            "SSH: the gateway has not made its keys yet ({} is missing): redeploy the gateway from this version, then run devbox up again",
+            path.display()
+        ));
+        return Ok(());
+    };
+    let key: Vec<&str> = public.split_whitespace().take(2).collect();
+    let (key, Some(from)) = (key.join(" "), bridge_address(c, host)?) else {
+        step.say("SSH: the VM is on no bridge Incus manages, so the gateway's key is not restricted to one address: left to you");
+        return Ok(());
+    };
+    let known = &host.remembered["ssh"];
+    if same_vm
+        && known["upstream"] == json!(key)
+        && known["from"] == json!(from)
+        && known["host_key"].is_string()
+    {
+        step.say(format!("up to date: the VM lets the gateway's SSH key in, from {from} only"));
+    } else {
+        step.act(
+            format!("+ let the gateway's SSH key into the VM, from {from} only, and record the VM's SSH host key"),
+            Action::Trust { key, from },
+        );
+    }
+    Ok(())
+}
+
+/// The owner's own keys, let in through the gateway's SSH server the first time: the ones the
+/// VM's user gets (`--ssh-keys`, or the invoking user's). Later, keys are paired and removed
+/// with `devbox ssh keys`, and `up` does not bring a removed one back.
+fn seed(c: &Context, host: &Host, step: &mut Step) {
+    let path = c.paths.gateway_ssh().join("authorized_keys");
+    if host.remembered["ssh"]["seeded"] == json!(true) || !c.system.exists(&path) {
+        return;
+    }
+    let present = read(c.system, &path).unwrap_or_default();
+    let has = |key: &str| {
+        present
+            .lines()
+            .any(|line| line.split_whitespace().take(2).collect::<Vec<_>>().join(" ") == key)
+    };
+    let today = crate::time::date(super::now(c.system), 0);
+    let lines: Vec<String> = ssh_keys(c)
+        .unwrap_or_default()
+        .iter()
+        .map(|line| line.split_whitespace().take(2).collect::<Vec<_>>().join(" "))
+        .filter(|key| key.contains(' ') && !has(key))
+        .map(|key| format!("{key} devbox up paired {today}"))
+        .collect();
+    if lines.is_empty() {
+        return;
+    }
+    step.act(
+        format!(
+            "+ let {} SSH key(s) of yours in through the gateway ({})",
+            lines.len(),
+            path.display()
+        ),
+        Action::Seed(lines),
+    );
 }
 
 /// Plans writing one file, when it is not already what it should be. Returns whether it is.
@@ -679,8 +773,8 @@ fn routing(c: &Context, host: &Host, desired: &Desired) -> Step {
     let service_url = desired.config["routing"]["service_url"].as_str().unwrap_or_default();
     if host.routing == Routing::None {
         step.say(format!(
-            "left to you: route https://{} and https://{} to {service_url}",
-            desired.code_host, desired.agents_host
+            "left to you: route https://{}, https://{} and https://{} to {service_url}",
+            desired.code_host, desired.agents_host, desired.ssh_host
         ));
         return step;
     }
@@ -699,6 +793,7 @@ fn routing(c: &Context, host: &Host, desired: &Desired) -> Step {
     let found = candidates.iter().filter_map(|file| read(c.system, file)).find_map(|yaml| {
         files::existing_router(&yaml, &desired.code_host)
             .or_else(|| files::existing_router(&yaml, &desired.agents_host))
+            .or_else(|| files::existing_router(&yaml, &desired.ssh_host))
     });
     let entrypoint = desired.config["routing"]["entrypoint"].as_str().unwrap_or("websecure");
     let mut settings =
@@ -709,9 +804,15 @@ fn routing(c: &Context, host: &Host, desired: &Desired) -> Step {
     if settings.tls.is_empty() {
         settings.tls = vec!["{}".to_owned()];
     }
-    let content =
-        files::traefik_routes(&desired.code_host, &desired.agents_host, service_url, &settings);
-    let what = format!("{} and {} → {service_url}", desired.code_host, desired.agents_host);
+    let content = files::traefik_routes(
+        [&desired.code_host, &desired.agents_host, &desired.ssh_host],
+        service_url,
+        &settings,
+    );
+    let what = format!(
+        "{}, {} and {} → {service_url}",
+        desired.code_host, desired.agents_host, desired.ssh_host
+    );
     write_if_changed(c, &mut step, &host.routing_file, &content, &what);
     step
 }
@@ -745,6 +846,7 @@ pub(crate) fn plan(c: &Context) -> Result<Plan, SetupError> {
     let content = files::host_config(&desired.config);
     let what = format!("{} → {} ({})", desired.code_host, desired.instance, desired.address);
     write_if_changed(c, &mut config, &c.paths.config(), &content, &what);
+    seed(c, &host, &mut config);
     let routing = routing(c, &host, &desired);
     let firewall = firewall(c, &host, &desired)?;
 

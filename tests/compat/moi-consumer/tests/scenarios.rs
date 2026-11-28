@@ -13,7 +13,7 @@ use moi_consumer::{FixtureHost, OnMoi};
 
 const HEALTH_OK: &str = r#"{"v":1,"status":"ok","problems":[],"vm":"running","phase":"idle","checkedAt":1790000000000}"#;
 const GATEWAY_STATUS: &str = r#"{"v":1,"version":"3f9c2d1","phase":"idle","vm":"running","lastStop":{"at":1789990000000,"reason":"idle","mode":"stateful","ms":4200}}"#;
-const VM_FINE: &str = "code_server=active\nhub=active\ntmux=active\ncontext_timer=active\nupdate_timer=active\nagent_claude=yes\nagent_codex=yes\nagent_opencode=yes\nhooks_claude=yes\nhooks_codex=yes\nhooks_opencode=yes\nsync=2026-09-21T14:00:00Z\ncontext=2026-09-21T12:00:00Z\ndotfiles=0 0\n";
+const VM_FINE: &str = "code_server=active\nhub=active\ntmux=active\ncontext_timer=active\nupdate_timer=active\ngateway_key=ssh-ed25519 AAAAFAKEGATEWAYUPSTREAMKEY\nhost_key=ssh-ed25519 AAAAFAKEVMHOSTKEY\nagent_claude=yes\nagent_codex=yes\nagent_opencode=yes\nhooks_claude=yes\nhooks_codex=yes\nhooks_opencode=yes\nsync=2026-09-21T14:00:00Z\ncontext=2026-09-21T12:00:00Z\ndotfiles=0 0\n";
 
 fn printed(text: &str) -> Option<Output> {
     Some(Output { code: Some(0), stdout: text.as_bytes().to_vec(), ..Output::default() })
@@ -43,12 +43,17 @@ fn server() -> FixtureHost {
             printed(HEALTH_OK)
         } else if url.ends_with("/__devbox/status") {
             printed(GATEWAY_STATUS)
+        } else if command.args.iter().any(|arg| arg == "Upgrade: websocket") {
+            printed("\u{0}\u{10}SSH-2.0-devbox\r\n")
         } else if url.ends_with("/releases/latest") {
             printed(r#"{"tag_name": "v1.2.3"}"#)
         } else {
             None
         }
     });
+    machine.put("/var/lib/devbox/gateway/ssh/upstream_ed25519_key.pub", "ssh-ed25519 AAAAFAKEGATEWAYUPSTREAMKEY devbox-gateway\n");
+    machine.put("/var/lib/devbox/gateway/ssh/host_ed25519_key.pub", "ssh-ed25519 AAAAFAKEGATEWAYHOSTKEY devbox-gateway host key\n");
+    machine.put("/var/lib/devbox/gateway/ssh/authorized_keys", "");
     machine.put(
         "/home/dev/.ssh/authorized_keys",
         "ssh-ed25519 FAKEkeyFAKEkeyFAKEkey dev@laptop\n# a comment\n",
@@ -59,6 +64,8 @@ fn server() -> FixtureHost {
             let script = command.get(2).map(String::as_str).unwrap_or_default();
             if script.starts_with("id -u 'dev'") {
                 (0, "1000\n1000\n/home/dev\n".to_owned(), String::new())
+            } else if script.contains("ssh_host_ed25519_key.pub") && !script.contains("code_server=") {
+                (0, "ssh-ed25519 AAAAFAKEVMHOSTKEY root@devbox\n".to_owned(), String::new())
             } else if script.contains("echo \"code_server=") {
                 (0, VM_FINE.to_owned(), String::new())
             } else {
@@ -126,6 +133,7 @@ fn moi_drives_up_status_doctor_and_down_through_its_own_host() {
             "remove /etc/devbox/secrets.toml",
             "remove /etc/devbox/devbox.toml",
             "remove /etc/dokploy/traefik/dynamic/devbox.yml",
+            "take the gateway's SSH key out of devbox",
             "kept the instance devbox, which `devbox up` created (delete it with `devbox down --destroy`)",
         ]
     );

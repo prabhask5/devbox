@@ -58,23 +58,32 @@ type Session struct {
 // key until Authorize is called.
 func Start(t *testing.T, user string) *Server {
 	t.Helper()
-	_, private, err := ed25519.GenerateKey(rand.Reader)
+	s, err := New(user, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
+	}
+	t.Cleanup(s.Close)
+	return s
+}
+
+// New runs a fake sshd on a loopback port until it is closed; commands run in dir.
+func New(user, dir string) (*Server, error) {
+	_, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return nil, err
 	}
 	signer, err := ssh.NewSignerFromKey(private)
 	if err != nil {
-		t.Fatal(err)
+		return nil, err
 	}
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		t.Fatal(err)
+		return nil, err
 	}
-	s := &Server{listener: listener, signer: signer, user: user, authorized: map[string]bool{}, conns: map[net.Conn]struct{}{}, Dir: t.TempDir()}
+	s := &Server{listener: listener, signer: signer, user: user, authorized: map[string]bool{}, conns: map[net.Conn]struct{}{}, Dir: dir}
 	s.Up.Store(true)
-	t.Cleanup(s.Close)
 	go s.accept()
-	return s
+	return s, nil
 }
 
 // SetRunning makes the server answer only while the VM runs: when it does not, a connection
@@ -430,6 +439,14 @@ func (c *connection) run(channel ssh.Channel, requests <-chan *ssh.Request, sess
 	case session.Kind == "subsystem":
 		_, _ = io.WriteString(channel.Stderr(), "no such subsystem\n")
 		return 1
+	case session.Command == "devbox-test-echo":
+		// What comes in goes back, byte for byte, with no program in between: for measuring.
+		_, _ = io.Copy(channel, counting)
+		return 0
+	case session.Command == "devbox-test-sink":
+		n, _ := io.Copy(io.Discard, counting)
+		_, _ = fmt.Fprintf(channel, "%d\n", n)
+		return 0
 	case session.Command == "devbox-test-agent-keys":
 		c.mu.Lock()
 		offered := c.agent
