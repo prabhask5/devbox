@@ -2,7 +2,14 @@
   "session_id": "__SESSION__",
   "transcript_path": "/home/dev/.claude/projects/-home-dev-code-devbox/__SESSION__.jsonl",
   "cwd": "__CWD__",
+  "scratchpad_dir": "/tmp/claude-1000/-home-dev-code-devbox/__SESSION__/scratchpad",
+  "prompt_id": "00000000-0000-4000-8000-000000000001",
   "permission_mode": "default",
-  "hook_event_name": "Error",
-  "error": "API rate limit reached"
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "StopFailure",
+  "error": "rate_limit",
+  "error_details": "429 Too Many Requests",
+  "last_assistant_message": "API Error: Rate limit reached"
 }

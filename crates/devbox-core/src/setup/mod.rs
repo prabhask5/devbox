@@ -317,6 +317,7 @@ impl Plan {
             agents_host: self.desired.agents_host.clone(),
             ssh_host: self.desired.ssh_host.clone(),
             user: Some(self.desired.user.clone()),
+            codex: inspect::has_codex(&self.desired.config),
         }
     }
 }

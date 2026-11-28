@@ -1,5 +1,6 @@
 // Installed by devbox: reports this opencode session's lifecycle to the devbox hub, in the same
 // vocabulary as the Claude Code and Codex hooks. Rewritten whenever devbox provisions the VM.
+// It is a plugin of the kind that exports a function (opencode's first plugin API).
 import { spawn } from "node:child_process";
 
 const RELAY = "/home/dev/.local/lib/devbox/current/devbox-hub";
@@ -28,15 +29,18 @@ export const DevboxPlugin = async ({ directory }) => {
           return report("SessionStart", { session_id });
         case "session.status":
           if (p.status?.type === "busy") return report("PreToolUse", { session_id });
+          // (opencode also sends `session.idle` for the same moment; one Stop is enough.)
           if (p.status?.type === "idle") return report("Stop", { session_id });
           return;
-        case "session.idle":
-          return report("Stop", { session_id });
         case "permission.asked":
-        case "permission.updated": {
-          const what = [p.permission || p.type || p.title, ...(p.patterns || [])].filter(Boolean);
+        case "permission.v2.asked": {
+          const what = [p.permission, ...(p.patterns || [])].filter(Boolean);
           return report("PermissionRequest", { session_id, message: `Permission: ${what.join(" ")}` });
         }
+        case "permission.replied":
+        case "permission.v2.replied":
+          // Answered, either way: the agent goes on.
+          return report("PreToolUse", { session_id });
         case "session.error":
           return report("Error", {
             session_id,

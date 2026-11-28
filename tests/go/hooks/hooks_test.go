@@ -111,8 +111,8 @@ func TestInstallKeepsWhatTheOwnerConfigured(t *testing.T) {
 	if got := commands("PreCompact"); len(got) != 1 || got[0] != "echo compacting" {
 		t.Errorf("an event devbox does not use: %v", got)
 	}
-	if len(settings.Hooks) != 9 {
-		t.Errorf("%d events with hooks, want the 8 devbox uses and PreCompact", len(settings.Hooks))
+	if len(settings.Hooks) != 10 {
+		t.Errorf("%d events with hooks, want the 9 devbox uses and PreCompact", len(settings.Hooks))
 	}
 	if !bytes.Contains(merged, []byte(`"<bar> & baz"`)) {
 		t.Error("characters were escaped that the owner wrote plainly")

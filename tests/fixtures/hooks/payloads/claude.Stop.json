@@ -2,8 +2,15 @@
   "session_id": "__SESSION__",
   "transcript_path": "/home/dev/.claude/projects/-home-dev-code-devbox/__SESSION__.jsonl",
   "cwd": "__CWD__",
+  "scratchpad_dir": "/tmp/claude-1000/-home-dev-code-devbox/__SESSION__/scratchpad",
+  "prompt_id": "00000000-0000-4000-8000-000000000001",
   "permission_mode": "default",
+  "effort": {
+    "level": "medium"
+  },
   "hook_event_name": "Stop",
   "stop_hook_active": false,
-  "last_assistant_message": "All 12 tests pass now."
+  "last_assistant_message": "All 12 tests pass now.",
+  "background_tasks": [],
+  "session_crons": []
 }

@@ -2,7 +2,12 @@
   "session_id": "__SESSION__",
   "transcript_path": "/home/dev/.claude/projects/-home-dev-code-devbox/__SESSION__.jsonl",
   "cwd": "__CWD__",
+  "scratchpad_dir": "/tmp/claude-1000/-home-dev-code-devbox/__SESSION__/scratchpad",
+  "prompt_id": "00000000-0000-4000-8000-000000000001",
   "permission_mode": "default",
+  "effort": {
+    "level": "medium"
+  },
   "hook_event_name": "PostToolUse",
   "tool_name": "Bash",
   "tool_input": {
@@ -12,6 +17,10 @@
   "tool_response": {
     "stdout": "ok",
     "stderr": "",
-    "interrupted": false
-  }
+    "interrupted": false,
+    "isImage": false,
+    "noOutputExpected": true
+  },
+  "tool_use_id": "toolu_FAKE0000000000000000000",
+  "duration_ms": 627
 }

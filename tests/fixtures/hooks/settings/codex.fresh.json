@@ -41,7 +41,7 @@
         "hooks": [
           {
             "command": "/home/dev/.local/lib/devbox/current/devbox-hub event codex SessionEnd",
-            "timeout": 5,
+            "timeout": 3,
             "type": "command"
           }
         ],

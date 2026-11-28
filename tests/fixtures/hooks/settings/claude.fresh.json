@@ -84,6 +84,18 @@
         "matcher": ""
       }
     ],
+    "StopFailure": [
+      {
+        "hooks": [
+          {
+            "command": "/home/dev/.local/lib/devbox/current/devbox-hub event claude Error",
+            "timeout": 5,
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
     "UserPromptSubmit": [
       {
         "hooks": [
