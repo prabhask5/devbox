@@ -139,6 +139,7 @@ step "wake over HTTP"
 gateway -H 'Content-Type: application/json' -d '{}' "https://code.$domain/__devbox/wake" | jq -e .ok >/dev/null
 wait_for 300 "awake" vm_is running
 wait_for 120 "the editor answers through the gateway" gateway --fail --output /dev/null "https://code.$domain/healthz"
+wait_for 60 "the VM's agent answers again" in_vm true
 after=$(in_vm sh -c 'cat /proc/sys/kernel/random/boot_id; pgrep -f "sleep 1000000" | head -n 1')
 [[ $before == "$after" ]] || { printf 'the VM did not resume where it was:\nbefore: %s\nafter: %s\n' "$before" "$after"; exit 1; }
 in_vm sudo -u dev -H tmux has-session -t nightly
