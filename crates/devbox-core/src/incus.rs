@@ -328,7 +328,28 @@ impl<'a> Incus<'a> {
         stateful: bool,
         limit: Duration,
     ) -> Result<(), Error> {
-        let body = json!({"action": action, "timeout": limit.as_secs(), "force": false, "stateful": stateful});
+        self.put_state(name, action, stateful, false, limit)
+    }
+
+    /// Stops an instance at once, as pulling its plug would: for an instance that is about to
+    /// be deleted.
+    ///
+    /// # Errors
+    ///
+    /// When Incus cannot be reached, refuses, or the stop fails.
+    pub fn stop_now(&self, name: &str) -> Result<(), Error> {
+        self.put_state(name, "stop", false, true, Duration::from_secs(120))
+    }
+
+    fn put_state(
+        &self,
+        name: &str,
+        action: &str,
+        stateful: bool,
+        force: bool,
+        limit: Duration,
+    ) -> Result<(), Error> {
+        let body = json!({"action": action, "timeout": limit.as_secs(), "force": force, "stateful": stateful});
         let path = format!("/1.0/instances/{name}/state");
         let answer =
             self.call("PUT", &path, Some(&body), Duration::from_secs(60))?.unwrap_or(Value::Null);

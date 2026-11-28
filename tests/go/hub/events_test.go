@@ -256,10 +256,10 @@ func TestWakeCorrectsTheClockAndSyncsOnce(t *testing.T) {
 		t.Fatalf("wake: HTTP %d, run %q", code, run)
 	}
 	wantCommands := []string{
-		"sudo -n date -s @" + itoa(host.Unix()), "sudo -n systemctl restart systemd-timesyncd",
+		"sudo -n /usr/local/sbin/devbox-set-clock " + itoa(host.Unix()),
 		"systemctl --user start --no-block devbox-update.service", "systemctl --user start --no-block devbox-context.service",
 	}
-	eventually(t, "the commands", func() bool { return len(h.runner.Calls()) >= 5 })
+	eventually(t, "the commands", func() bool { return len(h.runner.Calls()) >= 4 })
 	calls := h.runner.Calls()
 	if !reflect.DeepEqual(without(calls, "devbox sync --json"), wantCommands) || !contains(calls, "devbox sync --json") {
 		t.Errorf("commands run on wake:\n%s", strings.Join(calls, "\n"))
@@ -275,7 +275,7 @@ func TestWakeCorrectsTheClockAndSyncsOnce(t *testing.T) {
 	if _, again := wake("attach", clock.Now().Add(4*time.Second)); again != run {
 		t.Errorf("a wake during a sync started run %q, want %q", again, run)
 	}
-	if got := count(h.runner.Calls(), "sudo -n date"); got != 1 {
+	if got := count(h.runner.Calls(), "sudo -n /usr/local/sbin/devbox-set-clock"); got != 1 {
 		t.Errorf("the clock was set %d times", got)
 	}
 

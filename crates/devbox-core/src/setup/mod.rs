@@ -545,8 +545,22 @@ fn configure(
     Ok(())
 }
 
-/// Asks the gateway through the public host — the path a browser takes — how things are.
+/// Asks the gateway through the public host — the path a browser takes — how things are. The
+/// gateway and the router take a moment to pick up what was just written for them, so an
+/// answer that is not "ok" is asked for again for up to a minute and a half.
 fn verify(system: &dyn System, url: &str) -> Result<(), SetupError> {
+    let mut outcome = verify_once(system, url);
+    for _ in 0..30 {
+        if outcome.is_ok() {
+            break;
+        }
+        system.sleep(std::time::Duration::from_secs(3));
+        outcome = verify_once(system, url);
+    }
+    outcome
+}
+
+fn verify_once(system: &dyn System, url: &str) -> Result<(), SetupError> {
     let curl = Command::new("curl", ["--silent", "--show-error", "--max-time", "20", url])
         .timeout(std::time::Duration::from_secs(30));
     let unreachable = |why: String| {

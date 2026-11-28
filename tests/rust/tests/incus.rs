@@ -189,10 +189,10 @@ fn the_reference_responses_of_a_real_incus_are_understood() {
     let instance = Incus::new(&system, socket).instance("devbox").unwrap().unwrap();
     assert_eq!(
         (instance.status.as_str(), instance.kind.as_str(), instance.stateful),
-        ("Stopped", "virtual-machine", true)
+        ("Running", "virtual-machine", false)
     );
     assert_eq!(instance.config["migration.stateful"], "true");
-    assert_eq!(instance.devices["root"]["size.state"], "9GiB");
+    assert_eq!(instance.devices["root"]["size.state"], "3GiB");
     assert_eq!(instance.expanded_devices["eth0"]["ipv4.address"], "10.77.0.10");
     assert_eq!(instance.raw["profiles"], json!(["default"]));
 

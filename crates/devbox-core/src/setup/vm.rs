@@ -38,6 +38,8 @@ pub(crate) enum Release {
     Local(PathBuf),
     /// A release of the repository, by tag.
     Tag(String),
+    /// The build the VM has already, by the name it is installed under.
+    Installed(String),
     /// The repository's latest release, found out when installing.
     Latest,
 }
@@ -47,6 +49,8 @@ pub(crate) enum Release {
 pub(crate) struct Provision {
     pub agents: Vec<String>,
     pub release: Release,
+    /// The build that was asked for, when one was: remembered, to tell when another is.
+    pub asked: Option<String>,
     pub repo: String,
     pub hub_toml: String,
     /// The host's GitHub token, for `gh` in the VM and for the hub's deployments.
@@ -61,15 +65,13 @@ impl Provision {
     pub fn fingerprint(
         desired: &Desired,
         agents: &[String],
-        release: &Release,
         hub_toml: &str,
         token: bool,
     ) -> String {
-        let release = format!("{release:?}");
         let settings =
             format!("{} {} {} {token}", desired.user, desired.ports[0], agents.join(","));
         let mut parts: Vec<&[u8]> = FILES.iter().map(|(_, content)| content.as_bytes()).collect();
-        parts.extend([release.as_bytes(), settings.as_bytes(), hub_toml.as_bytes()]);
+        parts.extend([settings.as_bytes(), hub_toml.as_bytes()]);
         files::fingerprint(&parts)
     }
 }
@@ -159,11 +161,24 @@ impl Inside<'_> {
             None => return fail(format!("there is no instance {}", self.instance)),
             Some("Running") => {}
             Some(_) => {
-                self.incus.change_state(self.instance, "start", false, Duration::from_secs(300))?;
+                // A VM that sleeps with its memory saved wakes up where it was: Incus restores
+                // only when the start asks for it, and throws the memory away otherwise.
+                let asleep =
+                    self.incus.instance(self.instance)?.is_some_and(|found| found.stateful);
+                self.incus.change_state(
+                    self.instance,
+                    "start",
+                    asleep,
+                    Duration::from_secs(300),
+                )?;
             }
         }
         for _ in 0..90 {
             if self.root(&["true"], Duration::from_secs(20)).is_ok_and(|ran| ran.code == 0) {
+                // The agent answers before the first boot has finished: the user and the
+                // packages of a new VM are there only once cloud-init is done.
+                let done = "if command -v cloud-init >/dev/null; then cloud-init status --wait >/dev/null 2>&1; fi; true";
+                self.root(&["sh", "-c", done], Duration::from_secs(900))?;
                 return Ok(());
             }
             system.sleep(Duration::from_secs(2));
@@ -198,7 +213,11 @@ impl Inside<'_> {
 /// The last lines of what a script printed, for an error message.
 fn tail(output: &ExecOutput) -> String {
     let all = format!("{}{}", output.stdout, output.stderr);
-    let lines: Vec<&str> = all.lines().filter(|line| !line.trim().is_empty()).collect();
+    // Without the progress bars of downloads, which would be all there is to see.
+    let lines: Vec<&str> = all
+        .lines()
+        .filter(|line| !line.trim().is_empty() && !line.trim_start().starts_with('#'))
+        .collect();
     lines[lines.len().saturating_sub(12)..].join("\n")
 }
 
@@ -260,7 +279,7 @@ pub(crate) fn provision(
             }
             local
         }
-        Release::Tag(tag) => tag.clone(),
+        Release::Tag(tag) | Release::Installed(tag) => tag.clone(),
         Release::Latest => latest_release(system, &provision.repo)?,
     };
     let env = format!(
@@ -306,6 +325,10 @@ pub(crate) fn provision(
         record["user"] = json!(desired.user);
         record["stamp"] = json!(provision.stamp);
         record["agents"] = json!(provision.agents);
+        record["release"] = json!(release);
+        if let Some(asked) = &provision.asked {
+            record["asked"] = json!(asked);
+        }
     })
 }
 

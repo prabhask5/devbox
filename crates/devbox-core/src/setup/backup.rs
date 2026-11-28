@@ -302,8 +302,9 @@ fn undo(system: &dyn System, options: &DownOptions) -> Result<Vec<String>, Setup
             (None, _) => done.push(format!("the instance {name} is gone already")),
             (Some(_), true) if destroy => {
                 if real {
+                    // It is deleted next: nothing in it is waited for.
                     if running {
-                        stop(&incus)?;
+                        incus.stop_now(name)?;
                     }
                     incus.delete(name)?;
                 }

@@ -53,7 +53,7 @@ agentSessionId · transcriptPath · turnStartedAt · lastEventAt · unread · ad
 
 ## Wake hook (`POST /devbox/wake`)
 
-1. **Clock**: after a restore the guest clock is behind. If `|gateway.now − now| > 5 s`, set the clock (`sudo -n date -s @…` through `internal/sys`, then restart `systemd-timesyncd`).
+1. **Clock**: after a restore the guest clock is behind. If `|gateway.now − now| > 5 s`, set the clock (`sudo -n /usr/local/sbin/devbox-set-clock <unix seconds>` through `internal/sys`: a root-owned program the installer writes, which sets the time and restarts `systemd-timesyncd`; the sudoers rule names that program and nothing else).
 2. Mark busy now. If a sync finished < 60 s ago (boot-time run), return its `runId`; if one is running return it; else start `devbox sync --json` and return the new `runId`. Progress lines (spec 07) feed `sync` in the status; a line the hub cannot read is logged and skipped; a sync that cannot run or fails ends the run with one `error` result named `sync`.
 3. Trigger the updater check (spec 11) and context refresh if older than 6 h (spec 08).
 

@@ -634,6 +634,19 @@
      },
      "default": {}
     },
+    "firewall": {
+     "description": "What puts the firewall rule for the VM in force.",
+     "type": "object",
+     "required": [],
+     "properties": {
+      "manager": {
+       "description": "The firewall manager `devbox up` uses: `host-firewall`, `ufw`, `nftables`, `moi`, `none`, or the name of an embedder's own. Absent: `devbox up` finds out which.",
+       "type": "string",
+       "format": "devbox-nonempty"
+      }
+     },
+     "default": {}
+    },
     "provision": {
      "description": "How `devbox up` built the VM, so that it can build it again without being asked anything.",
      "type": "object",

@@ -43,7 +43,7 @@
       "title": "There is room on disk for its memory"
     },
     {
-      "detail": "no firewall manager devbox knows on this host",
+      "detail": "no firewall manager is used here: the rule is left to you",
       "id": "firewall",
       "result": "skipped",
       "title": "The firewall lets the gateway reach the VM"

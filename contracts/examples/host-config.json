@@ -29,6 +29,9 @@
     "entrypoint": "websecure",
     "service_url": "http://devbox-gateway:8080"
   },
+  "firewall": {
+    "manager": "host-firewall"
+  },
   "provision": {
     "user": "dev",
     "cpu": 3,

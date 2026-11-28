@@ -380,3 +380,101 @@ fn what_the_cli_prints_is_what_the_renderers_return_byte_for_byte() {
         "the new password must not be empty."
     );
 }
+
+#[test]
+fn the_firewall_manager_that_was_chosen_is_the_one_that_is_kept() {
+    // A host where nftables would be found, set up with the firewall left alone.
+    let system = dokploy();
+    system.put("/etc/nftables.conf", "flush ruleset\n");
+    system.prints("nft", "nftables v1.1.1\n");
+    let options = UpOptions { firewall: Some("none".to_owned()), ..fresh() };
+    setup::up(&system, &options, &mut Yes).unwrap();
+    let config = system.text("/etc/devbox/devbox.toml").unwrap();
+    assert!(config.contains("[firewall]\nmanager = \"none\"\n"), "{config}");
+
+    // No option the next time: still left alone, and nothing changes.
+    let again = setup::up(&system, &UpOptions::default(), &mut Yes).unwrap();
+    assert_eq!(again.outcome, Outcome::Unchanged, "{}", render::human(&again));
+    assert!(system.text("/etc/nftables.d/devbox.nft").is_none());
+    let doctor = render::human(&setup::doctor(&system, &StatusOptions::default()));
+    assert!(
+        doctor.contains(
+            "· The firewall lets the gateway reach the VM — no firewall manager is used here"
+        ),
+        "{doctor}"
+    );
+
+    // Asked for: the manager changes, and is the one kept from then on.
+    let nftables = UpOptions { firewall: Some("nftables".to_owned()), ..UpOptions::default() };
+    assert_eq!(setup::up(&system, &nftables, &mut Yes).unwrap().outcome, Outcome::Applied);
+    assert!(system.text("/etc/nftables.d/devbox.nft").is_some());
+    let again = setup::up(&system, &UpOptions::default(), &mut Yes).unwrap();
+    assert_eq!(again.outcome, Outcome::Unchanged, "{}", render::human(&again));
+}
+
+#[test]
+fn the_build_in_the_vm_is_kept_unless_another_is_asked_for() {
+    let system = dokploy();
+    system.put("/opt/build/devbox-hub", "FAKE hub binary");
+    system.put("/opt/build/devbox", "FAKE devbox binary");
+    let local = UpOptions { binaries: Some("/opt/build".into()), ..fresh() };
+    setup::up(&system, &local, &mut Yes).unwrap();
+    let installed = |system: &FakeSystem| {
+        system.incus(|incus| {
+            let env = &incus.instances["devbox"].files["/var/lib/devbox-install/env"].data;
+            let env = String::from_utf8(env.clone()).unwrap();
+            env.lines().find(|line| line.starts_with("RELEASE=")).unwrap().to_owned()
+        })
+    };
+    let first = installed(&system);
+    assert!(first.starts_with("RELEASE='local-"), "{first}");
+
+    // No build named: nothing is installed again, and GitHub is not asked for a release.
+    let asked_github = |system: &FakeSystem| {
+        system
+            .ran()
+            .iter()
+            .any(|command| command.args.last().is_some_and(|url| url.ends_with("/releases/latest")))
+    };
+    let again = setup::up(&system, &UpOptions::default(), &mut Yes).unwrap();
+    assert_eq!(again.outcome, Outcome::Unchanged, "{}", render::human(&again));
+    assert!(!asked_github(&system));
+
+    // Something else changes (an agent less): what is installed stays the build it is.
+    let fewer = UpOptions { no_agents: vec!["codex".to_owned()], ..UpOptions::default() };
+    let report = setup::up(&system, &fewer, &mut Yes).unwrap();
+    assert_eq!(report.outcome, Outcome::Applied);
+    assert!(
+        report.plan.steps[3].lines[0].contains(", which is installed)"),
+        "{:?}",
+        report.plan.steps[3].lines
+    );
+    assert_eq!(installed(&system), first);
+    assert!(!asked_github(&system));
+
+    // A release asked for by name replaces it.
+    let tagged = UpOptions { release: Some("v9.9.9".to_owned()), ..UpOptions::default() };
+    assert_eq!(setup::up(&system, &tagged, &mut Yes).unwrap().outcome, Outcome::Applied);
+    assert_eq!(installed(&system), "RELEASE='v9.9.9'");
+    let again = setup::up(&system, &UpOptions::default(), &mut Yes).unwrap();
+    assert_eq!(again.outcome, Outcome::Unchanged);
+}
+
+#[test]
+fn a_sleeping_vm_that_has_to_be_started_wakes_up_where_it_was() {
+    let system = dokploy();
+    setup::up(&system, &fresh(), &mut Yes).unwrap();
+    // It sleeps with its memory saved, and `up` has something to install into it.
+    system.incus(|incus| {
+        let vm = incus.instances.get_mut("devbox").unwrap();
+        "Stopped".clone_into(&mut vm.status);
+        vm.stateful = true;
+    });
+    let fewer = UpOptions { no_agents: vec!["opencode".to_owned()], ..UpOptions::default() };
+    assert_eq!(setup::up(&system, &fewer, &mut Yes).unwrap().outcome, Outcome::Applied);
+    system.incus(|incus| {
+        let vm = &incus.instances["devbox"];
+        assert_eq!(vm.status, "Running");
+        assert!(!vm.lost_memory, "starting the VM to provision it threw its saved memory away");
+    });
+}

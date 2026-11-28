@@ -8,38 +8,100 @@
   "metadata": {
     "architecture": "x86_64",
     "config": {
+      "boot.autostart": "false",
+      "cloud-init.user-data": "#cloud-config\n",
       "image.architecture": "amd64",
-      "image.description": "Ubuntu noble amd64",
+      "image.description": "Ubuntu resolute amd64 (20261118_07:42)",
       "image.os": "Ubuntu",
-      "image.release": "noble",
-      "limits.cpu": "3",
-      "limits.memory": "8GiB",
+      "image.release": "resolute",
+      "image.serial": "20261118_07:42",
+      "image.type": "disk-kvm.img",
+      "image.variant": "cloud",
+      "limits.cpu": "2",
+      "limits.memory": "2GiB",
       "migration.stateful": "true",
-      "volatile.uuid": "0b6f3a52-9d2c-4c2e-8a55-3f1b8a2f7c10"
+      "volatile.base_image": "0000000000000000000000000000000000000000000000000000000000000000",
+      "volatile.cloud-init.instance-id": "00000000-0000-4000-8000-000000000001",
+      "volatile.eth0.host_name": "tap00000001",
+      "volatile.eth0.hwaddr": "10:66:6a:00:00:01",
+      "volatile.last_state.power": "RUNNING",
+      "volatile.last_state.ready": "false",
+      "volatile.uuid": "00000000-0000-4000-8000-000000000001",
+      "volatile.uuid.generation": "00000000-0000-4000-8000-000000000001",
+      "volatile.vm.definition": "pc-q35-9.0",
+      "volatile.vm.rtc_adjustment": "0",
+      "volatile.vm.rtc_offset": "0",
+      "volatile.vsock_id": "0"
     },
-    "created_at": "2026-01-02T03:04:05.123456789Z",
-    "description": "",
     "devices": {
-      "root": { "path": "/", "pool": "default", "size": "60GiB", "size.state": "9GiB", "type": "disk" }
+      "eth0": {
+        "ipv4.address": "10.77.0.10",
+        "name": "eth0",
+        "network": "incusbr0",
+        "type": "nic"
+      },
+      "root": {
+        "path": "/",
+        "pool": "default",
+        "size": "12GiB",
+        "size.state": "3GiB",
+        "type": "disk"
+      }
     },
     "ephemeral": false,
+    "profiles": [
+      "default"
+    ],
+    "stateful": false,
+    "description": "",
+    "created_at": "2026-09-21T14:00:00Z",
     "expanded_config": {
-      "limits.cpu": "3",
-      "limits.memory": "8GiB",
-      "migration.stateful": "true"
+      "boot.autostart": "false",
+      "cloud-init.user-data": "#cloud-config\n",
+      "image.architecture": "amd64",
+      "image.description": "Ubuntu resolute amd64 (20261118_07:42)",
+      "image.os": "Ubuntu",
+      "image.release": "resolute",
+      "image.serial": "20261118_07:42",
+      "image.type": "disk-kvm.img",
+      "image.variant": "cloud",
+      "limits.cpu": "2",
+      "limits.memory": "2GiB",
+      "migration.stateful": "true",
+      "volatile.base_image": "0000000000000000000000000000000000000000000000000000000000000000",
+      "volatile.cloud-init.instance-id": "00000000-0000-4000-8000-000000000001",
+      "volatile.eth0.host_name": "tap00000001",
+      "volatile.eth0.hwaddr": "10:66:6a:00:00:01",
+      "volatile.last_state.power": "RUNNING",
+      "volatile.last_state.ready": "false",
+      "volatile.uuid": "00000000-0000-4000-8000-000000000001",
+      "volatile.uuid.generation": "00000000-0000-4000-8000-000000000001",
+      "volatile.vm.definition": "pc-q35-9.0",
+      "volatile.vm.rtc_adjustment": "0",
+      "volatile.vm.rtc_offset": "0",
+      "volatile.vsock_id": "0"
     },
     "expanded_devices": {
-      "eth0": { "ipv4.address": "10.77.0.10", "name": "eth0", "network": "incusbr0", "type": "nic" },
-      "root": { "path": "/", "pool": "default", "size": "60GiB", "size.state": "9GiB", "type": "disk" }
+      "eth0": {
+        "ipv4.address": "10.77.0.10",
+        "name": "eth0",
+        "network": "incusbr0",
+        "type": "nic"
+      },
+      "root": {
+        "path": "/",
+        "pool": "default",
+        "size": "12GiB",
+        "size.state": "3GiB",
+        "type": "disk"
+      }
     },
-    "last_used_at": "2026-02-03T04:05:06.123456789Z",
-    "location": "none",
     "name": "devbox",
-    "profiles": ["default"],
-    "project": "default",
-    "stateful": true,
-    "status": "Stopped",
-    "status_code": 102,
-    "type": "virtual-machine"
+    "status": "Running",
+    "status_code": 103,
+    "last_used_at": "2026-09-21T14:00:00Z",
+    "location": "none",
+    "type": "virtual-machine",
+    "project": "default"
   }
 }

@@ -5,7 +5,7 @@
   ✓ Its memory is saved when it sleeps — migration.stateful = true
   ✓ It does not start with the host — boot.autostart = false
   ✓ There is room on disk for its memory — size.state = 6GiB for 5GiB of memory
-  · The firewall lets the gateway reach the VM — no firewall manager devbox knows on this host
+  · The firewall lets the gateway reach the VM — no firewall manager is used here: the rule is left to you
   ✓ The gateway container runs — devbox-gateway: running
   ✓ Both hosts are routed to the gateway — /etc/dokploy/traefik/dynamic/devbox.yml
   ✓ code.example.com resolves — 203.0.113.7

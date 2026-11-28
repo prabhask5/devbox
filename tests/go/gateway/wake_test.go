@@ -70,8 +70,11 @@ func TestWakeRestoresAStatefulVM(t *testing.T) {
 	if wake.Sync == nil || wake.Sync.State != proto.SyncStateStateDone || *wake.Sync.RunID != "s-1" {
 		t.Errorf("sync progress: %+v", wake.Sync)
 	}
-	if got := kinds(h.incus.StateChanges()); !reflect.DeepEqual(got, []string{"start"}) {
+	if got := kinds(h.incus.StateChanges()); !reflect.DeepEqual(got, []string{"start stateful=true"}) {
 		t.Errorf("Incus state changes: %v", got)
+	}
+	if h.incus.Discarded("devbox") != 0 {
+		t.Error("the wake threw the saved memory away instead of restoring it")
 	}
 	if status, stateful := h.incus.Instance("devbox"); status != "Running" || stateful {
 		t.Errorf("instance: %s stateful=%v", status, stateful)
@@ -160,7 +163,7 @@ func TestWakeFallsBackToAColdBootWhenTheRestoreFails(t *testing.T) {
 	if !wake.Done || wake.Error != nil || wake.Kind != proto.WakeKindCold {
 		t.Fatalf("wake: %+v", wake)
 	}
-	if got := kinds(h.incus.StateChanges()); !reflect.DeepEqual(got, []string{"start", "start stateful=false"}) {
+	if got := kinds(h.incus.StateChanges()); !reflect.DeepEqual(got, []string{"start stateful=true", "start stateful=false"}) {
 		t.Errorf("Incus state changes: %v", got)
 	}
 	if !strings.Contains(strings.Join(wake.Log, "\n"), "Restore failed (incus: Failed to restore instance state); booting fresh instead") {
@@ -183,7 +186,7 @@ func TestWakeFailureIsReportedAndHealthShowsItForHalfAnHour(t *testing.T) {
 	if wake.Done || wake.Error == nil || *wake.Error != want || wake.Current != nil {
 		t.Fatalf("wake: %+v", wake)
 	}
-	if got := kinds(h.incus.StateChanges()); !reflect.DeepEqual(got, []string{"start"}) {
+	if got := kinds(h.incus.StateChanges()); !reflect.DeepEqual(got, []string{"start stateful=false"}) {
 		t.Errorf("a cold boot that fails is not retried: %v", got)
 	}
 	problem := "last wake failed: " + want
@@ -381,7 +384,7 @@ func TestAHundredPageLoadsStartTheVMOnce(t *testing.T) {
 	if wake := h.wakeDone(); !wake.Done {
 		t.Fatalf("wake: %+v", wake)
 	}
-	if got := kinds(h.incus.StateChanges()); !reflect.DeepEqual(got, []string{"start"}) {
+	if got := kinds(h.incus.StateChanges()); !reflect.DeepEqual(got, []string{"start stateful=true"}) {
 		t.Errorf("100 page loads caused these state changes: %v", got)
 	}
 	if resp := h.get(codeHost, "/", page); resp.body != "<html>code-server</html>" {
@@ -405,7 +408,7 @@ func TestAWakeDuringAStopWaitsThenStarts(t *testing.T) {
 	if wake := h.wakeDone(); !wake.Done || wake.Kind != proto.WakeKindRestore {
 		t.Fatalf("wake after the stop: %+v", wake)
 	}
-	if got := kinds(h.incus.StateChanges()); !reflect.DeepEqual(got, []string{"stop stateful=true", "start"}) {
+	if got := kinds(h.incus.StateChanges()); !reflect.DeepEqual(got, []string{"stop stateful=true", "start stateful=true"}) {
 		t.Errorf("state changes: %v", got)
 	}
 	// A stop requested while a wake runs does nothing: the wake wins.

@@ -8,6 +8,9 @@ version = 1
 hub_environment = "agents-hub"
 wake_to_deploy = false
 
+[firewall]
+manager = "none"
+
 [gateway]
 listen = ":8080"
 ssh_listen = ":2222"

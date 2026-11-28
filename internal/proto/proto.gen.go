@@ -763,6 +763,9 @@ type HostConfig struct {
 	// Domain the devbox is served under.
 	Domain string `json:"domain"`
 
+	// What puts the firewall rule for the VM in force.
+	Firewall HostConfigFirewall `json:"firewall"`
+
 	// Gateway listeners and timing.
 	Gateway HostConfigGateway `json:"gateway"`
 
@@ -821,6 +824,14 @@ func (j *HostConfigDeploy) UnmarshalJSON(value []byte) error {
 	}
 	*j = HostConfigDeploy(plain)
 	return nil
+}
+
+// What puts the firewall rule for the VM in force.
+type HostConfigFirewall struct {
+	// The firewall manager `devbox up` uses: `host-firewall`, `ufw`, `nftables`,
+	// `moi`, `none`, or the name of an embedder's own. Absent: `devbox up` finds out
+	// which.
+	Manager *string `json:"manager,omitempty,omitzero"`
 }
 
 // Gateway listeners and timing.
@@ -1136,6 +1147,9 @@ func (j *HostConfig) UnmarshalJSON(value []byte) error {
 	}
 	if _, ok := raw["domain"]; raw != nil && !ok {
 		return fmt.Errorf("field domain in HostConfig: required")
+	}
+	if _, ok := raw["firewall"]; raw != nil && !ok {
+		return fmt.Errorf("field firewall in HostConfig: required")
 	}
 	if _, ok := raw["gateway"]; raw != nil && !ok {
 		return fmt.Errorf("field gateway in HostConfig: required")

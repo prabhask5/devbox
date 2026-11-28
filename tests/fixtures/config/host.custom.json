@@ -4,6 +4,7 @@
     "wake_to_deploy": true
   },
   "domain": "devbox.test",
+  "firewall": {},
   "gateway": {
     "listen": "127.0.0.1:9000",
     "ssh_listen": "",

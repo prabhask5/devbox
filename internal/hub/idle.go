@@ -137,10 +137,9 @@ func (h *Hub) Wake(ctx context.Context, wake proto.HubWake) string {
 	host := time.UnixMilli(int64(wake.Now))
 	if skew := host.Sub(h.now()); skew > h.t.ClockSkew || skew < -h.t.ClockSkew {
 		h.log.Info("correcting the clock after a restore", "skew", skew.Round(time.Second).String())
-		if _, err := h.opt.Runner.Run(ctx, "sudo", "-n", "date", "-s", "@"+strconv.FormatInt(host.Unix(), 10)); err != nil {
+		// The one thing the hub may do as root: a program that takes the time and nothing else.
+		if _, err := h.opt.Runner.Run(ctx, "sudo", "-n", "/usr/local/sbin/devbox-set-clock", strconv.FormatInt(host.Unix(), 10)); err != nil {
 			h.log.Warn("clock not corrected", "error", err)
-		} else if _, err := h.opt.Runner.Run(ctx, "sudo", "-n", "systemctl", "restart", "systemd-timesyncd"); err != nil {
-			h.log.Warn("time sync not restarted", "error", err)
 		}
 	}
 

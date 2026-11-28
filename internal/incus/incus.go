@@ -104,13 +104,11 @@ func (c *Client) Get(ctx context.Context) (Instance, error) {
 	return Instance{Status: state.Status, Stateful: instance.Stateful}, nil
 }
 
-// Start starts the instance and waits for it. An instance with saved state restores it unless
-// discardState is set, which boots it fresh.
-func (c *Client) Start(ctx context.Context, discardState bool) error {
-	body := map[string]any{"action": "start", "timeout": -1}
-	if discardState {
-		body["stateful"] = false
-	}
+// Start starts the instance and waits for it. With restore, an instance with saved memory
+// resumes where it was; without, it boots fresh and saved memory is thrown away. Incus
+// restores only when asked to, so the request always says which it is.
+func (c *Client) Start(ctx context.Context, restore bool) error {
+	body := map[string]any{"action": "start", "timeout": -1, "stateful": restore}
 	return c.changeState(ctx, body)
 }
 

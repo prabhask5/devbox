@@ -1,0 +1,60 @@
+name: Nightly
+
+# The real thing, once a night: a real Incus VM on a GitHub-hosted runner with KVM, the gateway
+# in Docker behind a Traefik, `devbox up`, a stateful sleep, a wake over HTTP, `devbox down`
+# (docs/spec/15-testing.md). Not a merge gate. A failed scheduled run opens an issue, or adds
+# to the one that is open.
+#
+# It also runs on pull requests that change the run itself, so a change to it is tried before
+# it merges.
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths: [scripts/nightly.sh, .github/workflows/nightly.yml]
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  real-vm:
+    name: real VM
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+        with: { go: true, rust: true, web: false }
+      - run: scripts/nightly.sh
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nightly
+          path: nightly-out
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Tell the owner
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="The nightly real-VM run fails"
+          open=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title \"$title\"" --json number --jq '.[0].number')
+          if [[ -n $open ]]; then
+            gh issue comment "$open" --repo "$GITHUB_REPOSITORY" --body "It failed again: $RUN_URL"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "The nightly run on a real Incus VM failed: $RUN_URL
+
+          What it printed, and \`diagnosis.txt\` with the state of the machine when it stopped, are in the run and its \`nightly\` artifact."
+          fi
