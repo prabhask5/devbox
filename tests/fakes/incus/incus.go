@@ -218,7 +218,7 @@ func (s *Server) getInstance(w http.ResponseWriter, name string) {
 	}
 	s.mu.Unlock()
 	if metadata == nil {
-		respondError(w, http.StatusNotFound, "Instance not found")
+		respondError(w, http.StatusNotFound, notFound(name))
 		return
 	}
 	respondSync(w, metadata)
@@ -230,8 +230,9 @@ func (s *Server) getState(w http.ResponseWriter, name string) {
 	var metadata map[string]any
 	if i != nil {
 		pid, processes, started := 0, 0, "0001-01-01T00:00:00Z"
-		var network, disk any = nil, map[string]any{}
+		var network, disk, osInfo any = nil, map[string]any{}, nil
 		if i.status == "Running" {
+			osInfo = map[string]any{"os": "Ubuntu", "os_version": "26.04", "kernel_version": "7.0.0-43-generic", "hostname": name, "fqdn": "localhost"}
 			pid, processes, started = 4242, 37, "2026-01-02T03:04:05.000000000Z"
 			disk = map[string]any{"root": map[string]any{"total": 0, "usage": 0}}
 			network = map[string]any{"eth0": map[string]any{
@@ -244,12 +245,12 @@ func (s *Server) getState(w http.ResponseWriter, name string) {
 			"cpu": map[string]any{"usage": 0, "allocated_time": 0}, "disk": disk,
 			"memory":  map[string]any{"usage": 0, "usage_peak": 0, "total": 0, "swap_usage": 0, "swap_usage_peak": 0},
 			"network": network, "pid": pid, "processes": processes, "started_at": started,
-			"status": i.status, "status_code": statusCodes[i.status], "os_info": nil,
+			"status": i.status, "status_code": statusCodes[i.status], "os_info": osInfo,
 		}
 	}
 	s.mu.Unlock()
 	if metadata == nil {
-		respondError(w, http.StatusNotFound, "Instance not found")
+		respondError(w, http.StatusNotFound, notFound(name))
 		return
 	}
 	respondSync(w, metadata)
@@ -262,7 +263,7 @@ func (s *Server) putState(w http.ResponseWriter, name string, body map[string]an
 	switch {
 	case i == nil:
 		s.mu.Unlock()
-		respondError(w, http.StatusNotFound, "Instance not found")
+		respondError(w, http.StatusNotFound, notFound(name))
 		return
 	case action != "start" && action != "stop":
 		s.mu.Unlock()
@@ -291,6 +292,11 @@ func (s *Server) putState(w http.ResponseWriter, name string, body map[string]an
 		"type": "async", "status": "Operation created", "status_code": 100, "operation": "/1.0/operations/" + op.id,
 		"error_code": 0, "error": "", "metadata": created,
 	})
+}
+
+// notFound is what Incus says of an instance that is not there.
+func notFound(name string) string {
+	return fmt.Sprintf("Failed to fetch instance %q in project \"default\": Instance not found", name)
 }
 
 // apply performs a state change and returns the operation's error. The caller holds s.mu.

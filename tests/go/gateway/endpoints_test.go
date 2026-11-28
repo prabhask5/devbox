@@ -190,6 +190,8 @@ func TestEventStream(t *testing.T) {
 	if first.VM != proto.VMStateStopped || first.Phase != proto.GatewayPhaseIdle || first.Authed != nil {
 		t.Errorf("first event: %+v", first)
 	}
+	// The start takes long enough to be seen as the current phase, however busy the machine.
+	h.incus.SetDelays(200*time.Millisecond, 0)
 	h.gw.RequestWake("test")
 	seen := map[proto.WakePhaseID]bool{}
 	for {
@@ -205,8 +207,8 @@ func TestEventStream(t *testing.T) {
 		}
 	}
 	// Changes that follow each other within a write are sent as one event, so a phase that
-	// takes no time may never be seen as the current one.
-	if len(seen) < 2 || !seen[proto.WakePhaseIDStart] {
+	// takes no time may never be seen as the current one: only the start is sure to be.
+	if !seen[proto.WakePhaseIDStart] {
 		t.Errorf("the stream showed these phases as current: %v", seen)
 	}
 

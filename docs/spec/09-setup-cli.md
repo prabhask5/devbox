@@ -58,4 +58,4 @@ Incus reachable; config valid; secrets valid and private; instance exists and is
 - [x] Apply against `FakeSystem` + fake Incus: creates/adopts with exact Incus config; files written with modes; backups taken; idempotent second run is a no-op.
 - [x] `devbox down` after `up` restores every touched file byte-identically and the Incus config (fixture comparison).
 - [x] Preflight failures each produce an actionable message (golden), notably "gateway not deployed".
-- [ ] Nightly e2e (spec 15): real Incus VM in CI: `devbox up` on a fresh runner → health ok → sleep → wake → `devbox down`.
+- [x] Nightly e2e (spec 15): real Incus VM in CI: `devbox up` on a fresh runner → health ok → sleep → wake → `devbox down`.

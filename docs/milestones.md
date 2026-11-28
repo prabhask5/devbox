@@ -104,8 +104,8 @@ Specs: 09, 10, 12
 - [x] `tests/compat/moi-consumer` + `compat` CI job (MSRV toolchain, moi's `deny.toml`, dry-run publish, consumer scenarios), part of `required`
 - [x] `publish-crates.yml` (tags `crates-v*`)
 - [ ] After this milestone merges, the owner tags `crates-v0.1.0` so moi can start its devbox milestone
-- [ ] Nightly real-VM workflow (spec 15); it also checks `internal/incus` against a real Incus and replaces the hand-written `tests/fixtures/incus/` with recorded responses
-- [ ] Cleanup pass; `scripts/check-hygiene.sh` green
+- [x] Nightly real-VM workflow (spec 15); it also checks `internal/incus` against a real Incus and records its answers, from which the read fixtures in `tests/fixtures/incus/` are taken
+- [x] Cleanup pass; `scripts/check-hygiene.sh` green
 
 ## M9 — Hub continuous deployment
 Specs: 11 (hub part)

@@ -111,7 +111,7 @@ func TestFakeAnswersLikeIncus(t *testing.T) {
 	}
 	code, body = raw(t, fake, "GET", "/1.0/instances/devbox/state", "")
 	check("state-stopped.json", 200, code, body)
-	code, body = raw(t, fake, "GET", "/1.0/instances/nope", "")
+	code, body = raw(t, fake, "GET", "/1.0/instances/devbox-missing", "")
 	check("error-not-found.json", 404, code, body)
 	if !reflect.DeepEqual(body, fixture(t, "error-not-found.json")) {
 		t.Errorf("not found: %v", body)
@@ -225,7 +225,7 @@ func TestClientErrorsAreTyped(t *testing.T) {
 
 	missing := incus.New(fake.Socket(), "nope")
 	defer missing.Close()
-	if _, err := missing.Get(ctx); !incus.IsKind(err, incus.API) || err.Error() != "incus: Instance not found" {
+	if _, err := missing.Get(ctx); !incus.IsKind(err, incus.API) || err.Error() != `incus: Failed to fetch instance "nope" in project "default": Instance not found` {
 		t.Errorf("missing instance: %v", err)
 	}
 
