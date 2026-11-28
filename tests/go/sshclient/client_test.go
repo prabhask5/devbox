@@ -109,9 +109,26 @@ func TestTheProxyCarriesTheStreamBothWaysAndEndsWithIt(t *testing.T) {
 	}))
 	defer gateway.Close()
 	// ssh closes its end when it is done: the proxy's standard input ends, and so does the proxy.
-	code, out, errOut := run(t, trust(t, gateway), "SSH-2.0-OpenSSH_10.0\r\nhello", "proxy", gateway.URL, "--header", "X-One: 1", "--header", "X-Two:two words")
-	if code != 0 || errOut != "" || !strings.HasPrefix(out, "SSH-2.0-devbox\r\n") {
-		t.Errorf("exit %d, stdout %q, stderr %q", code, out, errOut)
+	// It closes it after it has read what it waited for; what the server sends after that has
+	// nobody to read it, so the test reads before it closes, too.
+	cmd := exec.Command(client, "proxy", gateway.URL, "--header", "X-One: 1", "--header", "X-Two:two words")
+	cmd.Env = append(append(os.Environ(), "HTTPS_PROXY=", "https_proxy=", "NO_PROXY=*"), trust(t, gateway)...)
+	stdin, _ := cmd.StdinPipe()
+	stdout, _ := cmd.StdoutPipe()
+	var errOut bytes.Buffer
+	cmd.Stderr = &errOut
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	_, _ = io.WriteString(stdin, "SSH-2.0-OpenSSH_10.0\r\nhello")
+	want := "SSH-2.0-devbox\r\nSSH-2.0-OpenSSH_10.0\r\nhello"
+	got := make([]byte, len(want))
+	if _, err := io.ReadFull(stdout, got); err != nil || string(got) != want {
+		t.Errorf("stdout %q (%v), stderr %q", got, err, errOut.String())
+	}
+	_ = stdin.Close()
+	if err := cmd.Wait(); err != nil || errOut.String() != "" {
+		t.Errorf("ended with %v, stderr %q", err, errOut.String())
 	}
 	if seen.Get("X-One") != "1" || seen.Get("X-Two") != "two words" || seen.Get("Sec-WebSocket-Protocol") != "" || seen.Get("Sec-WebSocket-Extensions") != "" {
 		t.Errorf("handshake headers: %v", seen)
