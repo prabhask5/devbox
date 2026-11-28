@@ -460,8 +460,8 @@ impl ::std::convert::TryFrom<::std::string::String> for GatewayPhase {
 #[doc = "When each paired SSH key was last used, kept by the gateway in its state directory (`ssh/keys-used.json`) and read by `devbox ssh keys`."]
 #[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug, PartialEq)]
 pub struct GatewaySshKeysUsed {
-    #[doc = "Last use (Unix time, ms) by key fingerprint (`SHA256:…`)."]
-    pub keys: ::std::collections::BTreeMap<::std::string::String, i64>,
+    #[doc = "One entry per key that has been used."]
+    pub keys: ::std::vec::Vec<SshKeyUse>,
     #[doc = "Contract version of this message."]
     pub v: i64,
 }
@@ -1179,6 +1179,14 @@ impl ::std::convert::TryFrom<::std::string::String> for SessionState {
     ) -> ::std::result::Result<Self, self::error::ConversionError> {
         value.parse()
     }
+}
+#[doc = "The last use of one key."]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug, PartialEq)]
+pub struct SshKeyUse {
+    #[doc = "When it last authenticated a connection (Unix time, ms)."]
+    pub at: i64,
+    #[doc = "The key's fingerprint, as `ssh-keygen -l` prints it (`SHA256:…`)."]
+    pub fingerprint: ::std::string::String,
 }
 #[doc = "One line of `devbox sync --json` (NDJSON). `start` carries `total`; `begin` carries `name`; `repo` carries `name`, `status` and `detail`; `done` ends the run."]
 #[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug, PartialEq)]

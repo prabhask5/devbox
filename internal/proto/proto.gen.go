@@ -654,15 +654,12 @@ func (j *GatewayPhase) UnmarshalJSON(value []byte) error {
 // When each paired SSH key was last used, kept by the gateway in its state
 // directory (`ssh/keys-used.json`) and read by `devbox ssh keys`.
 type GatewaySSHKeysUsed struct {
-	// Last use (Unix time, ms) by key fingerprint (`SHA256:…`).
-	Keys GatewaySSHKeysUsedKeys `json:"keys"`
+	// One entry per key that has been used.
+	Keys []SSHKeyUse `json:"keys"`
 
 	// Contract version of this message.
 	V int `json:"v"`
 }
-
-// Last use (Unix time, ms) by key fingerprint (`SHA256:…`).
-type GatewaySSHKeysUsedKeys map[string]int
 
 // UnmarshalJSON implements json.Unmarshaler.
 func (j *GatewaySSHKeysUsed) UnmarshalJSON(value []byte) error {
@@ -1835,6 +1832,36 @@ func (j *PushPayload) UnmarshalJSON(value []byte) error {
 		return err
 	}
 	*j = PushPayload(plain)
+	return nil
+}
+
+// The last use of one key.
+type SSHKeyUse struct {
+	// When it last authenticated a connection (Unix time, ms).
+	At int `json:"at"`
+
+	// The key's fingerprint, as `ssh-keygen -l` prints it (`SHA256:…`).
+	Fingerprint string `json:"fingerprint"`
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *SSHKeyUse) UnmarshalJSON(value []byte) error {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(value, &raw); err != nil {
+		return err
+	}
+	if _, ok := raw["at"]; raw != nil && !ok {
+		return fmt.Errorf("field at in SSHKeyUse: required")
+	}
+	if _, ok := raw["fingerprint"]; raw != nil && !ok {
+		return fmt.Errorf("field fingerprint in SSHKeyUse: required")
+	}
+	type Plain SSHKeyUse
+	var plain Plain
+	if err := json.Unmarshal(value, &plain); err != nil {
+		return err
+	}
+	*j = SSHKeyUse(plain)
 	return nil
 }
 

@@ -1,6 +1,9 @@
 {
   "v": 1,
-  "keys": {
-    "SHA256:FAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAK": 1790000000000
-  }
+  "keys": [
+    {
+      "fingerprint": "SHA256:FAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAKEFAK",
+      "at": 1790000000000
+    }
+  ]
 }

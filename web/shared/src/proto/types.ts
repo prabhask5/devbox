@@ -296,11 +296,22 @@ export interface GatewaySshKeysUsed {
    */
   v: number;
   /**
-   * Last use (Unix time, ms) by key fingerprint (`SHA256:…`).
+   * One entry per key that has been used.
    */
-  keys: {
-    [k: string]: number;
-  };
+  keys: SshKeyUse[];
+}
+/**
+ * The last use of one key.
+ */
+export interface SshKeyUse {
+  /**
+   * The key's fingerprint, as `ssh-keygen -l` prints it (`SHA256:…`).
+   */
+  fingerprint: string;
+  /**
+   * When it last authenticated a connection (Unix time, ms).
+   */
+  at: number;
 }
 /**
  * State of the gateway and the VM, served at /__devbox/status and pushed over /__devbox/events.

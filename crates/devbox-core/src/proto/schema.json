@@ -407,10 +407,10 @@
      "type": "integer"
     },
     "keys": {
-     "description": "Last use (Unix time, ms) by key fingerprint (`SHA256:…`).",
-     "type": "object",
-     "additionalProperties": {
-      "type": "integer"
+     "description": "One entry per key that has been used.",
+     "type": "array",
+     "items": {
+      "$ref": "#/$defs/SshKeyUse"
      }
     }
    }
@@ -1457,6 +1457,24 @@
     "gone",
     "ended"
    ]
+  },
+  "SshKeyUse": {
+   "description": "The last use of one key.",
+   "type": "object",
+   "required": [
+    "fingerprint",
+    "at"
+   ],
+   "properties": {
+    "fingerprint": {
+     "description": "The key's fingerprint, as `ssh-keygen -l` prints it (`SHA256:…`).",
+     "type": "string"
+    },
+    "at": {
+     "description": "When it last authenticated a connection (Unix time, ms).",
+     "type": "integer"
+    }
+   }
   },
   "SyncProgress": {
    "description": "One line of `devbox sync --json` (NDJSON). `start` carries `total`; `begin` carries `name`; `repo` carries `name`, `status` and `detail`; `done` ends the run.",

@@ -44,7 +44,7 @@ So that all three generators produce the same shapes, the schemas keep to a comm
 | `session` | hub → app/CLI | one session (05); carries `v` wherever it appears |
 | `screen-frame` | hub → app (SSE) | `{v, text?, cols?, rows?, reason?}`; no `text` means there is no screen, and `reason` (`external`, `gone`) says why |
 | `sync-progress` | `devbox sync --json` → hub | NDJSON lines `{v, type, …}`: `start{total}`, `begin{name}`, `repo{name,status,detail}`, `done` |
-| `gateway-ssh-keys-used` | gateway state `ssh/keys-used.json` → `devbox ssh keys` | `{v, keys: {<SHA256 fingerprint>: <last use, Unix ms>}}` (spec 18) |
+| `gateway-ssh-keys-used` | gateway state `ssh/keys-used.json` → `devbox ssh keys` | `{v, keys: [{fingerprint: "SHA256:…", at: <last use, Unix ms>}]}` (spec 18) |
 | `push-payload` | hub → service worker | `{v, title, body, url, tag, badge}` |
 | `host-config` | `/etc/devbox/devbox.toml` | written by `devbox up`, read by CLI + gateway |
 | `host-secrets` | `/etc/devbox/secrets.toml` | wake password hash, cookie secret, hub token; optionally `app_password_hash`, the host's copy of the app password's hash for a VM that is built again (the gateway does not read it) |
