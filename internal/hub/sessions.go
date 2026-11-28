@@ -185,7 +185,7 @@ func (h *Hub) Kill(ctx context.Context, id string) error {
 	}
 	h.mu.Lock()
 	delete(h.sessions, id)
-	h.kills++
+	h.changes++
 	h.mu.Unlock()
 	h.changed()
 	if err := h.store.remove(ctx, id); err != nil {
@@ -214,6 +214,7 @@ func (h *Hub) Rename(ctx context.Context, id, name string) (*proto.Session, erro
 			return nil, err
 		}
 		s.Tmux = &name
+		h.changes++
 	}
 	s.Name = name
 	h.persist(s)
@@ -331,7 +332,7 @@ func (h *Hub) Restart(ctx context.Context, id string) error {
 // sessions the hub does not know are adopted, agents that exited or fell silent are noticed.
 func (h *Hub) reconcile(ctx context.Context) {
 	h.mu.Lock()
-	kills := h.kills
+	changes := h.changes
 	h.mu.Unlock()
 	live, err := h.opt.Tmux.List(ctx)
 	if err != nil {
@@ -349,6 +350,13 @@ func (h *Hub) reconcile(ctx context.Context) {
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if h.changes != changes {
+		// The hub itself renamed or killed a session since the list was taken. An old list would
+		// put the old name back, or bring a killed session back as one nobody started: the next
+		// look at tmux is as good.
+		h.requestReconcile()
+		return
+	}
 	claimed := map[string]bool{}
 	for id, s := range h.sessions {
 		if s.Kind != proto.SessionKindTmux {
@@ -390,13 +398,7 @@ func (h *Hub) reconcile(ctx context.Context) {
 		}
 	}
 
-	// Sessions started elsewhere, e.g. `tmux -L devbox new -s scratch` in a terminal. Not from a
-	// list that was taken before a session was killed: it may still hold that session, which
-	// would come back as one nobody started. The next look at tmux is as good.
-	if h.kills != kills {
-		live = nil
-		h.requestReconcile()
-	}
+	// Sessions started elsewhere, e.g. `tmux -L devbox new -s scratch` in a terminal.
 	for i := range live {
 		l := &live[i]
 		if claimed[l.Name] || l.Name == observed {

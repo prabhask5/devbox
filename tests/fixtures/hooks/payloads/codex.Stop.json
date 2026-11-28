@@ -1,7 +1,11 @@
 {
   "session_id": "__SESSION__",
+  "transcript_path": null,
   "cwd": "__CWD__",
-  "model": "gpt-5-codex",
+  "model": "gpt-5.5",
+  "permission_mode": "default",
+  "turn_id": "turn-FAKE-1",
   "hook_event_name": "Stop",
+  "stop_hook_active": false,
   "last_assistant_message": "All 12 tests pass now."
 }

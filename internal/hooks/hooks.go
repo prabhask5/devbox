@@ -16,10 +16,25 @@ import (
 	"github.com/prabhask5/devbox/internal/sys"
 )
 
-// The events each agent's own hook system offers.
+// hook is one event of an agent's own hook system that devbox listens to.
+type hook struct {
+	Event   string // the agent's name for it
+	Report  string // what the relay reports it as, when that is another name
+	Timeout int    // seconds the agent waits for the relay
+}
+
+// The events each agent's own hook system offers. Claude Code has no event called Error: a
+// turn that ends in an API error is its StopFailure. Codex gives a SessionEnd hook three
+// seconds at most and warns about a longer timeout; it reports no errors.
 var (
-	claudeEvents = []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PermissionRequest", "Notification", "Stop", "SessionEnd"}
-	codexEvents  = []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PermissionRequest", "Stop", "SessionEnd"}
+	claudeEvents = []hook{
+		{Event: "SessionStart"}, {Event: "UserPromptSubmit"}, {Event: "PreToolUse"}, {Event: "PostToolUse"}, {Event: "PermissionRequest"},
+		{Event: "Notification"}, {Event: "Stop"}, {Event: "StopFailure", Report: "Error"}, {Event: "SessionEnd"},
+	}
+	codexEvents = []hook{
+		{Event: "SessionStart"}, {Event: "UserPromptSubmit"}, {Event: "PreToolUse"}, {Event: "PostToolUse"}, {Event: "PermissionRequest"},
+		{Event: "Stop"}, {Event: "SessionEnd", Timeout: 3},
+	}
 )
 
 //go:embed opencode-plugin.js
@@ -45,7 +60,7 @@ func Install(fsys sys.FS, home, relay string) error {
 // [{"matcher": "", "hooks": [{"type": "command", "command": …, "timeout": 5}]}]}}. Every other
 // key, and every hook that is not devbox's, stays as it is. The agents rewrite these files
 // themselves, which is why they are merged and not symlinked.
-func mergeHooks(fsys sys.FS, path, relay, agent string, events []string) error {
+func mergeHooks(fsys sys.FS, path, relay, agent string, events []hook) error {
 	settings := map[string]any{}
 	data, err := fsys.ReadFile(path)
 	switch {
@@ -62,16 +77,23 @@ func mergeHooks(fsys sys.FS, path, relay, agent string, events []string) error {
 		all = map[string]any{}
 	}
 	for _, event := range events {
-		groups, _ := all[event].([]any)
+		report, timeout := event.Report, event.Timeout
+		if report == "" {
+			report = event.Event
+		}
+		if timeout == 0 {
+			timeout = 5
+		}
+		groups, _ := all[event.Event].([]any)
 		kept := []any{}
 		for _, group := range groups {
 			if !isDevbox(group) {
 				kept = append(kept, group)
 			}
 		}
-		all[event] = append(kept, map[string]any{
+		all[event.Event] = append(kept, map[string]any{
 			"matcher": "",
-			"hooks":   []any{map[string]any{"type": "command", "command": relay + " event " + agent + " " + event, "timeout": 5}},
+			"hooks":   []any{map[string]any{"type": "command", "command": relay + " event " + agent + " " + report, "timeout": timeout}},
 		})
 	}
 	settings["hooks"] = all

@@ -682,3 +682,17 @@ func TestASignalReachesTheCommandInTheVM(t *testing.T) {
 		t.Fatal("the signal did not reach the command")
 	}
 }
+
+func TestAComputerThatWasJustPairedLogsInAtOnce(t *testing.T) {
+	h := start(t)
+	// Not at the gateway's next look at the file: the setup script tries the connection the
+	// moment pairing has answered.
+	for range 5 {
+		signer := h.pair()
+		client, err := ssh.Dial("tcp", h.sshAddr, h.clientConfig(vmUser, signer))
+		if err != nil {
+			t.Fatalf("the first connection after pairing: %v", err)
+		}
+		_ = client.Close()
+	}
+}

@@ -14,3 +14,7 @@ the VM. Paired computers: `devbox ssh keys`.
 
 On your phone: open https://agents.example.com in Safari, Share → Add to Home Screen, open it from
 there, then Settings → Enable notifications.
+
+Codex runs a new hook only after you have trusted it: start `codex` on the devbox once, type
+/hooks and trust the hooks devbox installed. Until then the agents app does not see what
+Codex does.

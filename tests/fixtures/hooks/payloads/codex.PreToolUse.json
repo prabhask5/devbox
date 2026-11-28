@@ -1,10 +1,14 @@
 {
   "session_id": "__SESSION__",
+  "transcript_path": null,
   "cwd": "__CWD__",
-  "model": "gpt-5-codex",
+  "model": "gpt-5.5",
+  "permission_mode": "default",
+  "turn_id": "turn-FAKE-1",
   "hook_event_name": "PreToolUse",
-  "tool_name": "shell",
+  "tool_name": "Bash",
   "tool_input": {
     "command": "cargo test"
-  }
+  },
+  "tool_use_id": "call_FAKE1"
 }

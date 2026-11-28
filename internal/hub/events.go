@@ -13,7 +13,7 @@ import (
 	"github.com/prabhask5/devbox/internal/proto"
 )
 
-var needsInputNotification = regexp.MustCompile(`permission|elicitation_dialog|agent_needs_input`)
+var needsInputNotification = regexp.MustCompile(`permission|elicitation_dialog|elicitation_url_dialog|agent_needs_input`)
 
 func text(payload map[string]any, keys ...string) string {
 	for _, key := range keys {
@@ -218,7 +218,9 @@ func (h *Hub) HandleEvent(ctx context.Context, event proto.AgentEvent) {
 		h.record("turn.done", map[string]any{"sessionId": s.ID, "agent": s.Agent, "repo": s.Repo, "seconds": seconds})
 		h.notifyFinished(s, seconds, reply)
 	case proto.AgentEventEventError:
-		what := text(payload, "error", "message")
+		// Claude's StopFailure names the kind of error in `error` (rate_limit, server_error) and
+		// says it in words in the other two; opencode's plugin sends the words as `error`.
+		what := text(payload, "last_assistant_message", "error_details", "error", "message")
 		if what == "" {
 			what = "error"
 		}

@@ -2,7 +2,8 @@
   "session_id": "__SESSION__",
   "transcript_path": "/home/dev/.claude/projects/-home-dev-code-devbox/__SESSION__.jsonl",
   "cwd": "__CWD__",
-  "permission_mode": "default",
+  "scratchpad_dir": "/tmp/claude-1000/-home-dev-code-devbox/__SESSION__/scratchpad",
   "hook_event_name": "SessionStart",
-  "source": "startup"
+  "source": "startup",
+  "model": "claude-fable-5-2"
 }

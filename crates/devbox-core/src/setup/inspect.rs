@@ -65,6 +65,15 @@ pub struct ConnectReport {
     pub ssh_host: String,
     /// The user in the VM, once it is provisioned.
     pub user: Option<String>,
+    /// Whether Codex is among the agents: its hooks wait for the owner to trust them.
+    pub codex: bool,
+}
+
+/// Whether a host config has Codex among the agents of the VM.
+pub(crate) fn has_codex(config: &Value) -> bool {
+    config["provision"]["agents"]
+        .as_array()
+        .is_some_and(|agents| agents.iter().any(|agent| agent == "codex"))
 }
 
 /// `devbox connect`: how to reach the devbox of this host.
@@ -81,6 +90,7 @@ pub fn connect(system: &dyn System, options: &StatusOptions) -> Result<ConnectRe
         agents_host: host("agents"),
         ssh_host: host("ssh"),
         user: super::vm_user(&config, &remembered(system, paths)),
+        codex: has_codex(&config),
     })
 }
 
@@ -681,7 +691,12 @@ pub(crate) fn render_doctor(report: &Value) -> String {
 pub(crate) fn render_connect(report: &ConnectReport) -> String {
     let (code_host, agents_host, ssh_host) =
         (&report.code_host, &report.agents_host, &report.ssh_host);
+    let codex = if report.codex {
+        "\nCodex runs a new hook only after you have trusted it: start `codex` on the devbox once, type\n/hooks and trust the hooks devbox installed. Until then the agents app does not see what\nCodex does.\n"
+    } else {
+        ""
+    };
     format!(
-        "Your devbox\n\n  Editor       https://{code_host}\n  Agents app   https://{agents_host}\n  SSH          ssh devbox\n\nOn each of your computers (macOS or Linux), once:\n\n  curl -fsSL https://{ssh_host}/setup | sh\n\nIt installs a small client, asks for the password of the agents app to pair the computer's\nkey, and writes one block of SSH config. After that `ssh devbox` works from anywhere and wakes\nthe VM. Paired computers: `devbox ssh keys`.\n\nOn your phone: open https://{agents_host} in Safari, Share → Add to Home Screen, open it from\nthere, then Settings → Enable notifications.\n"
+        "Your devbox\n\n  Editor       https://{code_host}\n  Agents app   https://{agents_host}\n  SSH          ssh devbox\n\nOn each of your computers (macOS or Linux), once:\n\n  curl -fsSL https://{ssh_host}/setup | sh\n\nIt installs a small client, asks for the password of the agents app to pair the computer's\nkey, and writes one block of SSH config. After that `ssh devbox` works from anywhere and wakes\nthe VM. Paired computers: `devbox ssh keys`.\n\nOn your phone: open https://{agents_host} in Safari, Share → Add to Home Screen, open it from\nthere, then Settings → Enable notifications.\n{codex}"
     )
 }

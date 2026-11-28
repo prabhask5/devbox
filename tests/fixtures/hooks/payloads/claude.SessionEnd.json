@@ -2,7 +2,8 @@
   "session_id": "__SESSION__",
   "transcript_path": "/home/dev/.claude/projects/-home-dev-code-devbox/__SESSION__.jsonl",
   "cwd": "__CWD__",
-  "permission_mode": "default",
+  "scratchpad_dir": "/tmp/claude-1000/-home-dev-code-devbox/__SESSION__/scratchpad",
+  "prompt_id": "00000000-0000-4000-8000-000000000001",
   "hook_event_name": "SessionEnd",
   "reason": "prompt_input_exit"
 }

@@ -2,13 +2,17 @@ package hub_test
 
 import (
 	"context"
+	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/prabhask5/devbox/internal/hub"
 	"github.com/prabhask5/devbox/internal/proto"
+	"github.com/prabhask5/devbox/tests/go/repo"
 )
 
 var ctx = context.Background()
@@ -89,7 +93,7 @@ func TestAnAgentSessionFromStartToRestart(t *testing.T) {
 	}
 	h.typeLine(created.ID, "error")
 	s = h.waitState(created.ID, proto.SessionStateError)
-	if value(s.WaitingFor) != "API rate limit reached" {
+	if value(s.WaitingFor) != "API Error: Rate limit reached" {
 		t.Errorf("error: %s", value(s.WaitingFor))
 	}
 
@@ -133,7 +137,7 @@ func TestCodexAndOpencodeDriveTheSameStates(t *testing.T) {
 		h.typeLine(s.ID, "ask")
 		waiting := h.waitState(s.ID, proto.SessionStateNeedsInput)
 		adapter, _ := hub.AdapterByID(agent)
-		want := map[string]string{"codex": "Permission to use shell: cargo test", "opencode": "Permission: bash cargo test"}[agent]
+		want := map[string]string{"codex": "Permission to use Bash: cargo test", "opencode": "Permission: bash cargo test"}[agent]
 		if value(waiting.WaitingFor) != want {
 			t.Errorf("%s waits for %q, want %q", agent, value(waiting.WaitingFor), want)
 		}
@@ -403,5 +407,41 @@ func TestASessionThatLostItsTagIsTaggedAgain(t *testing.T) {
 	eventually(t, "the hub to follow the rename", func() bool { s := h.session(id); return s != nil && s.Name == "renamed" })
 	if sessions := h.hub.Sessions(); len(sessions) != 1 {
 		t.Errorf("one session was started, the hub lists %d: %+v", len(sessions), sessions)
+	}
+}
+
+// The keys the app's answer buttons send are what the agents' own prompts take. Claude Code's
+// are checked against screens recorded from the running agent (tests/fixtures/hooks/screens,
+// docs/spec/05-agents-and-hooks.md says how to record them again).
+func TestClaudesAnswerKeysAreWhatItsRecordedPromptsTake(t *testing.T) {
+	adapter, _ := hub.AdapterByID("claude")
+	keys := map[string]string{}
+	for _, key := range adapter.AnswerKeys {
+		keys[key.Label] = key.Key
+	}
+	if len(keys) != 3 || keys["Yes"] != "1" || keys["Always"] != "2" || keys["No"] != "Escape" {
+		t.Fatalf("answer keys: %+v", adapter.AnswerKeys)
+	}
+	screens, err := filepath.Glob(filepath.Join(repo.Root(t), "tests/fixtures/hooks/screens/claude.*.txt"))
+	if err != nil || len(screens) < 2 {
+		t.Fatalf("recorded screens: %v %v", screens, err)
+	}
+	option := regexp.MustCompile(`(?m)^\s*(?:❯ )?(\d)\. (.*)$`)
+	for _, path := range screens {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		options := map[string]string{}
+		for _, match := range option.FindAllStringSubmatch(string(data), -1) {
+			options[match[1]] = match[2]
+		}
+		// 1 is the plain yes, 2 the yes that also stops it asking, and Esc cancels, which is no.
+		if options["1"] != "Yes" || !strings.HasPrefix(options["2"], "Yes, and ") || !strings.Contains(string(data), "Esc to cancel") {
+			t.Errorf("%s: options %v", filepath.Base(path), options)
+		}
+		if last := options[strconv.Itoa(len(options))]; last != "No" {
+			t.Errorf("%s: the last option is %q", filepath.Base(path), last)
+		}
 	}
 }

@@ -95,7 +95,7 @@ type Hub struct {
 
 	reconcileNow chan struct{}
 
-	kills      int // sessions killed so far; guarded by mu
+	changes    int // renames and kills of tmux sessions by the hub itself; guarded by mu
 	background sync.WaitGroup
 	closing    chan struct{} // closed when the hub stops, to end event streams
 	push       *webpush.Sender
