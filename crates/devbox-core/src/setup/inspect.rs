@@ -687,7 +687,7 @@ pub(crate) fn render_doctor(report: &Value) -> String {
     out
 }
 
-/// How to reach a devbox: the URLs, an SSH config snippet, and how to install the phone app.
+/// How to reach a devbox: the URLs, the command that sets a computer up for SSH, and how to install the phone app.
 pub(crate) fn render_connect(report: &ConnectReport) -> String {
     let (code_host, agents_host, ssh_host) =
         (&report.code_host, &report.agents_host, &report.ssh_host);

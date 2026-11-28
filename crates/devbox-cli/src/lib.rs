@@ -60,7 +60,7 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
-    /// Print the URLs, an SSH config snippet and how to install the phone app
+    /// Print the URLs, the command that sets a computer up for SSH, and how to install the phone app
     Connect,
     /// The computers that may log in over SSH, and how SSH stands
     Ssh {

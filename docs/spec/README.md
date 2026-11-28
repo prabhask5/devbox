@@ -20,5 +20,5 @@ Read [CLAUDE.md](../../CLAUDE.md) first. Each file states behaviour and ends wit
 | 14 | [Security](14-security.md) | auth, trust boundaries, secrets, dependencies |
 | 15 | [Testing](15-testing.md) | fakes, layers, the end-to-end harness, CI jobs |
 | 16 | [Design](16-design.md) | the approved UI (visual baselines), tokens, components |
-| 17 | [Public readiness](17-public-readiness.md) | the artifact-free end state, what goes when, enforcement |
+| 17 | [Public readiness](17-public-readiness.md) | what the repository holds and does not, personal data, enforcement |
 | 18 | [SSH from anywhere](18-ssh.md) | SSH over WebSocket, the gateway's SSH server and boot-aware terminal, `devbox-ssh` and the one-command client setup |
