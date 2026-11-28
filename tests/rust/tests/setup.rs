@@ -353,6 +353,10 @@ fn a_fresh_host_is_set_up_and_a_second_run_changes_nothing() {
         assert!(devbox_core::password::verify(hub.app_password_hash.expose(), "FAKE-app-password").unwrap());
         assert_eq!(hub.hub_token.expose(), parsed.hub_token.expose(), "the gateway and the hub share one token");
         assert_ne!(hub.cookie_secret.expose(), parsed.cookie_secret.expose());
+        // Nothing is installed before the first boot has finished creating the user.
+        let waited = vm.executed.iter().position(|(command, _)| command.last().is_some_and(|script| script.contains("cloud-init status --wait")));
+        let looked_up = vm.executed.iter().position(|(command, _)| command.last().is_some_and(|script| script.starts_with("id -u 'dev'")));
+        assert!(waited.is_some() && waited < looked_up, "{:?}", vm.executed);
         let last = vm.executed.last().unwrap();
         assert_eq!((last.0.as_slice(), last.1), (&["bash".to_owned(), "/var/lib/devbox-install/install.sh".to_owned()][..], None));
     });

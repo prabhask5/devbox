@@ -87,7 +87,7 @@ printf 'tls:\n  certificates:\n    - certFile: /etc/traefik/certs/tls.crt\n     
 docker network create dokploy-network >/dev/null
 docker run -d --name traefik --network dokploy-network -p 443:443 \
   -v /etc/traefik/dynamic:/etc/traefik/dynamic:ro -v /etc/traefik/certs:/etc/traefik/certs:ro \
-  traefik:v3.6 --entrypoints.websecure.address=:443 --providers.file.directory=/etc/traefik/dynamic --providers.file.watch=true >/dev/null
+  traefik:v3 --entrypoints.websecure.address=:443 --providers.file.directory=/etc/traefik/dynamic --providers.file.watch=true >/dev/null
 
 step "the gateway, as Dokploy would deploy it"
 sudo install -d -m 755 /etc/devbox /var/lib/devbox/gateway

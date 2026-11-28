@@ -164,6 +164,10 @@ impl Inside<'_> {
         }
         for _ in 0..90 {
             if self.root(&["true"], Duration::from_secs(20)).is_ok_and(|ran| ran.code == 0) {
+                // The agent answers before the first boot has finished: the user and the
+                // packages of a new VM are there only once cloud-init is done.
+                let done = "if command -v cloud-init >/dev/null; then cloud-init status --wait >/dev/null 2>&1; fi; true";
+                self.root(&["sh", "-c", done], Duration::from_secs(900))?;
                 return Ok(());
             }
             system.sleep(Duration::from_secs(2));
