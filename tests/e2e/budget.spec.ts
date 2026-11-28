@@ -17,7 +17,10 @@ function budget(metric: string): number {
 // The agents app on a mid-range phone: Chromium with its CPU slowed four times, the app's shell
 // already in the service worker's cache. Time from the start of the navigation to the session
 // list being on the screen, the median of five loads.
-test("the app's first render on a mid-range phone is within its budget", async ({ page, request }) => {
+test("the app's first render on a mid-range phone is within its budget", async ({
+  page,
+  request,
+}) => {
   await reset(request);
   await page.addInitScript(() => {
     const seen = () => {
@@ -25,7 +28,11 @@ test("the app's first render on a mid-range phone is within its budget", async (
         (window as unknown as { rendered?: number }).rendered ??= performance.now();
       }
     };
-    new MutationObserver(seen).observe(document, { childList: true, subtree: true, characterData: true });
+    new MutationObserver(seen).observe(document, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
   });
   await page.goto(`${AGENTS}/`);
   await page.getByLabel("Wake password").fill(WAKE_PASSWORD);
@@ -47,11 +54,14 @@ test("the app's first render on a mid-range phone is within its budget", async (
     const rendered = await page.waitForFunction(
       () => (window as unknown as { rendered?: number }).rendered,
     );
-    times.push((await rendered.jsonValue()) as number);
+    const time = await rendered.jsonValue();
+    if (time === undefined) throw new Error("the page did not say when it rendered");
+    times.push(time);
   }
   await devtools.send("Emulation.setCPUThrottlingRate", { rate: 1 });
   times.sort((a, b) => a - b);
   const median = times[2];
+  if (median === undefined) throw new Error("five loads were measured");
 
   // The budgets job collects what was measured into one table (scripts/budgets.sh).
   const out = process.env.DEVBOX_BUDGETS_OUT;
@@ -60,7 +70,8 @@ test("the app's first render on a mid-range phone is within its budget", async (
     mkdirSync(dirname(file), { recursive: true });
     appendFileSync(file, `hub_app_first_render_ms = ${median.toFixed(1)}\n`);
   }
-  expect(median, `first renders: ${times.map((t) => t.toFixed(0)).join(", ")} ms`).toBeLessThanOrEqual(
-    budget("hub_app_first_render_ms") * 1.1,
-  );
+  expect(
+    median,
+    `first renders: ${times.map((t) => t.toFixed(0)).join(", ")} ms`,
+  ).toBeLessThanOrEqual(budget("hub_app_first_render_ms") * 1.1);
 });

@@ -94,10 +94,12 @@ type Hub struct {
 	started time.Time
 
 	reconcileNow chan struct{}
-	background   sync.WaitGroup
-	closing      chan struct{} // closed when the hub stops, to end event streams
-	push         *webpush.Sender
-	login        *httpx.LoginLimiter
+
+	kills      int // sessions killed so far; guarded by mu
+	background sync.WaitGroup
+	closing    chan struct{} // closed when the hub stops, to end event streams
+	push       *webpush.Sender
+	login      *httpx.LoginLimiter
 
 	watchMu sync.Mutex
 	streams map[chan struct{}]struct{} // app state streams waiting for a change
