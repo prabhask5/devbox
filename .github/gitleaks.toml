@@ -1,0 +1,24 @@
+# The full-history secret scan of the release workflow (docs/spec/17-public-readiness.md):
+# gitleaks' own rules, minus what looks like a secret and is not one.
+title = "devbox"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "protocol constants, placeholders and the fixtures of the tests that look for secrets"
+regexTarget = "line"
+regexes = [
+  # the nonce of a WebSocket handshake: RFC 6455's own example, or one made for a check
+  '''Sec-WebSocket-Key''',
+  # an empty default that a server fills in when it serves the script
+  '''DEFAULT_HOST_KEY=''',
+]
+paths = [
+  # what devbox-context must redact: every kind of secret, each one fake
+  '''^tests/fixtures/context/secrets\.txt$''',
+  # the example of RFC 8291, appendix A
+  '''^tests/go/webpush/webpush_test\.go$''',
+  # an example file with empty values, in the history
+  '''^reference/prototype/host/devbox-gateway/\.env\.example$''',
+]
