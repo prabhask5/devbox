@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -36,6 +37,8 @@ var (
 type sshServer struct {
 	g    *Gateway
 	keys *sshKeys
+
+	pending atomic.Int64 // connections that have not authenticated yet
 
 	mu       sync.Mutex
 	attempts map[string][]time.Time // unauthenticated connections per source address
@@ -130,6 +133,10 @@ func (s *sshServer) config() *ssh.ServerConfig {
 			return &ssh.Permissions{Extensions: map[string]string{"fingerprint": ssh.FingerprintSHA256(key)}}, nil
 		},
 	}
+	// Signatures with SHA-2 only: no ssh-rsa (SHA-1), no DSA.
+	config.PublicKeyAuthAlgorithms = []string{
+		ssh.KeyAlgoED25519, ssh.KeyAlgoECDSA256, ssh.KeyAlgoECDSA384, ssh.KeyAlgoECDSA521, ssh.KeyAlgoRSASHA512, ssh.KeyAlgoRSASHA256,
+	}
 	config.KeyExchanges = []string{ssh.KeyExchangeMLKEM768X25519, ssh.KeyExchangeCurve25519}
 	config.Ciphers = []string{ssh.CipherChaCha20Poly1305, ssh.CipherAES256GCM, ssh.CipherAES128GCM}
 	config.AddHostKey(s.keys.host)
@@ -139,16 +146,27 @@ func (s *sshServer) config() *ssh.ServerConfig {
 // serve handles one connection from its first byte to its end.
 func (s *sshServer) serve(ctx context.Context, conn net.Conn, source string) {
 	defer conn.Close() //nolint:errcheck // closing a finished connection
+	// Connections that have not logged in yet are few per address and bounded in all, and
+	// each has half a minute: nobody ties the gateway up by connecting and saying nothing.
 	if !s.admit(source) {
+		return
+	}
+	if s.pending.Add(1) > int64(s.g.t.SSHPending) {
+		s.pending.Add(-1)
 		return
 	}
 	_ = conn.SetDeadline(time.Now().Add(sshAuthWithin))
 	client, channels, requests, err := ssh.NewServerConn(conn, s.config())
+	s.pending.Add(-1)
 	if err != nil {
-		return // not SSH, not authenticated, or too slow: nothing was woken and nothing reached
+		// Not SSH, not authenticated, or too slow: nothing was woken and nothing reached.
+		s.g.log.Warn("ssh: a connection did not log in", "from", source, "error", err)
+		return
 	}
 	_ = conn.SetDeadline(time.Time{})
 	s.authenticated(source)
+	fingerprint := client.Permissions.Extensions["fingerprint"]
+	s.g.log.Info("ssh: logged in", "from", source, "key", fingerprint, "name", s.keys.name(fingerprint))
 
 	// From here on the connection is the owner's: it may wake the VM, counts as activity, and
 	// ends when the VM is put to sleep.

@@ -3,8 +3,11 @@ package gateway_test
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
 	"crypto/ed25519"
+	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/rsa"
 	"errors"
 	"fmt"
 	"io"
@@ -183,6 +186,7 @@ func TestOnlyAPairedKeyOfTheVMUserGetsInAndNothingElseWakesTheVM(t *testing.T) {
 		t.Errorf("the gateway's banner: %q, %v", banner, err)
 	}
 	fmt.Fprint(conn, "GET / HTTP/1.1\r\n\r\n")
+	_ = conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
 	_, _ = io.ReadAll(conn)
 	_ = conn.Close()
 
@@ -547,4 +551,104 @@ func TestTheSameServerAnswersInAWebSocketOnTheSSHHost(t *testing.T) {
 	if got := h.status(); got.VM != proto.VMStateRunning {
 		t.Errorf("status: %+v", got)
 	}
+}
+
+// The files that decide who gets in are trusted only while nobody else can change or read them.
+func TestSSHFailsClosedWhenItsFilesAreNotPrivate(t *testing.T) {
+	h := start(t)
+	signer := h.pair()
+	_ = h.mustSSH(signer).Close()
+
+	// Anybody could add a key to a file others may write: nobody gets in from it.
+	if err := os.Chmod(h.sshFile("authorized_keys"), 0o666); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the warning", func() bool {
+		return strings.Contains(h.logs.String(), "ssh/authorized_keys is writable by others (mode 0666): no key is accepted until it is chmod 600")
+	})
+	if _, err := ssh.Dial("tcp", h.sshAddr, h.clientConfig(vmUser, signer)); err == nil {
+		t.Fatal("a key from a file anybody can write was accepted")
+	}
+	if err := os.Chmod(h.sshFile("authorized_keys"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_ = h.mustSSH(signer).Close()
+
+	// A private key that became readable is made private again when the gateway starts.
+	h.shutdown()
+	for _, name := range []string{"host_ed25519_key", "upstream_ed25519_key"} {
+		if err := os.Chmod(h.sshFile(name), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h.run(sysClock(), testTimings())
+	eventually(t, "the private keys to be private again", func() bool {
+		for _, name := range []string{"host_ed25519_key", "upstream_ed25519_key"} {
+			if info, _ := os.Stat(h.sshFile(name)); info.Mode().Perm() != 0o600 {
+				return false
+			}
+		}
+		return true
+	})
+}
+
+func TestWeakKeysAreNotAcceptedEvenWhenListed(t *testing.T) {
+	h := start(t)
+	rsaSigner := func(bits int) (ssh.Signer, string) {
+		private, err := rsa.GenerateKey(rand.Reader, bits)
+		if err != nil {
+			t.Fatal(err)
+		}
+		signer, err := ssh.NewSignerFromKey(private)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return signer, strings.TrimSpace(string(ssh.MarshalAuthorizedKey(signer.PublicKey())))
+	}
+	weak, weakLine := rsaSigner(2048)
+	strong, strongLine := rsaSigner(3072)
+	ecdsaPrivate, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	curve, _ := ssh.NewSignerFromKey(ecdsaPrivate)
+	h.authorize(weakLine+" old-laptop", strongLine+" server", strings.TrimSpace(string(ssh.MarshalAuthorizedKey(curve.PublicKey())))+" phone")
+	eventually(t, "the warning about the short key", func() bool {
+		return strings.Contains(h.logs.String(), "line 1 is a ssh-rsa key, which is too weak or not supported: the key is refused")
+	})
+	_ = h.mustSSH(strong).Close()
+	_ = h.mustSSH(curve).Close()
+	if _, err := ssh.Dial("tcp", h.sshAddr, h.clientConfig(vmUser, weak)); err == nil {
+		t.Error("a 2048-bit RSA key was accepted")
+	}
+	// Each login and each refusal is in the log, with where it came from and which key it was.
+	eventually(t, "the logins and the refusal in the log", func() bool {
+		logs := h.logs.String()
+		return strings.Contains(logs, `msg="ssh: logged in" from=127.0.0.1 key=`+ssh.FingerprintSHA256(strong.PublicKey())+" name=server") &&
+			strings.Contains(logs, `msg="ssh: a connection did not log in" from=127.0.0.1`)
+	})
+}
+
+func TestConnectionsThatHaveNotLoggedInAreBounded(t *testing.T) {
+	h := start(t, withTimings(func(t *gateway.Timings) { t.SSHPending = 2 }))
+	signer := h.pair()
+	_ = h.mustSSH(signer).Close()
+	// Two connections that say nothing hold the two places there are.
+	var idle []net.Conn
+	for range 2 {
+		conn, err := net.Dial("tcp", h.sshAddr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		banner := make([]byte, 16)
+		if _, err := io.ReadFull(conn, banner); err != nil {
+			t.Fatal(err)
+		}
+		idle = append(idle, conn)
+	}
+	if _, err := ssh.Dial("tcp", h.sshAddr, h.clientConfig(vmUser, signer)); err == nil {
+		t.Error("a third connection was let in while two were logging in")
+	}
+	// They do not hold them for long, and when they go there is room again.
+	for _, conn := range idle {
+		_ = conn.Close()
+	}
+	_ = h.mustSSH(signer).Close()
 }

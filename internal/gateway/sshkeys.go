@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/rsa"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -90,9 +91,21 @@ func loadOrCreateKey(path, comment string) (ssh.Signer, error) {
 	} else if err != nil {
 		return nil, err
 	}
+	// A private key others can read is not private: it is made the gateway's alone again, and
+	// a file that cannot be is not used.
+	if info, err := os.Stat(path); err != nil {
+		return nil, err
+	} else if info.Mode().Perm()&0o077 != 0 {
+		if err := os.Chmod(path, 0o600); err != nil {
+			return nil, fmt.Errorf("%s is readable by others and cannot be made private: %w", path, err)
+		}
+	}
 	signer, err := ssh.ParsePrivateKey(data)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	if signer.PublicKey().Type() != ssh.KeyAlgoED25519 {
+		return nil, fmt.Errorf("%s is not an ed25519 key", path)
 	}
 	public := bytes.TrimSpace(ssh.MarshalAuthorizedKey(signer.PublicKey()))
 	line := string(public) + " " + comment + "\n"
@@ -120,7 +133,13 @@ func (k *sshKeys) reload() (warnings []string, changed bool) {
 	}
 	k.stamp = stamp
 	authorized := map[string]string{}
-	data, _ := os.ReadFile(path) //nolint:gosec // the gateway's own state
+	var data []byte
+	if err == nil && info.Mode().Perm()&0o022 != 0 {
+		// Whoever can write this file can let themselves in: nobody is let in from it.
+		warnings = append(warnings, fmt.Sprintf("ssh/authorized_keys is writable by others (mode %04o): no key is accepted until it is chmod 600", info.Mode().Perm()))
+	} else {
+		data, _ = os.ReadFile(path) //nolint:gosec // the gateway's own state
+	}
 	for number, line := range strings.Split(string(data), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -130,6 +149,8 @@ func (k *sshKeys) reload() (warnings []string, changed bool) {
 		switch {
 		case err != nil:
 			warnings = append(warnings, fmt.Sprintf("ssh/authorized_keys line %d is not a public key: ignored", number+1))
+		case !strongKey(key):
+			warnings = append(warnings, fmt.Sprintf("ssh/authorized_keys line %d is a %s key, which is too weak or not supported: the key is refused", number+1, key.Type()))
 		case len(options) > 0:
 			// devbox does not interpret command=, from= and the like, and a key that is meant
 			// to be restricted must not get in unrestricted.
@@ -149,6 +170,13 @@ func (k *sshKeys) allowed(key ssh.PublicKey) bool {
 	defer k.mu.Unlock()
 	_, ok := k.authorized[ssh.FingerprintSHA256(key)]
 	return ok
+}
+
+// name is the device name a key was paired under.
+func (k *sshKeys) name(fingerprint string) string {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	return k.authorized[fingerprint]
 }
 
 // allowedFingerprint is allowed for a key that is known by its fingerprint.
@@ -177,4 +205,21 @@ func (k *sshKeys) markUsed(fingerprint string, at time.Time) {
 	if os.WriteFile(path+".new", append(data, '\n'), 0o600) == nil {
 		_ = os.Rename(path+".new", path)
 	}
+}
+
+// strongKey reports whether a client key is of a kind the gateway accepts: ed25519, ECDSA on
+// the NIST curves, or RSA of at least 3072 bits.
+func strongKey(key ssh.PublicKey) bool {
+	switch key.Type() {
+	case ssh.KeyAlgoED25519, ssh.KeyAlgoECDSA256, ssh.KeyAlgoECDSA384, ssh.KeyAlgoECDSA521:
+		return true
+	case ssh.KeyAlgoRSA:
+		parsed, ok := key.(ssh.CryptoPublicKey)
+		if !ok {
+			return false
+		}
+		public, ok := parsed.CryptoPublicKey().(*rsa.PublicKey)
+		return ok && public.N.BitLen() >= 3072
+	}
+	return false
 }

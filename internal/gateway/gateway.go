@@ -40,6 +40,7 @@ type Timings struct {
 	SettleFor     time.Duration // a running VM has this long before unanswered services are a problem
 	OverIdleBy    time.Duration // staying awake this long past the idle limit is a problem
 	DeployPoll    time.Duration // between looks for a build of the hub that waits for a sleeping VM
+	SSHPending    int           // SSH connections that may be in the middle of logging in at once
 }
 
 // DefaultTimings are the production values.
@@ -63,6 +64,7 @@ func DefaultTimings() Timings {
 		SettleFor:     3 * time.Minute,
 		OverIdleBy:    10 * time.Minute,
 		DeployPoll:    5 * time.Minute,
+		SSHPending:    128,
 	}
 }
 
