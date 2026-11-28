@@ -8,6 +8,7 @@ gateway_ws_p99_ms = 1
 gateway_idle_rss_mb = 20
 gateway_idle_cpu_percent = 0.1
 gateway_image_mb = 25
+devbox_ssh_mb = 6
 wake_overhead_ms = 300
 relay_p50_ms = 5
 relay_p99_ms = 15

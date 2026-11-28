@@ -123,6 +123,16 @@ budgets() {
   step "measure the gateway"
   go build -trimpath -ldflags "-s -w" -o target/budgets/devbox-gateway ./cmd/devbox-gateway
   go run ./tests/perf/gateway -gateway target/budgets/devbox-gateway
+  step "measure the SSH client"
+  # The largest of the four builds that ship: every computer that connects downloads one.
+  local largest=0 platform size
+  for platform in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
+    CGO_ENABLED=0 GOOS=${platform%/*} GOARCH=${platform#*/} go build -trimpath -ldflags "-s -w" -o target/budgets/devbox-ssh ./cmd/devbox-ssh
+    size=$(wc -c <target/budgets/devbox-ssh)
+    (( size > largest )) && largest=$size
+  done
+  mkdir -p target/budgets
+  awk -v bytes="$largest" 'BEGIN { printf "devbox_ssh_mb = %.2f\n", bytes / 1048576 }' >>target/budgets/measured.toml
   step "measure the hub"
   go build -trimpath -ldflags "-s -w" -o target/budgets/devbox-hub ./cmd/devbox-hub
   go run ./tests/perf/hub -hub target/budgets/devbox-hub

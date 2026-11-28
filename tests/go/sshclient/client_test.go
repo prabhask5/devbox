@@ -19,7 +19,6 @@ import (
 
 	"github.com/prabhask5/devbox/internal/wsconn"
 	"github.com/prabhask5/devbox/tests/fakes/tunnel"
-	"github.com/prabhask5/devbox/tests/go/repo"
 )
 
 var client string
@@ -228,23 +227,8 @@ func TestEveryFailureIsOneLineThatSaysWhatToDoAndExits255(t *testing.T) {
 	check("not a URL", nil, "devbox-ssh: \"devbox.example.com\" is not an https URL\n", "proxy", "devbox.example.com")
 }
 
-func TestVersionAndSize(t *testing.T) {
+func TestVersion(t *testing.T) {
 	if code, out, errOut := run(t, nil, "", "version"); code != 0 || out != "devbox-ssh abc1234\n" || errOut != "" {
 		t.Errorf("version: exit %d, stdout %q, stderr %q", code, out, errOut)
-	}
-	// The client is downloaded by every computer that connects: the build that ships (static,
-	// stripped) stays under 6 MB for every platform it ships for.
-	for _, platform := range []string{"linux/amd64", "linux/arm64", "darwin/amd64", "darwin/arm64"} {
-		goos, goarch, _ := strings.Cut(platform, "/")
-		out := filepath.Join(t.TempDir(), "devbox-ssh")
-		build := exec.Command("go", "build", "-trimpath", "-ldflags", "-s -w", "-o", out, "./cmd/devbox-ssh")
-		build.Dir = repo.Root(t)
-		build.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS="+goos, "GOARCH="+goarch)
-		if output, err := build.CombinedOutput(); err != nil {
-			t.Fatalf("%s: %v\n%s", platform, err, output)
-		}
-		if info, err := os.Stat(out); err != nil || info.Size() > 6<<20 {
-			t.Errorf("%s: %v bytes", platform, info.Size())
-		}
 	}
 }
