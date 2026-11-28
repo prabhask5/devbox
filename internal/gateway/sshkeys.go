@@ -258,7 +258,7 @@ func (k *sshKeys) add(key ssh.PublicKey, name string, at time.Time) error {
 	if !replaced {
 		lines = append(lines, wanted)
 	}
-	if err := os.WriteFile(path+".new", []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+	if err := os.WriteFile(path+".new", []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil { //nolint:gosec // a fixed name in the gateway's own directory
 		return err
 	}
 	return os.Rename(path+".new", path)

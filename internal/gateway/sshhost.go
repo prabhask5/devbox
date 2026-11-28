@@ -126,7 +126,8 @@ func (g *Gateway) serveSSHAPI(w http.ResponseWriter, r *http.Request) {
 			contentType = "text/plain; charset=utf-8"
 		}
 		w.Header().Set("Content-Type", contentType)
-		_, _ = w.Write(data)
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		_, _ = w.Write(data) //nolint:gosec // a build the gateway ships, served as what it is and never as a page
 		return
 	}
 	if r.URL.Path != "/__devbox/ssh/pair" {
