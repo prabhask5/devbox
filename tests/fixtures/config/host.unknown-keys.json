@@ -4,6 +4,7 @@
     "wake_to_deploy": false
   },
   "domain": "example.com",
+  "firewall": {},
   "gateway": {
     "listen": ":8080",
     "ssh_listen": ":2222",

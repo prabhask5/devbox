@@ -96,6 +96,8 @@ provider = "traefik-file"           # traefik-file | none
 file = "/etc/dokploy/traefik/dynamic/devbox.yml"
 entrypoint = "websecure"
 service_url = "http://devbox-gateway:8080"
+[firewall]
+manager = "host-firewall"          # what `devbox up` put the rule in force with; absent: found out
 [provision]                         # how `devbox up` built the VM, so it can rebuild it without input (moi restore)
 user = "dev"
 cpu = 3

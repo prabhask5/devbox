@@ -40,12 +40,16 @@ fn version_at_least(version: &str, major: u32, minor: u32) -> bool {
 }
 
 /// What manages the firewall: the embedder's manager, the one named, or the one found.
-fn firewall_manager(c: &Context) -> Result<Arc<dyn Manager>, String> {
+fn firewall_manager(c: &Context, existing: Option<&Value>) -> Result<Arc<dyn Manager>, String> {
     if let Some(manager) = &c.options.firewall_manager {
         return Ok(Arc::clone(manager));
     }
+    // The manager of the last run is kept, unless it was an embedder's that is not here now.
+    let kept = existing
+        .and_then(|config| config["firewall"]["manager"].as_str())
+        .and_then(firewall::named);
     match &c.options.firewall {
-        None => Ok(firewall::detect(c.system)),
+        None => Ok(kept.unwrap_or_else(|| firewall::detect(c.system))),
         Some(name) => firewall::named(name).ok_or_else(|| {
             format!(
                 "--firewall {name}: the managers are host-firewall, ufw, nftables, moi and none."
@@ -112,7 +116,7 @@ fn preflight(c: &Context) -> Result<(Step, Host), SetupError> {
             Err(problem) => problems.push(problem),
         }
     }
-    let manager = match firewall_manager(c) {
+    let manager = match firewall_manager(c, existing.as_ref()) {
         Ok(manager) => Some(manager),
         Err(problem) => {
             problems.push(problem);
@@ -302,6 +306,7 @@ fn desired(c: &Context, host: &Host) -> Result<Desired, SetupError> {
     } else {
         settings["routing"]["provider"] = json!("none");
     }
+    settings["firewall"]["manager"] = json!(host.firewall.describe());
     built(c, host, &user, &mut settings["provision"])?;
     let resolved = match config::host("devbox.toml", &files::host_config(&settings)) {
         Ok(parsed) => serde_json::to_value(parsed.value).unwrap_or(Value::Null),

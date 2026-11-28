@@ -494,6 +494,7 @@ pub struct HostConfig {
     pub deploy: HostConfigDeploy,
     #[doc = "Domain the devbox is served under."]
     pub domain: ::std::string::String,
+    pub firewall: HostConfigFirewall,
     pub gateway: HostConfigGateway,
     pub hosts: HostConfigHosts,
     #[doc = "Incus instance name."]
@@ -515,6 +516,13 @@ pub struct HostConfigDeploy {
     pub repo: ::std::option::Option<::std::string::String>,
     #[doc = "Wake a sleeping VM to install a new hub build."]
     pub wake_to_deploy: bool,
+}
+#[doc = "What puts the firewall rule for the VM in force."]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug, Default, PartialEq)]
+pub struct HostConfigFirewall {
+    #[doc = "The firewall manager `devbox up` uses: `host-firewall`, `ufw`, `nftables`, `moi`, `none`, or the name of an embedder's own. Absent: `devbox up` finds out which."]
+    #[serde(skip_serializing_if = "::std::option::Option::is_none")]
+    pub manager: ::std::option::Option<::std::string::String>,
 }
 #[doc = "Gateway listeners and timing."]
 #[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug, PartialEq)]

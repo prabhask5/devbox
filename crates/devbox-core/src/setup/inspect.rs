@@ -516,10 +516,24 @@ fn firewall_check(system: &dyn System, config: &Value, checks: &mut Checks) {
         config["vm"]["address"].as_str().unwrap_or_default(),
         &[port("code_port"), port("hub_port"), port("ssh_port")],
     );
-    let manager = crate::firewall::detect(system);
+    // Asked of the manager `up` used; one of an embedder's is not here to be asked.
+    let manager = match config["firewall"]["manager"].as_str() {
+        None => crate::firewall::detect(system),
+        Some(name) => match crate::firewall::named(name) {
+            Some(manager) => manager,
+            None => {
+                checks.skip("firewall", title, &format!("the firewall is managed by {name}"));
+                return;
+            }
+        },
+    };
     match manager.check(system, &rule) {
         _ if manager.describe() == "none" => {
-            checks.skip("firewall", title, "no firewall manager devbox knows on this host");
+            checks.skip(
+                "firewall",
+                title,
+                "no firewall manager is used here: the rule is left to you",
+            );
         }
         Ok(change) => checks.check(
             "firewall",

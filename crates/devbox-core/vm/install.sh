@@ -144,4 +144,6 @@ give -m 644 "$bundle"/units/* "$home/.config/systemd/user/"
 as_user systemctl --user daemon-reload
 as_user systemctl --user enable --now devbox-tmux.service devbox-hub.service devbox-context.timer >/dev/null 2>&1
 as_user systemctl --user restart devbox-hub.service
+# The developer context once now, so that agents have it before the timer first fires.
+as_user systemctl --user start devbox-context.service >/dev/null 2>&1 || true
 echo "done"

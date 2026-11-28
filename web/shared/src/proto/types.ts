@@ -600,6 +600,15 @@ export interface HostConfig {
     service_url: string;
   };
   /**
+   * What puts the firewall rule for the VM in force.
+   */
+  firewall: {
+    /**
+     * The firewall manager `devbox up` uses: `host-firewall`, `ufw`, `nftables`, `moi`, `none`, or the name of an embedder's own. Absent: `devbox up` finds out which.
+     */
+    manager?: string;
+  };
+  /**
    * How `devbox up` built the VM, so that it can build it again without being asked anything.
    */
   provision: {
