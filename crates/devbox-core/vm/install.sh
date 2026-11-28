@@ -18,17 +18,18 @@ as_user() {
   sudo -u "$DEVBOX_USER" -H env "XDG_RUNTIME_DIR=/run/user/$uid" "PATH=$home/.local/bin:/usr/local/bin:/usr/bin:/bin" "$@"
 }
 # The bundle is root's alone (it holds secrets), so the user cannot read it: its files are
-# read by root and written by the user, through a pipe (a file root alone may read cannot be
-# opened again by the user, even when it is handed over open). give -m <mode> <file...> <target>
+# read by root and written by the user. give -m <mode> <file...> <target file or directory>
 give() {
-  local mode=$2 target file; shift 2
+  local mode=$2 target file dest; shift 2
   target=${@: -1}
   for file in "${@:1:$#-1}"; do
-    if [ -d "$target" ]; then
-      cat "$file" | as_user install -m "$mode" /dev/stdin "${target%/}/$(basename "$file")"
-    else
-      cat "$file" | as_user install -m "$mode" /dev/stdin "$target"
-    fi
+    dest=$target
+    [ ! -d "$target" ] || dest=${target%/}/$(basename "$file")
+    # Written next to its place, the user's alone until it has its mode, then moved there: a
+    # program that is running can be replaced, and nothing ever sees half a file.
+    as_user sh -c 'umask 077 && cat >"$1.new"' sh "$dest" <"$file"
+    chmod "$mode" "$dest.new"
+    as_user mv -f "$dest.new" "$dest"
   done
 }
 step() { echo "== $*"; }
