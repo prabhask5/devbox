@@ -125,7 +125,12 @@ func (s *sshServer) config() *ssh.ServerConfig {
 				return nil, errors.New("not the devbox user")
 			}
 			if !s.keys.allowed(key) {
-				return nil, errors.New("not a paired key")
+				// A computer that was paired a moment ago logs in at once, not at the next
+				// look at the file.
+				s.reloadKeys()
+				if !s.keys.allowed(key) {
+					return nil, errors.New("not a paired key")
+				}
 			}
 			return &ssh.Permissions{Extensions: map[string]string{"fingerprint": ssh.FingerprintSHA256(key)}}, nil
 		},
