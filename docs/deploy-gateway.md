@@ -32,10 +32,15 @@ Create one **Compose** application:
 | Watch paths | `cmd/devbox-gateway/**`, `cmd/devbox-ssh/**`, `internal/**`, `scripts/build-ssh-client.sh`, `deploy/gateway/**`, `go.mod`, `go.sum` |
 | Environment | `DEVBOX_INCUS_GID=<gid of /var/lib/incus/unix.socket>` |
 | Domains | none — `devbox up` writes the routes |
-| Preview deployments | off |
+| File Mounts | none — with any, Dokploy builds from the wrong directory |
+| Isolated Deployments, Randomize | off — the container keeps the name `devbox-gateway` |
 
 Create the host directories as in the Compose section first. With Auto Deploy on, a push that
-touches a watched path rebuilds and restarts the gateway.
+touches a watched path rebuilds and restarts the gateway, unless its last commit message contains
+`[skip ci]`. Dokploy shows each deploy in the application's Deployments tab; it does not report
+them to GitHub. Its documentation advises against absolute host paths in a compose file; the three
+this one mounts (`/etc/devbox`, the state directory, the Incus socket) are outside everything
+Dokploy cleans up, and are passed to Docker as written.
 
 ## Checking it
 
@@ -50,7 +55,9 @@ If Incus itself is restarted, its socket is replaced and the gateway reports
 
 ## Rolling back
 
-Deploy the previous commit: in Dokploy, redeploy an earlier deployment from the application's
-Deployments tab; with Compose, `git checkout <commit>` and `docker compose … up -d --build`. The
-gateway keeps no state that a newer version changes incompatibly; `/var/lib/devbox/gateway` only
-holds wake history.
+Deploy the previous commit. With Dokploy, `git revert` the bad commit and push to `main`: Dokploy
+always builds the head of the branch, a Compose application has no rollback button, and "Rebuild"
+builds the same checkout again. With Compose, `git checkout <commit>` and
+`docker compose … up -d --build`. The gateway keeps no state that a newer version changes
+incompatibly; `/var/lib/devbox/gateway` holds the wake history and the SSH server's keys and
+paired computers.

@@ -35,7 +35,8 @@ static() {
   step "go mod tidy";   go mod tidy -diff
   step "golangci-lint"; go run "$GOLANGCI_LINT" run
   step "staticcheck";   go run "$STATICCHECK" ./...
-  # TODO(M12): drop -test once every package is used by a binary; until then code that only tests reach is allowed.
+  # -test: the fakes of internal/sys and a few constructors exist for the tests, which count as their users.
+  # Code that neither a program nor a test reaches fails.
   step "deadcode";      dead=$(go run "$DEADCODE" -test -filter 'devbox/(cmd|internal)/' ./...); [[ -z $dead ]] || { echo "$dead"; return 1; }
   step "govulncheck";   go run "$GOVULNCHECK" ./...
 
@@ -93,9 +94,6 @@ web() {
   step "vitest";      pnpm -C web run test
   step "web build";   pnpm -C web run build
 }
-
-# TODO(M2): the Go and Rust suites that need real tmux and git.
-integration() { step "integration"; echo "no integration suites yet"; }
 
 e2e() {
   step "web install"; web_install
@@ -172,13 +170,13 @@ budgets() {
 }
 
 stages=("$@")
-[[ ${#stages[@]} -gt 0 ]] || stages=(static go rust compat web integration e2e build budgets) # ssh-client runs on a Mac
+[[ ${#stages[@]} -gt 0 ]] || stages=(static go rust compat web e2e build budgets) # ssh-client runs on a Mac
 for stage in "${stages[@]}"; do
   case $stage in
-    static|rust|compat|web|integration|e2e|build|budgets) "$stage" ;;
+    static|rust|compat|web|e2e|build|budgets) "$stage" ;;
     go) go_ ;;
     ssh-client) ssh_client ;;
-    *) echo "unknown stage: $stage (static go rust compat ssh-client web integration e2e build budgets)"; exit 2 ;;
+    *) echo "unknown stage: $stage (static go rust compat ssh-client web e2e build budgets)"; exit 2 ;;
   esac
 done
 printf '\n\033[1;32mall green\033[0m\n'

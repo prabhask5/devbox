@@ -1,21 +1,20 @@
 # 16 — Design
 
-**The prototype's UI is the approved design.** The owner reviewed the screenshots in [`reference/design/`](../../reference/design/) and wants them kept. The new boot screen (03) and hub app (06) must match them: layout, colours, typography, spacing, components, icons and copy. Improvements are welcome only where they don't change the look (accessibility, performance, edge states the prototype lacked); anything that changes the look needs the owner's approval in the PR.
+**The look of the two UIs is fixed.** The boot screen (03) and the hub app (06) are compared, screen by screen, with baseline screenshots in `tests/e2e/visual/`: layout, colours, typography, spacing, components, icons and copy. Improvements are welcome where they do not change the look (accessibility, performance, states that have no screen yet); anything that changes it needs the owner's approval in the pull request, which then carries the new baselines.
 
-| Screenshot | Screen |
+| Baseline | Screen |
 |---|---|
-| `boot-01-asleep-signin.png` | boot screen, asleep, wake password |
-| `boot-02-waking.png` | boot screen, waking: phases, progress bar, ETA |
-| `boot-03-syncing.png` | boot screen, syncing: repo chips, Open now |
-| `app-01-signin.png` | hub app sign-in |
-| `app-02-sessions.png` | sessions list: Needs you / Idle / Finished, status pill, FAB, tab bar |
-| `app-03-new-session.png` | new-session sheet: agent segmented control, repo list with branch/dirty/ahead, prompt |
-| `app-04-needs-input.png` | session needing permission: red banner with Yes / Always / No, live screen, quick keys, composer |
-| `app-05-session-screen.png` | shell session screen with colours |
-| `app-06-settings.png` | settings: notifications, devbox status, repo sync, agents |
-| `app-07-assistant.png` | Assistant tab placeholder (purple orb) |
-
-The prototype source (`reference/prototype/devbox/hub/public/app.css`, `reference/prototype/host/devbox-gateway/boot.html`) is the exact reference for values.
+| `boot-asleep-signin` | boot screen, asleep, wake password |
+| `boot-waking` | boot screen, waking: phases, progress bar, ETA |
+| `boot-syncing`, `boot-syncing-results` | boot screen, syncing: repo chips, Open now |
+| `boot-cold-first`, `boot-hub-skipped`, `boot-error`, `boot-signin-error`, `boot-stopping`, `boot-unconfigured` | the other states of the boot screen |
+| `app-signin`, `app-asleep` | hub app sign-in; the app while the devbox sleeps |
+| `app-sessions` | sessions list: Needs you / Idle / Finished, status pill, FAB, tab bar |
+| `app-new-session` | new-session sheet: agent segmented control, repo list with branch/dirty/ahead, prompt |
+| `app-needs-input` | session needing permission: red banner with Yes / Always / No, live screen, quick keys, composer |
+| `app-session-screen`, `app-session-external` | shell session screen with colours; a session that runs outside the hub's tmux |
+| `app-settings` | settings: notifications, devbox status, repo sync, agents |
+| `app-assistant` | Assistant tab placeholder (purple orb) |
 
 ## Tokens (`web/shared/tokens.json` → CSS variables, used by both UIs)
 
@@ -31,21 +30,21 @@ The prototype source (`reference/prototype/devbox/hub/public/app.css`, `referenc
 | agent colours | claude `#e8916b`, codex `#8fd3c7`, opencode `#f2c14e`, shell `#9198a3` | agent badges (letter on a 10 % tint) |
 | progress gradient | `#4aa3ff → #7cc4ff` | progress bars |
 | radii | cards 16, buttons/inputs 12, chips 99, badges 10, sheets 22 (top) | |
-| type | system stack (`ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif`, the prototype's; `system-ui` is left out because Linux browsers map it to a different font than `sans-serif`); page titles 28/700, section labels 12/600 uppercase tracking .06em, body 15, mono `ui-monospace, "SF Mono", Menlo, "JetBrains Mono"` | |
+| type | system stack (`ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif`; `system-ui` is left out because Linux browsers map it to a different font than `sans-serif`); page titles 28/700, section labels 12/600 uppercase tracking .06em, body 15, mono `ui-monospace, "SF Mono", Menlo, "JetBrains Mono"` | |
 
 ## Components (must look like the screenshots)
 
-Large left-aligned page title with a status pill on the right; uppercase section labels with counts; inset-grouped list rows (badge · name · relative time · two-line subtitle · chips); floating accent **＋** button (56 px, 18 px radius, soft accent glow); bottom tab bar with blur (Sessions / Assistant / Settings, line icons); bottom sheets with a grab handle; segmented control; session header with back chevron and ⋯ menu; red "needs you" banner with the green primary answer button; monospace screen on near-black (`#090b0d`); horizontally scrolling quick-key chips; rounded composer with the accent send button; boot screen: brand dot (pulsing while live), 26 px title, phase list card with ring / spinner / green check icons, repo chips coloured by status. Icons: the prototype's inline SVG line set (no icon fonts, no emoji as UI icons except the notification titles 🔐 ✅ ❌ ⚠️). App icon: `reference/prototype/devbox/hub/public/icon.svg`.
+Large left-aligned page title with a status pill on the right; uppercase section labels with counts; inset-grouped list rows (badge · name · relative time · two-line subtitle · chips); floating accent **＋** button (56 px, 18 px radius, soft accent glow); bottom tab bar with blur (Sessions / Assistant / Settings, line icons); bottom sheets with a grab handle; segmented control; session header with back chevron and ⋯ menu; red "needs you" banner with the green primary answer button; monospace screen on near-black (`#090b0d`); horizontally scrolling quick-key chips; rounded composer with the accent send button; boot screen: brand dot (pulsing while live), 26 px title, phase list card with ring / spinner / green check icons, repo chips coloured by status. Icons: an inline SVG line set (no icon fonts, no emoji as UI icons except the notification titles 🔐 ✅ ❌ ⚠️). App icon: `web/hub-app/public/icon.svg`.
 
 ## Visual regression
 
-`tests/e2e/visual/` compares screenshots (390×844 @2x, clock stopped, animations off, fixture data from `tests/fixtures/boot/` and `tests/fixtures/app/`) with baselines named `<screen>-<project>-<platform>.png`. The baselines **are the prototype**: `baseline.spec.ts` renders the prototype's page with the same data in the same browser and saves that as the baseline, so the comparison is new UI against approved design with nothing else different. More than 2 % differing pixels fails. States the prototype did not have (`unconfigured`) take their baseline from the new UI and need the owner's approval when they change.
+`tests/e2e/visual/` compares screenshots (390×844 @2x, clock stopped, animations off, fixture data from `tests/fixtures/boot/` and `tests/fixtures/app/`, which is checked against the contracts) with baselines named `<screen>-<project>-<platform>.png`. More than 2 % differing pixels fails.
 
-The app's screens (`app.spec.ts`, baselines from `app-baseline.spec.ts`): sign-in, asleep, sessions, new-session sheet, session needing input, shell session screen, external session, settings, assistant. Both implementations get the same hub and gateway answers from `tests/fixtures/app/app.json` (checked against the contracts), converted for the prototype into the shapes its page expected. The prototype's app named its fonts differently from its boot screen; its baseline is drawn with the one stack of the tokens. The app adds nothing visible to these screens: what it has beyond the prototype (the update prompt, the version line under Sign out) is outside them.
+The baselines are the approved design. A baseline changes only with the owner's approval.
 
-Baselines are per platform; the Linux ones are committed and compared in CI. `scripts/e2e.sh --update-baselines` rewrites them for the current platform; the CI workflow run by hand with `update_baselines` does it on Linux and uploads them as an artifact to commit.
+Baselines are per platform; the Linux ones are compared in CI. `scripts/e2e.sh --update-baselines` rewrites them for the current platform from the UI as it is; the CI workflow run by hand with `update_baselines` does it on Linux and uploads them as an artifact to commit.
 
 ## Acceptance
 
-- [x] Visual regression: Playwright screenshots of every screen above (same viewport 390×844 @2x, same fixture data) compared against the prototype as baselines in `tests/e2e/visual/` — differences beyond a small threshold fail and need owner approval. (Boot screen: `tests/e2e/visual/boot.spec.ts`; app: `tests/e2e/visual/app.spec.ts`)
+- [x] Visual regression: Playwright screenshots of every screen above (same viewport 390×844 @2x, same fixture data) compared against the baselines in `tests/e2e/visual/` — differences beyond a small threshold fail and need owner approval. (Boot screen: `tests/e2e/visual/boot.spec.ts`; app: `tests/e2e/visual/app.spec.ts`)
 - [x] Tokens generated from `tokens.json` (unit test that CSS variables match the table: `tests/web/tokens.test.ts`).

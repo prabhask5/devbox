@@ -1,8 +1,11 @@
 name: Release
 
-# Tags v* publish a release: static binaries for amd64 and arm64 with checksums and build provenance
-# attestations, install.sh, and the gateway image on GHCR. The tag must pass release-mode hygiene and a full-history secret scan.
-# The library crates have their own tags and workflow (publish-crates.yml).
+# Tags v* publish a release (scripts/package-release.sh says what is in it): static binaries for amd64
+# and arm64, the archive `devbox up` installs into the VM, install.sh, the SSH client and its setup
+# script, checksums and build provenance attestations; and the gateway image on GHCR. The tag must pass
+# release-mode hygiene and a full-history secret scan. A tag with a suffix (v1.0.0-rc.1) is a
+# pre-release: it is published the same way and is nobody's latest release.
+# The library crates and the SSH client on its own have their own tags and workflows.
 
 on:
   push:
@@ -22,12 +25,14 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/setup
         with: { go: true }
-      - name: Release hygiene
-        run: scripts/check-hygiene.sh --release
+      - name: Hygiene, with the list of personal identifiers
+        run: scripts/check-hygiene.sh
         env:
           HYGIENE_DENYLIST: ${{ secrets.HYGIENE_DENYLIST }}
+          # A release needs the list; a pre-release may be cut without it.
+          HYGIENE_DENYLIST_REQUIRED: ${{ contains(github.ref_name, '-') && '' || '1' }}
       - name: Full-history secret scan
-        run: go run github.com/zricethezav/gitleaks/v8@v8.30.1 git --redact --verbose .
+        run: go run github.com/zricethezav/gitleaks/v8@v8.30.1 git --config .github/gitleaks.toml --redact --verbose .
 
   build:
     name: build (${{ matrix.arch }})
@@ -42,7 +47,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
         with: { go: true, rust: true }
-      - run: scripts/ci.sh build
+      - name: Build, as the version of the tag
+        run: DEVBOX_VERSION=${GITHUB_REF_NAME#v} scripts/ci.sh build
         env:
           DEVBOX_RUST_TARGET: ${{ matrix.target }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -63,20 +69,22 @@ jobs:
       attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+        with: { go: true }
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: bin-*
-          path: dist
+          path: bin
           merge-multiple: true
-      - name: Checksums
-        run: |
-          cp install.sh dist/
-          cd dist && sha256sum -- * > SHA256SUMS
+      - name: Package
+        run: scripts/package-release.sh "$GITHUB_REF_NAME" bin dist
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-checksums: dist/SHA256SUMS
       - name: Publish
-        run: gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --generate-notes
+        run: |
+          if [[ $GITHUB_REF_NAME == *-* ]]; then kind=(--prerelease --latest=false); else kind=(--latest); fi
+          gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --generate-notes "${kind[@]}"
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -95,8 +103,9 @@ jobs:
           scripts/check-image.sh
           image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/devbox-gateway"
           echo "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-          docker build -f deploy/gateway/Dockerfile --build-arg "VERSION=${GITHUB_REF_NAME#v}" \
-            -t "$image:${GITHUB_REF_NAME#v}" -t "$image:latest" .
+          tags=(-t "$image:${GITHUB_REF_NAME#v}")
+          [[ $GITHUB_REF_NAME == *-* ]] || tags+=(-t "$image:latest")
+          docker build -f deploy/gateway/Dockerfile --build-arg "VERSION=${GITHUB_REF_NAME#v}" "${tags[@]}" .
           docker push --all-tags "$image"
         env:
           GH_TOKEN: ${{ github.token }}

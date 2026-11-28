@@ -1,0 +1,39 @@
+[
+  {
+    "url": "https://api.github.com/repos/you/devbox/deployments/8124913401/statuses/23358383006",
+    "id": 23358383006,
+    "node_id": "FAKEnodeid",
+    "state": "queued",
+    "creator": {
+      "login": "github-actions[bot]",
+      "id": 1,
+      "node_id": "FAKEnodeid",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/github-actions%5Bbot%5D",
+      "html_url": "https://github.com/apps/github-actions",
+      "followers_url": "https://api.github.com/users/github-actions%5Bbot%5D/followers",
+      "following_url": "https://api.github.com/users/github-actions%5Bbot%5D/following{/other_user}",
+      "gists_url": "https://api.github.com/users/github-actions%5Bbot%5D/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/github-actions%5Bbot%5D/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/github-actions%5Bbot%5D/subscriptions",
+      "organizations_url": "https://api.github.com/users/github-actions%5Bbot%5D/orgs",
+      "repos_url": "https://api.github.com/users/github-actions%5Bbot%5D/repos",
+      "events_url": "https://api.github.com/users/github-actions%5Bbot%5D/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/github-actions%5Bbot%5D/received_events",
+      "type": "Bot",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "description": "waiting for the devbox VM",
+    "environment": "agents-hub",
+    "target_url": "",
+    "created_at": "2026-11-28T05:13:21Z",
+    "updated_at": "2026-11-28T05:13:21Z",
+    "deployment_url": "https://api.github.com/repos/you/devbox/deployments/8124913401",
+    "repository_url": "https://api.github.com/repos/you/devbox",
+    "environment_url": "",
+    "log_url": "",
+    "performed_via_github_app": null
+  }
+]

@@ -1,6 +1,6 @@
 # 09 — Setup CLI (`devbox`)
 
-The Rust CLI (`crates/devbox-cli`, logic in `devbox-core`) sets up and maintains everything on the host. **Goal: after deploying the gateway in Dokploy, one command connects and configures everything.** Prototype: `reference/prototype/host/README.md` (the manual steps this automates) and `reference/prototype/bootstrap.sh` (VM provisioning).
+The Rust CLI (`crates/devbox-cli`, logic in `devbox-core`) sets up and maintains everything on the host. **Goal: after deploying the gateway in Dokploy, one command connects and configures everything.**
 
 ```
 devbox up --domain example.com [--dotfiles git@github.com:you/dotfiles] [options]
@@ -44,7 +44,7 @@ Incus reachable; config valid; secrets valid and private; instance exists and is
 
 ## Adoption of an existing VM
 
-`devbox up --adopt --instance <name> --domain example.com --dotfiles … --firewall <manager>` on a host that already runs a hand-built dev VM (the author's homelab is described in `reference/cestmoi.md`) must: keep the VM's disk and user data, convert its config (stateful, size.state, autostart off), replace an existing Traefik route for the code host (backed up) with routes to the gateway, extend an existing firewall rule for the VM with `hub_port`, leave every other container and route untouched. `devbox down` returns the host to its exact previous state (byte-identical files, Incus config restored).
+`devbox up --adopt --instance <name> --domain example.com --dotfiles … --firewall <manager>` on a host that already runs a hand-built dev VM must: keep the VM's disk and user data, convert its config (stateful, size.state, autostart off), replace an existing Traefik route for the code host (backed up) with routes to the gateway, extend an existing firewall rule for the VM with `hub_port`, leave every other container and route untouched. `devbox down` returns the host to its exact previous state (byte-identical files, Incus config restored).
 
 ## Implementation rules
 
@@ -55,8 +55,8 @@ Incus reachable; config valid; secrets valid and private; instance exists and is
 
 ## Acceptance
 
-- [x] Golden `--dry-run` plans for: fresh host (Dokploy detected), adoption fixture (an anonymized Dokploy + Incus host), re-run with no changes, plain Traefik host, `--routing none`, each firewall manager.
-- [x] Apply against `FakeSystem` + fake Incus: creates/adopts with exact Incus config; files written with modes; backups taken; idempotent second run is a no-op.
-- [x] `devbox down` after `up` restores every touched file byte-identically and the Incus config (fixture comparison).
-- [x] Preflight failures each produce an actionable message (golden), notably "gateway not deployed".
-- [x] Nightly e2e (spec 15): real Incus VM in CI: `devbox up` on a fresh runner → health ok → sleep → wake → `devbox down`.
+- [x] Golden `--dry-run` plans for: fresh host (Dokploy detected), adoption fixture (an anonymized Dokploy + Incus host), re-run with no changes, plain Traefik host, `--routing none`, each firewall manager. (`tests/rust/tests/setup.rs`, `tests/fixtures/setup/plan-*.txt`)
+- [x] Apply against `FakeSystem` + fake Incus: creates/adopts with exact Incus config; files written with modes; backups taken; idempotent second run is a no-op. (`a_fresh_host_is_set_up_and_a_second_run_changes_nothing`)
+- [x] `devbox down` after `up` restores every touched file byte-identically and the Incus config (fixture comparison). (`adopting_changes_only_what_sleeping_needs_and_down_puts_every_byte_back`)
+- [x] Preflight failures each produce an actionable message (golden), notably "gateway not deployed". (`tests/fixtures/setup/preflight-*.txt`)
+- [x] Nightly e2e (spec 15): real Incus VM in CI: `devbox up` on a fresh runner → health ok → sleep → wake → `devbox down`. (`scripts/nightly.sh`)

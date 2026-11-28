@@ -1,6 +1,6 @@
 # 02 — Gateway
 
-`devbox-gateway` (Go) is the only way into the VM from outside. It runs as a Docker container on the host, deployed by Dokploy (spec 11), reachable by Traefik on the Docker network. Prototype: `reference/prototype/host/devbox-gateway/server.js`.
+`devbox-gateway` (Go) is the only way into the VM from outside. It runs as a Docker container on the host, deployed by Dokploy (spec 11), reachable by Traefik on the Docker network.
 
 ```
 client ─► Cloudflare/Traefik ─► gateway :8080 ─┬─ Host = hosts.agents → VM:hub_port   (hub)

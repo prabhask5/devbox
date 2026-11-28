@@ -18,7 +18,7 @@ The budgets are for Linux, where devbox runs, and are enforced there (CI). On an
 | Gateway SSH: awake VM, accept → relaying | 5 ms | same: a new connection's first echoed byte, minus the VM's handshake and the same command straight to the VM |
 | `devbox-ssh` size / RSS while proxying | 6 MB / 15 MB | the largest of the four builds; peak RSS of the native build while it proxies 256 MiB to an echo (its heap is capped at 8 MiB) |
 | Wake overhead beyond Incus + VM | 300 ms | fake Incus with instant start: request → ready, minus fake delays |
-| Hook relay wall time p50 / p99 | 5 ms / 15 ms | `devbox-hub event` invoked 200 times against a running hub |
+| Hook relay wall time p50 / p99 | 5 ms / 15 ms | `devbox-hub event` invoked 200 times against a running hub, five rounds; the quietest round counts, since what else a shared runner is doing only ever adds to the time a process takes to start |
 | Hub idle RSS / CPU (10 sessions, no viewers) | 30 MB / 0.3 % | `tests/perf/hub`: the real binary with ten shell sessions in real tmux, watched for 60 s |
 | Hub event → SSE state update | 20 ms | same: an event posted on the hub's socket → the state frame received by a signed-in client. A change on its own is sent at once; changes that follow within 100 ms are coalesced into one frame |
 | Screen frame latency (pane output → SSE frame) | 60 ms | same: a loop in the pane prints 200 lines and a marker; from the trigger to the frame that shows the marker |

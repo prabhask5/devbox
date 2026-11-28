@@ -766,7 +766,7 @@ textarea.field {
   margin: 0 auto 8px;
 }
 
-/* ---------- not in the prototype */
+/* ---------- the update prompt and the version line */
 .toast.update {
   cursor: pointer;
   color: var(--accent);

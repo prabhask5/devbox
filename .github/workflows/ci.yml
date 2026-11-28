@@ -40,6 +40,9 @@ jobs:
       - run: scripts/ci.sh static
         env:
           CARGO_TOOLS_ROOT: /home/runner/.cargo # cached by the setup action, so cargo-typify is built once
+          # Personal identifiers that must not be in the repository (spec 17). A run without the
+          # secret (a pull request from a fork) is checked for everything else; a release needs it.
+          HYGIENE_DENYLIST: ${{ secrets.HYGIENE_DENYLIST }}
 
   go:
     name: go
@@ -94,16 +97,6 @@ jobs:
       - uses: ./.github/actions/setup
         with: { go: false, rust: false, web: true }
       - run: scripts/ci.sh web
-
-  integration:
-    name: integration
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/setup
-        with: { go: true, rust: true, web: false }
-      - run: scripts/ci.sh integration
 
   e2e:
     name: e2e
@@ -173,7 +166,7 @@ jobs:
   required:
     name: required
     if: always()
-    needs: [static, go, rust, compat, ssh-client, web, integration, e2e, build, budgets]
+    needs: [static, go, rust, compat, ssh-client, web, e2e, build, budgets]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

@@ -13,9 +13,9 @@ Context for agents and maintainers. This file, `docs/spec/` and the code are the
 - **Every repo current on every wake**: all your GitHub repos are cloned and synced, never losing local work.
 - **Developer context for AI**: a continuously refreshed description of how you work and what you are working on, written into your private dotfiles repo, which every agent reads.
 - **One command to set up or rebuild everything**: `devbox up --domain example.com [--dotfiles <repo>]`.
-- **Continuous deployment of itself**: pushes to `main` redeploy the gateway (through Dokploy) and the agents hub (through GitHub Deployments + an updater in the VM), each visible in GitHub's Deployments UI.
+- **Continuous deployment of itself**: pushes to `main` redeploy the gateway (through Dokploy, or `docker compose` by hand) and the agents hub (through GitHub Deployments + an updater in the VM, visible in GitHub's Deployments UI).
 
-The first real deployment is the author's homelab (an Incus VM behind Dokploy's Traefik, described in `reference/`). Every feature must work on any Linux server with systemd, Incus and Docker, configured only through devbox's own config files. Personal configuration lives in a separate, private **dotfiles** repository that devbox consumes through a small contract (spec 10).
+Every feature must work on any Linux server with systemd, Incus and Docker, configured only through devbox's own config files. A VM, Traefik routes and firewall rules that are there already are adopted, not replaced (`docs/adopting-an-existing-vm.md`). Personal configuration lives in a separate, private **dotfiles** repository that devbox consumes through a small contract (spec 10).
 
 License: MIT. Public repository: `github.com/prabhask5/devbox`.
 
@@ -37,7 +37,7 @@ Product pillars, used to break ties:
 | `devbox-hub event` | VM, invoked by agent hooks | **Go** (same binary) | Hook relay: forwards one agent event to the hub over a unix socket in a few ms | 05 |
 | `devbox` CLI | host and VM | **Rust** | `devbox up/down/status/doctor/connect` (host setup, provisioning, routing, firewall), `devbox sync` (repo sync), `devbox context` (AI context) | 07, 08, 09 |
 | `devbox-core`, `devbox-sync`, `devbox-context` crates | — | **Rust** | Libraries behind the CLI, built to be embedded by moi as `moi devbox` | 12 |
-| Gateway UI, Hub app | browser | **TypeScript** (Preact + Vite) | Boot screen; agents PWA. Built to static assets and embedded into the Go binaries. **Must match the approved design** in `reference/design/` | 03, 06, 16 |
+| Gateway UI, Hub app | browser | **TypeScript** (Preact + Vite) | Boot screen; agents PWA. Built to static assets and embedded into the Go binaries. **Must match the approved design**: the baselines in `tests/e2e/visual/` | 03, 06, 16 |
 
 Why this split: the long-running network services (gateway, hub) are Go — fast startup, tiny static binaries, excellent HTTP/WebSocket/proxy support, low memory. Everything moi will drive (setup, provisioning, sync, context) is Rust so moi (`github.com/prabhask5/moi`, Rust) can embed it as a library instead of shelling out (spec 12). Contracts between components are defined once as JSON Schema in `contracts/` and generated into Go, Rust and TypeScript types (spec 01), so the languages cannot drift apart.
 
@@ -48,15 +48,15 @@ contracts/            JSON Schemas for every cross-component message and config 
 cmd/devbox-gateway/   Go main for the gateway
 cmd/devbox-hub/       Go main for the hub (subcommands: serve, event, agent, update)
 cmd/devbox-ssh/       Go main for the SSH client + setup.sh (the client setup script)
+install.sh            installs the devbox CLI on a host from a release
 internal/             Go packages: gateway/, hub/, update/, incus/, proto/ (generated), config/, schema/, secret/, password/, sys/, httpx/, relay/, hooks/, webpush/, tmux/ ...
 crates/               Rust workspace members: devbox-cli (bin `devbox`), devbox-core, devbox-sync, devbox-context
 web/                  pnpm workspace: gateway-ui/, hub-app/, shared/ (generated types, design tokens)
 deploy/gateway/       Dockerfile + compose.yml for Dokploy (no domain, no previews)
 crates/devbox-core/vm/  What gets installed into the VM, embedded in the CLI: installer, systemd units, cloud-init template, code-server defaults
-docs/                 spec/, guides (dotfiles.md, deploy-gateway.md, …); milestones.md + agent-workflow.md until 1.0
+docs/                 spec/, guides (dotfiles.md, deploy-gateway.md, adopting-an-existing-vm.md), roadmap.md, images/
 tests/                every test that is not a small pure-function unit test (spec 15); compat/ is moi's view of the library crates (spec 12)
-reference/            the working prototype and cestmoi's current setup; read-only input, deleted before 1.0
-scripts/              ci.sh and the checks CI runs
+scripts/              ci.sh and the checks CI runs; the release and deploy scripts the workflows call
 ```
 
 One Go module at the root (`github.com/prabhask5/devbox`), one Cargo workspace at the root, one pnpm workspace under `web/`. Toolchains are pinned (`go.mod` `toolchain`, `rust-toolchain.toml`, `packageManager` + `.node-version`).
@@ -107,18 +107,22 @@ Rules:
 - **TypeScript**: strict, Preact + Vite, `prettier`, `eslint`, `tsc --noEmit`, `vitest`, Playwright (WebKit iPhone profile is mandatory). Bundle budgets are enforced (spec 13).
 - Never commit secrets; fixtures use `FAKE…` values. Output other systems consume (`/__devbox/*`, hub `/devbox/*`, `--json`, Kuma-facing health text) is covered by golden tests; changing it is a breaking change.
 
-## 6. How work is organized
+## 6. How changes are made
 
-devbox is built milestone by milestone by an AI coding agent (Claude Code), reviewed by the owner. Milestones are in `docs/milestones.md`; the contract is `docs/agent-workflow.md`; `/next-milestone` starts the next one. For each milestone:
+Behaviour is specified before it is built: `docs/spec/` says what devbox does, and each spec ends in acceptance criteria that name the tests holding them. A change goes like this:
 
-1. Read this file and the spec sections the milestone names. If the spec is ambiguous, decide and write the decision into the spec in the same PR.
-2. Write tests from the acceptance criteria first, then implement.
-3. Cleanup pass (`scripts/check-hygiene.sh`); the repo is publishable after every milestone.
-4. `scripts/ci.sh` green; README/spec updated for user-visible changes; tick the milestone boxes.
+1. Read this file and the specs the change touches. If a spec is wrong, ambiguous or silent, decide, and write the decision into the spec as fact in the same pull request.
+2. Write the tests first, from the acceptance criteria, in `tests/`, against the fakes. Then implement until they pass.
+3. `scripts/ci.sh` green (it is what CI runs, stage by stage); `scripts/check-hygiene.sh` is part of it and keeps the repository free of leftovers: no TODOs, no scaffolding, no personal data, no provisional wording in the specs, no unchecked boxes ([spec 17](docs/spec/17-public-readiness.md)).
+4. README, guides and CHANGELOG updated for what a user can see. One focused pull request; squash-merged when the `required` job is green.
 
-**The end state is a public, solo-maintained open-source repo with no artifacts of how it was built** ([spec 17](docs/spec/17-public-readiness.md)): no `reference/`, no milestone or agent-workflow files, no scaffolding, no TODOs, no provisional wording in specs, no personal data, no unused code or dependencies. Every milestone moves toward it; M13 finishes it and makes `check-hygiene.sh --release` the CI default. This section itself is rewritten at M13 as "How changes are made".
+Things that are easy to get wrong:
 
-`reference/prototype/` is a working, tested prototype of most of this (Node + bash) that ran against mocks; it defines behaviour to port and the edge cases already found. Port behaviour, not code.
+- **Never run devbox, its tests or its scripts against the real system of the machine you are on**: no real Incus socket, Docker, `systemctl`, firewall, Traefik files or `/etc`. The fakes exist for that; the nightly workflow is where the real thing runs, on a throwaway runner.
+- The look of the UI is fixed by the visual baselines (spec 16); a change to it needs the owner's approval in the pull request.
+- Output other tools read (`/__devbox/*`, hub `/devbox/*`, `--json`, health strings, the files of a release, the client setup script's file layout) is an interface: changing it is a breaking change.
+- A test is never weakened to make it pass without saying why in the pull request. A flaky test is a bug until shown otherwise; several were.
+- What an outside program does (an agent's hooks and prompts, Dokploy, GitHub) is written into the specs with its evidence and its version, and re-checked when that program changes.
 
 ## 7. Non-goals (v1)
 

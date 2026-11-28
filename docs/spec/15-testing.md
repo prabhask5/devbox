@@ -49,20 +49,18 @@ Each job runs one stage of `scripts/ci.sh` (`scripts/ci.sh static`, `scripts/ci.
 | Job | Runs |
 |---|---|
 | `static` | tests-location, secrets, hygiene, generated contracts up to date, docs links, gofmt/vet/golangci-lint/staticcheck/deadcode/govulncheck/`go mod tidy` diff, rustfmt/clippy (with `disallowed-methods` in the library crates)/cargo deny/cargo machete, prettier/eslint/tsc/knip/pnpm audit |
-| `go` | `go test -race ./...` |
-| `rust` | `cargo test --workspace` |
-| `ssh-client` | on a macOS runner: the client setup script under `/bin/sh` (`tests/go/sshsetup`), `devbox-ssh` and `internal/wsconn` (spec 18) |
+| `go` | `go test -race ./...`: unit tests and the suites of `tests/go`, which use real tmux, git and the OpenSSH client with the fakes |
+| `rust` | `cargo test --workspace`: unit tests and the suites of `tests/rust`, which use real git with the fakes |
 | `compat` | what moi needs of the library crates (spec 12): they build with moi's Rust, the `tests/compat/moi-consumer` scenarios, moi's `cargo deny` policy, no async runtime / HTTP crate / TLS stack, `cargo publish --dry-run` |
 | `web` | Vitest + builds + bundle budgets |
-| `integration` | real tmux + git + fakes (Go and Rust integration suites) |
 | `ssh-client` | macOS runner: the setup script under `/bin/sh` against a fake gateway and a fake `$HOME`, and the darwin `devbox-ssh` build proxying to a local gateway (spec 18) |
 | `e2e` | the harness scenarios with Playwright (WebKit iPhone + Chromium) |
 | `build` | gateway image, hub/devbox static binaries (amd64 + arm64, one native runner per architecture; `devbox` is built for the musl targets) |
 | `budgets` | spec 13 |
-| `required` | fails unless every job above succeeded (pattern from stellar/moi) |
+| `required` | fails unless every job above succeeded |
 
 ## Acceptance
 
-- [ ] Every spec's acceptance criteria map to named tests; `docs/milestones.md` links each criterion to its test file when ticked.
-- [ ] The harness runs locally with one command and in CI in under 10 minutes.
-- [ ] Fakes have their own tests against recorded real responses (Incus, GitHub, push).
+- [x] Every acceptance criterion in the specs names the tests, fixtures or scripts that hold it.
+- [x] The harness runs locally with one command (`scripts/e2e.sh`) and in CI in under 10 minutes (the `e2e` job takes about four).
+- [x] The fakes are held to what the real services answer: the fake Incus to answers recorded from a real Incus in the nightly run (`tests/fixtures/incus`, `tests/go/incus`), the fake GitHub to answers recorded from GitHub's API (`tests/fixtures/github`, `TestTheFakeAnswersAsGitHubWasRecordedToAnswer`), and the fake push service by being the receiving side of RFC 8291, whose example the sending side reproduces (`TestEncryptMatchesTheRFC8291Example`).

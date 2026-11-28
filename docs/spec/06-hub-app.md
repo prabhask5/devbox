@@ -1,6 +1,6 @@
 # 06 — Hub app & push
 
-The agents app at `agents.<domain>`: an installable PWA, TypeScript + Preact + Vite, embedded into `devbox-hub`. Primary device: iPhone, installed to the Home Screen. Prototype: `reference/prototype/devbox/hub/public/` (screenshots in the reference README).
+The agents app at `agents.<domain>`: an installable PWA, TypeScript + Preact + Vite, embedded into `devbox-hub`. Primary device: iPhone, installed to the Home Screen.
 
 ## Screens
 
@@ -34,7 +34,7 @@ When the devbox goes to sleep under an open app, the gateway ends the app's even
 
 ## Design
 
-**Match the approved design in spec 16** (screenshots `reference/design/app-*.png`): same layout, colours, components and copy. Dark, Apple-like (inset-grouped lists, sheets, safe-area insets via `env()`, 44 px targets, 16 px inputs), one accent colour, tokens shared with the boot screen. Reduced motion respected. Works offline as a shell. No external requests.
+**Match the approved design in spec 16** (baselines `tests/e2e/visual/app-*.png`): same layout, colours, components and copy. Dark, Apple-like (inset-grouped lists, sheets, safe-area insets via `env()`, 44 px targets, 16 px inputs), one accent colour, tokens shared with the boot screen. Reduced motion respected. Works offline as a shell. No external requests.
 
 ## Acceptance
 

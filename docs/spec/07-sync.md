@@ -1,6 +1,6 @@
 # 07 — Repo sync
 
-`devbox sync [--json] [--repo <name>]` (Rust, crate `devbox-sync`) brings every repository in `~/code` up to date with its upstream. Runs on every wake (via the hub, spec 04), on cold boot, and on demand (`devbox sync`, app "Sync now"). Prototype: `reference/prototype/devbox/bin/devbox-sync` (bash) — its test matrix passed and must be ported as-is.
+`devbox sync [--json] [--repo <name>]` (Rust, crate `devbox-sync`) brings every repository in `~/code` up to date with its upstream. Runs on every wake (via the hub, spec 04), on cold boot, and on demand (`devbox sync`, app "Sync now").
 
 ## Guarantee
 
@@ -44,7 +44,7 @@ The library is `devbox_sync::sync(system, options, report)`: it reports each ste
 
 ## Acceptance
 
-- [x] Port the prototype's matrix with real git in temp dirs: clean behind → updated; dirty + staged + untracked behind → updated with everything kept (staged stays staged); dirty conflicting → conflict, byte-identical restore; unpushed commits conflicting → conflict, byte-identical; unpushed commits non-conflicting → rebased; up to date; detached → skipped; no upstream → skipped; rebase in progress → skipped; fetch failure → error, untouched; other branches fast-forwarded. (`tests/rust/tests/sync_matrix.rs`)
+- [x] The matrix with real git in temp dirs: clean behind → updated; dirty + staged + untracked behind → updated with everything kept (staged stays staged); dirty conflicting → conflict, byte-identical restore; unpushed commits conflicting → conflict, byte-identical; unpushed commits non-conflicting → rebased; up to date; detached → skipped; no upstream → skipped; rebase in progress → skipped; fetch failure → error, untouched; other branches fast-forwarded. (`tests/rust/tests/sync_matrix.rs`)
 - [x] Property test (proptest): random working-tree states (files added/modified/deleted/staged/untracked/binary/renamed) × random upstream changes → either all local changes present after sync or the repo is byte-identical (every file of the work dir with its mode + index + untracked list + stash list compared). 40 cases per run, more with `PROPTEST_CASES`. (`tests/rust/tests/sync_property.rs`)
 - [x] Clone of missing repos through a fake GitHub API + local bare remotes; archived repos and manifest filters respected. (`tests/rust/tests/sync_clone.rs`; on a machine that exists only in the test — host key, token never on a command line: `tests/rust/tests/sync_system.rs`)
 - [x] `--json` output golden; human output golden. (`tests/rust/tests/sync_output.rs` against `tests/fixtures/sync/`; the hub reads the same golden: `TestTheHubUnderstandsWhatDevboxSyncPrints`)

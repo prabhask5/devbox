@@ -1,0 +1,46 @@
+[
+  {
+    "url": "https://api.github.com/repos/you/devbox/deployments/8124913401",
+    "id": 8124913401,
+    "node_id": "FAKEnodeid",
+    "task": "deploy",
+    "original_environment": "agents-hub",
+    "environment": "agents-hub",
+    "description": "devbox-hub 508502f1f68cd06f44b990672015551d73e5e248",
+    "created_at": "2026-11-28T05:13:20Z",
+    "updated_at": "2026-11-28T05:13:21Z",
+    "statuses_url": "https://api.github.com/repos/you/devbox/deployments/8124913401/statuses",
+    "repository_url": "https://api.github.com/repos/you/devbox",
+    "creator": {
+      "login": "github-actions[bot]",
+      "id": 1,
+      "node_id": "FAKEnodeid",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1?v=4",
+      "gravatar_id": "",
+      "url": "https://api.github.com/users/github-actions%5Bbot%5D",
+      "html_url": "https://github.com/apps/github-actions",
+      "followers_url": "https://api.github.com/users/github-actions%5Bbot%5D/followers",
+      "following_url": "https://api.github.com/users/github-actions%5Bbot%5D/following{/other_user}",
+      "gists_url": "https://api.github.com/users/github-actions%5Bbot%5D/gists{/gist_id}",
+      "starred_url": "https://api.github.com/users/github-actions%5Bbot%5D/starred{/owner}{/repo}",
+      "subscriptions_url": "https://api.github.com/users/github-actions%5Bbot%5D/subscriptions",
+      "organizations_url": "https://api.github.com/users/github-actions%5Bbot%5D/orgs",
+      "repos_url": "https://api.github.com/users/github-actions%5Bbot%5D/repos",
+      "events_url": "https://api.github.com/users/github-actions%5Bbot%5D/events{/privacy}",
+      "received_events_url": "https://api.github.com/users/github-actions%5Bbot%5D/received_events",
+      "type": "Bot",
+      "user_view_type": "public",
+      "site_admin": false
+    },
+    "sha": "508502f1f68cd06f44b990672015551d73e5e248",
+    "ref": "508502f1f68cd06f44b990672015551d73e5e248",
+    "payload": {
+      "run_id": 46110962716,
+      "artifact": "vm-508502f1f68cd06f44b990672015551d73e5e248",
+      "version": "508502f1f68cd06f44b990672015551d73e5e248"
+    },
+    "transient_environment": false,
+    "production_environment": false,
+    "performed_via_github_app": null
+  }
+]

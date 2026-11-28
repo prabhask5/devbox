@@ -45,8 +45,9 @@ fn server() -> FixtureHost {
             printed(GATEWAY_STATUS)
         } else if command.args.iter().any(|arg| arg == "Upgrade: websocket") {
             printed("\u{0}\u{10}SSH-2.0-devbox\r\n")
-        } else if url.ends_with("/releases/latest") {
-            printed(r#"{"tag_name": "v1.2.3"}"#)
+        } else if url.ends_with("/releases?per_page=100") {
+            // The newest first, as GitHub lists them: the SSH client's, a pre-release, a release.
+            printed(r#"[{"tag_name": "ssh-v0.3.0"}, {"tag_name": "v1.3.0-rc.1", "prerelease": true}, {"tag_name": "v1.2.3"}, {"tag_name": "v1.2.2"}]"#)
         } else {
             None
         }

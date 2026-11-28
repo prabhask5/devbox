@@ -1,38 +1,29 @@
 # 17 — Public readiness (no artifacts)
 
-devbox ships as a **public, solo-maintained open-source project**. The repository at `v1.0.0` must look like it was written that way from the start: no trace of the build process, no personal data, no scaffolding, no leftovers. This spec defines that end state, what exists only during development and when it goes, and the checks that enforce it. It applies continuously (every milestone ends clean) and completely at M13.
+devbox is a **public, solo-maintained open-source project**, and its repository holds only what belongs to one: no trace of how it was written, no personal data, no scaffolding, no leftovers. This spec says what that means and which checks hold it, on every pull request.
 
-## End state at v1.0.0
-
-The repository contains only:
+## What the repository contains
 
 | Path | Purpose |
 |---|---|
-| `README.md` | user-facing: what/why, screenshots, requirements, quickstart, guides index, FAQ |
-| `CLAUDE.md` | architecture and conventions for contributors and AI assistants (§6 rewritten to "How changes are made"; no milestone references) |
-| `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `CHANGELOG.md`, `LICENSE` | community files; CONTRIBUTING gains a short "AI-assisted contributions" section replacing `docs/agent-workflow.md` |
-| `docs/spec/` | behaviour as shipped — no "decided in", "planned", "spike", "open question", "TBD", milestone numbers or references to `reference/` |
-| `docs/` guides | `dotfiles.md`, `deploy-gateway.md`, `adopting-an-existing-vm.md`, `roadmap.md` (replaces `milestones.md`), `images/` (screenshots used by the README and guides) |
-| source | `contracts/`, `cmd/`, `internal/`, `crates/` (with the VM bundle in `crates/devbox-core/vm/`), `web/`, `deploy/` |
+| `README.md` | user-facing: what and why, screenshots, requirements, quickstart, guides, questions |
+| `CLAUDE.md` | architecture and conventions for contributors and AI assistants |
+| `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `CHANGELOG.md`, `LICENSE` | community files |
+| `docs/spec/` | behaviour as shipped, with the tests that hold it |
+| `docs/` guides | `dotfiles.md`, `deploy-gateway.md`, `adopting-an-existing-vm.md`, `roadmap.md`, `images/` (screenshots used by the README and guides) |
+| source | `contracts/`, `cmd/`, `internal/`, `crates/` (with the VM bundle in `crates/devbox-core/vm/`), `web/`, `deploy/`, `install.sh` |
 | `tests/` | tests, fakes, minimal anonymized fixtures, visual baselines |
-| `scripts/` | only scripts CI or users run (`ci.sh`, `gen.sh`, `e2e.sh`, `budgets.sh`, the checks) |
+| `scripts/` | only scripts CI, the workflows or users run |
 | `.github/` | workflows, templates, Dependabot |
 | tool config | `go.mod/go.sum`, `Cargo.toml/Cargo.lock`, `web/package.json` + lockfile, lint/format configs, toolchain pins, `budgets.toml`, `.gitignore`, `.editorconfig` |
 
-## Development-only artifacts and when they go
+## What it does not contain
 
-| Artifact | Exists because | Removed |
-|---|---|---|
-| `reference/` (prototype, cestmoi notes, design screenshots) | input for building | M13 — design screenshots move to `tests/e2e/visual/` (baselines) and `docs/images/` (README); prototype behaviour lives in specs and tests |
-| `docs/milestones.md` | build plan | M13 → `docs/roadmap.md` (short, future-facing) |
-| `docs/agent-workflow.md`, `.claude/commands/next-milestone.md`, `.claude/settings.json` | the milestone workflow | M13 — essentials folded into CONTRIBUTING; `.claude/` deleted |
-| `scripts/create-issues.sh`, the `milestone` label and milestone issues | tracking | M13 — script deleted, issues closed, label deleted |
-| "not implemented yet" commands, exit code 3 | scaffold | as each milestone delivers its commands; none at M13 |
-| `TODO(M<n>)` / `TODO(#<n>)` | tracked deferrals | as their milestone lands; none at M13 |
-| milestone references and provisional wording in specs ("decided in M2", "planned", open questions) | decisions pending | as each decision is made — the milestone that decides rewrites the sentence as fact |
-| cestmoi-specific material (runbook, adoption details, personal hostnames) | first deployment | never committed outside `reference/`: M11's cutover runbook is the generic `docs/adopting-an-existing-vm.md` (with `example.com`); cestmoi specifics go in the M11 PR description only |
-| hub build outputs | continuous deployment | never in Releases: hub builds are workflow artifacts (retention 30 days, spec 11), so the Releases page holds only real tagged versions |
-| merged branches, stale workflow runs | process | delete-branch-on-merge on; nothing to clean |
+- Files that only served writing the code: plans, checklists of work to do, notes for a coding agent beyond `CLAUDE.md`, an agent's own configuration (`.claude/`), input material such as an earlier implementation.
+- Scaffolding: a command that says it is not implemented, a `TODO`, `FIXME`, `XXX` or `HACK`.
+- Provisional wording in `docs/`, `README.md` and `CLAUDE.md`: a decision that is still to be made, a reference to a stage of the work, an unchecked box. A decision is written as the fact it became.
+- Build outputs in Releases other than tagged versions: hub builds are workflow artifacts (retention 30 days, spec 11).
+- Merged branches: branches are deleted on merge.
 
 ## Personal data
 
@@ -40,9 +31,9 @@ The repository contains only:
 - Fixtures derived from a real host are anonymized (hostnames, domains, users, IPs, MACs, serials, keys) and minimal.
 - No real tokens, keys, push endpoints or hashes anywhere, in any commit (full-history scan).
 
-## Code and dependency hygiene (continuous, CI `static` job from M0)
+## Code and dependency hygiene (the CI `static` job)
 
-- Go: `go mod tidy` leaves no diff; `staticcheck` (incl. U1000 unused) and `deadcode ./...` report nothing outside allowlisted generated code; `govulncheck` clean.
+- Go: `go mod tidy` leaves no diff; `staticcheck` (incl. U1000 unused) and `deadcode` report nothing (tests count as the users of the fakes in `internal/sys`); `govulncheck` clean.
 - Rust: `cargo machete` (unused dependencies) clean; no unused features enabled; `cargo deny` clean; `#![deny(dead_code)]` holds without blanket `allow`s.
 - TypeScript: `knip` reports no unused files, exports or dependencies; `pnpm audit --prod` clean.
 - No committed build outputs (`dist/`, `target/`, `node_modules/`, binaries); no executable files except scripts in `scripts/`, `deploy/`; no file over 1 MB.
@@ -50,24 +41,26 @@ The repository contains only:
 - Every skipped/ignored test states why; no commented-out code; no debug output.
 - Every GitHub Action is referenced by commit SHA (`check-hygiene.sh` fails on a tag or branch reference).
 
-## Repository settings (owner, checked at M13)
+## Repository settings
 
-Description, topics, website; branch ruleset on `main` requiring `required`, PRs only, no force pushes or deletion; squash merge only, PR title as commit title; delete branches on merge; Dependabot (gomod, cargo, npm, actions) and security alerts on; private vulnerability reporting on; Actions pinned by SHA.
+Description, topics, website; a ruleset on `main` requiring the `required` check and pull requests, with no force pushes or deletion; squash merge only, with the pull request's title as the commit title; branches deleted on merge; Dependabot (gomod, cargo, npm, actions) and security alerts on; private vulnerability reporting on; Actions pinned by SHA.
 
 ## Automated enforcement
 
-`scripts/check-hygiene.sh` (normal mode on every PR) and `scripts/check-hygiene.sh --release` (default in CI from M13, and on every release tag). Release mode fails on any of:
+`scripts/check-hygiene.sh`, in the `static` job on every pull request and on release tags, fails on any of:
 
-- paths: `reference/`, `.claude/`, `docs/milestones.md`, `docs/agent-workflow.md`, `scripts/create-issues.sh`
-- the strings "not implemented yet", `TODO`, `FIXME`, `XXX`, `HACK` anywhere tracked
-- in `docs/`, `README.md`, `CLAUDE.md`: milestone references (`\bM[0-9]{1,2}\b`), "decided in", "(planned)", "spike", "open question", "TBD", links into `reference/`
-- personal identifiers outside `LICENSE`, `CHANGELOG.md` and repository URLs (the denylist is read from the `HYGIENE_DENYLIST` CI secret, so the list itself is not committed)
-- unchecked boxes in any remaining checklist doc
+- debug and placeholder code (`dbg!`, `todo!`, `console.log`, debug prints), stray files, committed build output, a file over 1 MB, an executable outside `scripts/` and `deploy/`, a skipped test without a reason, a GitHub Action not pinned by commit SHA
+- the paths `reference/`, `.claude/`, `docs/milestones.md`, `docs/agent-workflow.md`, `scripts/create-issues.sh`
+- the strings "not implemented yet", `TODO`, `FIXME`, `XXX`, `HACK` anywhere tracked (outside this spec, the script and its test, and devbox-context, which lists such markers in the owner's repositories)
+- in `docs/`, `README.md`, `CLAUDE.md`, `CONTRIBUTING.md`: `\bM[0-9]{1,2}\b`, "decided in", "(planned)", "spike", "open question", "TBD", links into `reference/`
+- unchecked boxes in those documents
+- personal identifiers outside `LICENSE`, `CHANGELOG.md` and repository URLs. The list is the `HYGIENE_DENYLIST` CI secret, so that the list itself is not committed; a run that does not have the secret (a pull request from a fork) says so and checks the rest, and the tag of a release requires it (`HYGIENE_DENYLIST_REQUIRED=1`; a pre-release may be cut without)
+- a top-level path that is not in the table above
 
-Plus a full-history secret scan (`gitleaks`) in the release workflow.
+The release workflow adds a full-history secret scan (`gitleaks`).
 
 ## Acceptance
 
-- [ ] `check-hygiene.sh --release` implements every rule above (tested against a fixture repo in `tests/` that violates each rule once).
-- [ ] At M13 it passes on `main`, becomes the default in CI, and runs on release tags; gitleaks full-history scan clean.
-- [ ] The end-state table matches `git ls-files` at the top level (a test lists unexpected top-level paths).
+- [x] `check-hygiene.sh` implements every rule above, tested against a fixture repository that violates each rule once. (`tests/go/scripts/hygiene_test.go`)
+- [x] It passes on `main`, runs in CI on every pull request and on release tags; the release workflow scans the full history for secrets. (`scripts/ci.sh static`, `.github/workflows/release.yml`)
+- [x] The top level of the repository is what the table allows. (`TestTopLevelIsWhatTheEndStateAllows`)

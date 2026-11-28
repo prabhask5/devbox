@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # The nightly real-VM run (docs/spec/15-testing.md): on a throwaway machine with KVM, everything
 # for real — Incus, the gateway in Docker behind a Traefik, `devbox up`, a stateful sleep, a
-# wake over HTTP, `devbox down`.
+# wake over HTTP and one over SSH, `devbox down`.
+#
+# With DEVBOX_NIGHTLY_RELEASE=<tag> it tries a release instead of the checkout, the way its
+# users get it: the CLI from the release's install.sh, the hub and the CLI in the VM from the
+# release's archive, the SSH client from the release's download.
 #
 # It installs packages and changes the machine it runs on, so it refuses to run anywhere but
 # on a GitHub-hosted runner. Not a merge gate: .github/workflows/nightly.yml runs it.
@@ -22,7 +26,12 @@ jar=$work/cookies
 wake_password=FAKE-nightly-wake-password
 app_password=FAKE-nightly-app-password
 
-devbox() { sudo "$PWD/target/release/devbox" "$@"; }
+release=${DEVBOX_NIGHTLY_RELEASE:-}
+if [[ -n $release ]]; then
+  devbox() { sudo /usr/local/bin/devbox "$@"; }
+else
+  devbox() { sudo "$PWD/target/release/devbox" "$@"; }
+fi
 gateway() { curl --silent --show-error --max-time 20 --cookie "$jar" --cookie-jar "$jar" "$@"; }
 status() { gateway "https://code.$domain/__devbox/status"; }
 in_vm() { sudo incus exec devbox -- "$@"; }
@@ -74,12 +83,27 @@ sudo iptables -I DOCKER-USER -i incusbr0 -j ACCEPT
 sudo iptables -I DOCKER-USER -o incusbr0 -j ACCEPT
 sudo incus version
 
-step "build"
-cargo build --release --locked -p devbox-cli
-mkdir -p "$work/bin"
-CGO_ENABLED=0 go build -trimpath -o "$work/bin/devbox-hub" ./cmd/devbox-hub
-CGO_ENABLED=0 go build -trimpath -o "$work/devbox-ssh" ./cmd/devbox-ssh
-cp target/release/devbox "$work/bin/devbox"
+if [[ -n $release ]]; then
+  step "install devbox $release from its release"
+  download=https://github.com/$GITHUB_REPOSITORY/releases/download/$release
+  curl -fsSL "$download/install.sh" | sudo sh
+  [[ $(/usr/local/bin/devbox --version) == "devbox ${release#v}" ]] || { echo "the installed devbox is $(/usr/local/bin/devbox --version)"; exit 1; }
+  arch=$(dpkg --print-architecture)
+  curl -fsSL "$download/devbox-ssh-linux-$arch.gz" | gunzip > "$work/devbox-ssh"
+  curl -fsSL "$download/SHA256SUMS" -o "$work/SHA256SUMS"
+  [[ $(sha256sum "$work/devbox-ssh" | cut -d' ' -f1) == "$(awk -v name="devbox-ssh-linux-$arch" '$2 == name { print $1 }' "$work/SHA256SUMS")" ]] ||
+    { echo "the SSH client of $release does not match its checksum"; exit 1; }
+  chmod 755 "$work/devbox-ssh"
+  build=(--release "$release")
+else
+  step "build"
+  cargo build --release --locked -p devbox-cli
+  mkdir -p "$work/bin"
+  CGO_ENABLED=0 go build -trimpath -o "$work/bin/devbox-hub" ./cmd/devbox-hub
+  CGO_ENABLED=0 go build -trimpath -o "$work/devbox-ssh" ./cmd/devbox-ssh
+  cp target/release/devbox "$work/bin/devbox"
+  build=(--binaries "$work/bin")
+fi
 
 step "a Traefik in front, with a certificate the machine trusts"
 openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 2 -subj "/CN=devbox nightly" \
@@ -108,7 +132,7 @@ printf '%s\n' "$app_password" > "$work/app"
 ssh-keygen -q -t ed25519 -N '' -f "$work/key"
 devbox up --domain "$domain" --traefik-file /etc/traefik/dynamic/devbox.yml --firewall none \
   --user dev --ssh-keys "$work/key.pub" --cpu 2 --memory 2GiB --disk 12GiB \
-  --no-agents claude,codex,opencode --binaries "$work/bin" \
+  --no-agents claude,codex,opencode "${build[@]}" \
   --wake-password-file "$work/wake" --app-password-file "$work/app" --yes | tee "$out/up.txt"
 
 step "set up: status, doctor, a second up that changes nothing"

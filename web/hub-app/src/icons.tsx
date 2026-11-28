@@ -1,4 +1,4 @@
-// The prototype's line icons.
+// The app's line icons.
 
 export function Back() {
   return (

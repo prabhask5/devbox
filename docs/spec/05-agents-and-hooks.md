@@ -1,6 +1,6 @@
 # 05 — Agents & hooks
 
-The hub is agent-agnostic. Everything agent-specific is an **adapter** (`internal/hub/adapters`) plus a **hook config** the agent loads (`vm/agents/`). Prototype: `reference/prototype/devbox/hub/lib/adapters.js`, `reference/prototype/agents/`.
+The hub is agent-agnostic. Everything agent-specific is an **adapter** (`internal/hub/adapters`) plus a **hook config** the agent loads (`vm/agents/`).
 
 ## Adapters
 

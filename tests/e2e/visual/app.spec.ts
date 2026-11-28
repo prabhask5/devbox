@@ -4,8 +4,8 @@ import type { Served } from "./app-screens.ts";
 import { VIEWPORT } from "./states.ts";
 
 // Visual regression (docs/spec/16-design.md): every screen of the agents app must look like the
-// approved design. The baselines are screenshots of the prototype with the same data
-// (app-baseline.spec.ts); a difference beyond the threshold needs the owner's approval.
+// approved design, which is the baselines next to this file. A difference beyond the threshold
+// needs the owner's approval, and new baselines (scripts/e2e.sh --update-baselines).
 test.use(VIEWPORT);
 
 const TYPES: Record<string, string> = {

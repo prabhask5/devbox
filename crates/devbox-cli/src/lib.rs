@@ -17,9 +17,16 @@ use devbox_core::setup::{
 use devbox_core::system::{Host, System};
 use devbox_sync::Event;
 
+/// The version this build says it is: the release it was built for (`DEVBOX_VERSION` at build
+/// time, set by the release workflow), or the crate's own for a build from a checkout.
+const VERSION: &str = match option_env!("DEVBOX_VERSION") {
+    Some(version) => version,
+    None => env!("CARGO_PKG_VERSION"),
+};
+
 /// A personal development machine on your own server.
 #[derive(Parser)]
-#[command(name = "devbox", version, propagate_version = true)]
+#[command(name = "devbox", version = VERSION, propagate_version = true)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -53,7 +60,7 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
-    /// Print the URLs, an SSH config snippet and how to install the phone app
+    /// Print the URLs, the command that sets a computer up for SSH, and how to install the phone app
     Connect,
     /// The computers that may log in over SSH, and how SSH stands
     Ssh {
