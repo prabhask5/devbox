@@ -45,4 +45,5 @@ mode = "stateful"
 address = "10.77.0.10"
 code_port = 8080
 hub_port = 8090
+ssh_host_key = "ssh-ed25519 AAAAFAKEVMHOSTKEY"
 ssh_port = 22

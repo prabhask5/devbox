@@ -1,0 +1,10 @@
+{
+  "v": 1,
+  "host": "devbox.example.com",
+  "routed": true,
+  "hostKey": "SHA256:FAKEGATEWAYHOSTKEY",
+  "vmAcceptsGateway": true,
+  "vmHostKeyRecorded": true,
+  "paired": 1,
+  "setup": "curl -fsSL https://devbox.example.com/setup | sh"
+}

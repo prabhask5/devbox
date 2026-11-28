@@ -61,6 +61,8 @@ pub struct ConnectReport {
     pub code_host: String,
     /// The agents app's host.
     pub agents_host: String,
+    /// The SSH host: where a computer is set up from, and what `ssh devbox` connects through.
+    pub ssh_host: String,
     /// The user in the VM, once it is provisioned.
     pub user: Option<String>,
 }
@@ -77,6 +79,7 @@ pub fn connect(system: &dyn System, options: &StatusOptions) -> Result<ConnectRe
     Ok(ConnectReport {
         code_host: host("code"),
         agents_host: host("agents"),
+        ssh_host: host("ssh"),
         user: super::vm_user(&config, &remembered(system, paths)),
     })
 }
@@ -216,6 +219,8 @@ echo "hub=$(as systemctl --user is-active devbox-hub.service 2>/dev/null)"
 echo "tmux=$(as systemctl --user is-active devbox-tmux.service 2>/dev/null)"
 echo "context_timer=$(as systemctl --user is-active devbox-context.timer 2>/dev/null)"
 echo "update_timer=$(as systemctl --user is-active devbox-update.timer 2>/dev/null)"
+echo "gateway_key=$(grep -s ' devbox-gateway$' "$h/.ssh/authorized_keys" | tail -n 1 | sed 's/^[^ ]* //; s/ devbox-gateway$//')"
+echo "host_key=$(cut -d' ' -f1,2 /etc/ssh/ssh_host_ed25519_key.pub 2>/dev/null)"
 for a in claude codex opencode; do as sh -c "command -v $a" >/dev/null 2>&1 && echo "agent_$a=yes" || echo "agent_$a=no"; done
 grep -qs 'devbox-hub event' "$h/.claude/settings.json" && echo hooks_claude=yes || echo hooks_claude=no
 grep -qs 'devbox-hub event' "$h/.codex/hooks.json" && echo hooks_codex=yes || echo hooks_codex=no
@@ -363,26 +368,31 @@ fn public_checks(system: &dyn System, config: &Value, checks: &mut Checks) {
         format!("{GATEWAY_CONTAINER}: {container}"),
         "deploy the gateway (docs/deploy-gateway.md), or start its Compose application",
     );
-    let (code, agents) = (
+    let (code, agents, ssh) = (
         config["hosts"]["code"].as_str().unwrap_or_default(),
         config["hosts"]["agents"].as_str().unwrap_or_default(),
+        config["hosts"]["ssh"].as_str().unwrap_or_default(),
     );
     if config["routing"]["provider"] == json!("traefik-file") {
         let file = config["routing"]["file"].as_str().unwrap_or_default();
         let routes = read(system, Path::new(file)).unwrap_or_default();
-        let both = files::existing_router(&routes, code).is_some()
-            && files::existing_router(&routes, agents).is_some();
+        let all =
+            [code, agents, ssh].iter().all(|host| files::existing_router(&routes, host).is_some());
         checks.check(
             "routing",
-            "Both hosts are routed to the gateway",
-            both,
+            "The three hosts are routed to the gateway",
+            all,
             file,
             "run `devbox up`",
         );
     } else {
-        checks.skip("routing", "Both hosts are routed to the gateway", "routing is left to you");
+        checks.skip(
+            "routing",
+            "The three hosts are routed to the gateway",
+            "routing is left to you",
+        );
     }
-    for (id, host) in [("dns-code", code), ("dns-agents", agents)] {
+    for (id, host) in [("dns-code", code), ("dns-agents", agents), ("dns-ssh", ssh)] {
         let resolved = run(system, "getent", &["hosts", host]).filter(|answer| !answer.is_empty());
         checks.check(
             id,
@@ -395,6 +405,40 @@ fn public_checks(system: &dyn System, config: &Value, checks: &mut Checks) {
             "add a DNS record for the host that points at this server, like the one for the editor",
         );
     }
+    // The path `ssh devbox` takes: a WebSocket on the SSH host, in which the gateway's SSH server
+    // says who it is. Asking for it logs nobody in and wakes nothing.
+    let handshake = Command::new(
+        "curl",
+        [
+            "--silent",
+            "--http1.1",
+            "--no-buffer",
+            "--max-time",
+            "5",
+            "--output",
+            "-",
+            "--header",
+            "Connection: Upgrade",
+            "--header",
+            "Upgrade: websocket",
+            "--header",
+            "Sec-WebSocket-Version: 13",
+            "--header",
+            "Sec-WebSocket-Key: ZGV2Ym94IGRvY3RvciBjaGVjaw==",
+            &format!("https://{ssh}/"),
+        ],
+    )
+    .timeout(Duration::from_secs(10));
+    let answered = system
+        .run(&handshake)
+        .map(|output| String::from_utf8_lossy(&output.stdout).contains("SSH-2.0-"));
+    checks.check(
+        "ssh-stream",
+        "SSH is answered through the public host",
+        answered.unwrap_or(false),
+        format!("https://{ssh}"),
+        "check DNS and the route for the SSH host, and that the gateway is this version (redeploy it); `devbox ssh status` says more",
+    );
     match fetch(system, &format!("https://{code}/__devbox/health")) {
         Some(health) if health["status"] == json!("ok") => checks.add("health", "The gateway is healthy, asked through the public host", Ok("ok".to_owned())),
         Some(health) => {
@@ -403,6 +447,42 @@ fn public_checks(system: &dyn System, config: &Value, checks: &mut Checks) {
         }
         None => checks.add("health", "The gateway is healthy, asked through the public host", Err((format!("https://{code}/__devbox/health does not answer"), "check DNS, Traefik's route and that the gateway container is on the network Traefik routes to"))),
     }
+}
+
+/// SSH, as seen from inside the VM: it lets the gateway's own key in, and is the VM the
+/// gateway expects (spec 18).
+fn ssh_checks(
+    system: &dyn System,
+    paths: &Paths,
+    config: &Value,
+    in_vm: (&str, &str),
+    checks: &mut Checks,
+) {
+    let (gateway_key, host_key) = in_vm;
+    let upstream = read(system, &paths.gateway_ssh().join("upstream_ed25519_key.pub"))
+        .map(|public| public.split_whitespace().take(2).collect::<Vec<_>>().join(" "))
+        .unwrap_or_default();
+    checks.check(
+        "ssh-upstream",
+        "The VM lets the gateway's SSH key in",
+        !upstream.is_empty() && gateway_key == upstream,
+        if gateway_key.is_empty() {
+            "the VM has no key of the gateway's"
+        } else if gateway_key == upstream {
+            "from the bridge only"
+        } else {
+            "the VM has another key than the gateway's"
+        },
+        "run `devbox up`: it puts the gateway's key into the VM",
+    );
+    let recorded = config["vm"]["ssh_host_key"].as_str().unwrap_or_default();
+    checks.check(
+        "ssh-host-key",
+        "The VM's SSH host key is the one the gateway connects to",
+        !recorded.is_empty() && host_key == recorded,
+        if recorded.is_empty() { "none is recorded" } else if host_key == recorded { "recorded in the host config" } else { "the VM has another host key than the recorded one" },
+        "run `devbox up` if the VM was rebuilt: it records the VM's host key again; if it was not, find out why the key changed",
+    );
 }
 
 fn vm_checks(
@@ -492,6 +572,7 @@ fn vm_checks(
             "in the VM: `devbox-hub hooks install`",
         );
     }
+    ssh_checks(system, paths, config, (value("gateway_key"), value("host_key")), checks);
     checks.check(
         "sync",
         "The repositories have been synced",
@@ -598,9 +679,9 @@ pub(crate) fn render_doctor(report: &Value) -> String {
 
 /// How to reach a devbox: the URLs, an SSH config snippet, and how to install the phone app.
 pub(crate) fn render_connect(report: &ConnectReport) -> String {
-    let (code_host, agents_host) = (&report.code_host, &report.agents_host);
-    let user = report.user.as_deref().unwrap_or("<user>");
+    let (code_host, agents_host, ssh_host) =
+        (&report.code_host, &report.agents_host, &report.ssh_host);
     format!(
-        "Your devbox\n\n  Editor       https://{code_host}\n  Agents app   https://{agents_host}\n\nOn your phone: open https://{agents_host} in Safari, Share → Add to Home Screen, open it from\nthere, then Settings → Enable notifications.\n\nSSH goes through the gateway, which wakes the VM: it listens on port 2222 of this server's\nloopback. In ~/.ssh/config on your own machine:\n\n  Host devbox\n    HostName 127.0.0.1\n    Port 2222\n    User {user}\n    ProxyJump <this server>\n"
+        "Your devbox\n\n  Editor       https://{code_host}\n  Agents app   https://{agents_host}\n  SSH          ssh devbox\n\nOn each of your computers (macOS or Linux), once:\n\n  curl -fsSL https://{ssh_host}/setup | sh\n\nIt installs a small client, asks for the password of the agents app to pair the computer's\nkey, and writes one block of SSH config. After that `ssh devbox` works from anywhere and wakes\nthe VM. Paired computers: `devbox ssh keys`.\n\nOn your phone: open https://{agents_host} in Safari, Share → Add to Home Screen, open it from\nthere, then Settings → Enable notifications.\n"
     )
 }

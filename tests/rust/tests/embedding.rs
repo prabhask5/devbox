@@ -90,7 +90,11 @@ fn up_is_a_function_that_asks_through_confirm_and_returns_a_report() {
     assert!(system.text("/etc/devbox/devbox.toml").is_some());
     assert_eq!(report.connect.user.as_deref(), Some("dev"));
     let said = render::human(&report);
-    assert!(said.contains("\nDone.\n\nYour devbox\n") && said.contains("    User dev\n"), "{said}");
+    assert!(
+        said.contains("\nDone.\n\nYour devbox\n")
+            && said.contains("  curl -fsSL https://devbox.example.com/setup | sh\n"),
+        "{said}"
+    );
 
     // The report is data: passwords are not in it, in any form.
     let json = render::json(&report);
@@ -477,4 +481,147 @@ fn a_sleeping_vm_that_has_to_be_started_wakes_up_where_it_was() {
         assert_eq!(vm.status, "Running");
         assert!(!vm.lost_memory, "starting the VM to provision it threw its saved memory away");
     });
+}
+
+fn golden(name: &str, actual: &str) {
+    let path = format!("tests/fixtures/setup/{name}");
+    if std::env::var_os("UPDATE_GOLDEN").is_some() {
+        std::fs::write(devbox_tests::repo(&path), actual).unwrap();
+    }
+    assert_eq!(actual, devbox_tests::read(&path), "{path}");
+}
+
+#[test]
+fn the_owners_keys_are_let_in_once_and_keys_are_listed_added_and_removed() {
+    let system = dokploy();
+    system.set_now(std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_790_000_000));
+    let keys = "/var/lib/devbox/gateway/ssh/authorized_keys";
+    system.set_owner_of(keys, (65532, 65532));
+    setup::up(&system, &fresh(), &mut Yes).unwrap();
+    // The key the owner logs in to the server with is the first one let in through the gateway.
+    assert_eq!(
+        system.text(keys).unwrap(),
+        "ssh-ed25519 FAKEkeyFAKEkeyFAKEkey devbox up paired 2026-09-21\n"
+    );
+    assert_eq!(system.files()[keys].0, 0o600);
+    assert_eq!(system.owner(keys), Some((65532, 65532)), "the file stays the gateway's");
+
+    let ssh = |args: &[&str]| {
+        let mut all = vec!["ssh"];
+        all.extend(args);
+        devbox(&system, &all)
+    };
+    // Paired from a laptop since (as the gateway writes it), and used.
+    system.put(keys, "ssh-ed25519 AAAAlaptopFAKEFAKEFAKE Ada's MacBook Pro paired 2026-09-22\nssh-rsa AAAAserverFAKEFAKE build server paired 2026-09-23\n");
+    system.set_owner_of(keys, (65532, 65532));
+    system.put(
+        "/var/lib/devbox/gateway/ssh/keys-used.json",
+        r#"{"v": 1, "keys": [{"fingerprint": "SHA256:laptopFAKEFAKEFAKE", "at": 1790003600000}]}"#,
+    );
+    let (code, out, err) = ssh(&["keys"]);
+    assert_eq!((code, err.as_str()), (ExitCode::SUCCESS, ""));
+    golden("ssh-keys.txt", &out);
+    let (_, json, _) = ssh(&["keys", "--json"]);
+    golden("ssh-keys.json", &json);
+    let options = setup::ssh::SshOptions::default();
+    assert_eq!(json, render::json(&setup::ssh::keys(&system, &options).unwrap()));
+
+    // Added without pairing: from a file, under the key's own comment; then renamed.
+    system.put("/home/dev/desk.pub", "ssh-ed25519 AAAAdeskFAKEFAKE dev@desk\n");
+    let (code, out, _) = ssh(&["keys", "add", "/home/dev/desk.pub"]);
+    assert_eq!(code, ExitCode::SUCCESS, "{out}");
+    assert_eq!(
+        out,
+        "Added dev@desk (ED25519 SHA256:deskFAKEFAKE). It can log in now: ssh devbox\n"
+    );
+    let (_, out, _) = ssh(&["keys", "add", "ssh-ed25519 AAAAdeskFAKEFAKE", "--name", "desk"]);
+    assert_eq!(out, "That key was there already; it is now named desk (SHA256:deskFAKEFAKE).\n");
+    assert!(
+        system
+            .text(keys)
+            .unwrap()
+            .ends_with("\nssh-ed25519 AAAAdeskFAKEFAKE desk paired 2026-09-21\n")
+    );
+    assert_eq!(system.owner(keys), Some((65532, 65532)));
+
+    // What is not a key that is accepted is said to be, and changes nothing.
+    let before = system.text(keys).unwrap();
+    for (key, why) in [
+        ("ssh-rsa AAAASHORTFAKE old", "devbox ssh: an RSA key of 2048 bits is too short"),
+        ("ssh-dss AAAAFAKE old", "devbox ssh: that is not a public key devbox accepts"),
+        (
+            "command=\"sh\" ssh-ed25519 AAAAFAKE x",
+            "devbox ssh: that is not a public key devbox accepts",
+        ),
+        ("ssh-ed25519 not-a-key x", "devbox ssh: that is not a public key devbox accepts"),
+    ] {
+        let (code, out, err) = ssh(&["keys", "add", key]);
+        assert!(
+            code == ExitCode::from(2) && out.is_empty() && err.starts_with(why),
+            "{key}: {err}"
+        );
+    }
+    assert_eq!(system.text(keys).unwrap(), before);
+
+    // Removed by name or by fingerprint.
+    let (_, out, _) = ssh(&["keys", "remove", "Ada's MacBook Pro"]);
+    assert_eq!(
+        out,
+        "Removed Ada's MacBook Pro (ED25519 SHA256:laptopFAKEFAKEFAKE). Connections that came in with it are closed within two seconds.\n"
+    );
+    let (code, _, _) = ssh(&["keys", "remove", "SHA256:serverFAKEFAKE"]);
+    assert_eq!(code, ExitCode::SUCCESS);
+    let (code, _, err) = ssh(&["keys", "remove", "nobody"]);
+    assert_eq!(
+        (code, err.as_str()),
+        (
+            ExitCode::from(2),
+            "devbox ssh: no key is named nobody or has that fingerprint: `devbox ssh keys` lists them.\n"
+        )
+    );
+    assert_eq!(system.text(keys).unwrap(), "ssh-ed25519 AAAAdeskFAKEFAKE desk paired 2026-09-21\n");
+
+    // A key that was removed is not brought back by the next `up`: the owner's keys are let
+    // in the first time only.
+    let again = setup::up(&system, &UpOptions::default(), &mut Yes).unwrap();
+    assert_eq!(again.outcome, Outcome::Unchanged, "{}", render::human(&again));
+    assert_eq!(system.text(keys).unwrap(), "ssh-ed25519 AAAAdeskFAKEFAKE desk paired 2026-09-21\n");
+
+    let (code, out, err) = ssh(&["status"]);
+    assert_eq!((code, err.as_str()), (ExitCode::SUCCESS, ""));
+    golden("ssh-status.txt", &out);
+    let (_, json, _) = ssh(&["status", "--json"]);
+    golden("ssh-status.json", &json);
+
+    // With nobody paired, the list says how to pair.
+    let (_, out, _) = ssh(&["keys", "remove", "desk"]);
+    assert!(out.starts_with("Removed desk "), "{out}");
+    let (_, out, _) = ssh(&["keys"]);
+    assert_eq!(
+        out,
+        "No computer is paired yet. On a Mac or a Linux computer, run:\n\n  curl -fsSL https://devbox.example.com/setup | sh\n"
+    );
+}
+
+#[test]
+fn down_takes_the_gateways_key_out_of_a_vm_that_stays_and_leaves_the_paired_computers() {
+    let system = dokploy();
+    setup::up(&system, &fresh(), &mut Yes).unwrap();
+    let keys = system.text("/var/lib/devbox/gateway/ssh/authorized_keys").unwrap();
+    let report = setup::down(&system, &DownOptions::default()).unwrap();
+    assert!(
+        report.done.contains(&"took the gateway's SSH key out of devbox".to_owned()),
+        "{:?}",
+        report.done
+    );
+    system.incus(|incus| {
+        let last = incus.instances["devbox"].executed.last().unwrap();
+        // The same script, with no key to put in: the gateway's line goes.
+        assert!(
+            last.0[2].contains("grep -v ' devbox-gateway$'") && last.0[4..] == ["dev", ""],
+            "{last:?}"
+        );
+    });
+    assert_eq!(system.text("/var/lib/devbox/gateway/ssh/authorized_keys").unwrap(), keys);
+    assert!(system.text("/var/lib/devbox/gateway/ssh/host_ed25519_key.pub").is_some());
 }

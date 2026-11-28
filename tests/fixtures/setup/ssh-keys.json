@@ -1,0 +1,20 @@
+{
+  "v": 1,
+  "host": "devbox.example.com",
+  "keys": [
+    {
+      "name": "Ada's MacBook Pro",
+      "kind": "ED25519",
+      "fingerprint": "SHA256:laptopFAKEFAKEFAKE",
+      "paired": "2026-09-22",
+      "lastUsed": 1790003600000
+    },
+    {
+      "name": "build server",
+      "kind": "RSA",
+      "fingerprint": "SHA256:serverFAKEFAKE",
+      "paired": "2026-09-23",
+      "lastUsed": null
+    }
+  ]
+}

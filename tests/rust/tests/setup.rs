@@ -105,7 +105,7 @@ fn the_plan_for_adopting_a_host_that_runs_a_vm_already() {
         "    ~ migration.stateful: (unset) → true",
         "    ~ boot.autostart: true → false",
         "    ~ root disk size.state: (unset) → 6GiB (room for 5GiB of memory)",
-        "    ~ replace /etc/dokploy/traefik/dynamic/devbox.yml: code.example.com and agents.example.com → http://devbox-gateway:8080 (what is there is saved for `devbox down`)",
+        "    ~ replace /etc/dokploy/traefik/dynamic/devbox.yml: code.example.com, agents.example.com and devbox.example.com → http://devbox-gateway:8080 (what is there is saved for `devbox down`)",
         "    + host-firewall: containers → 10.77.0.10 tcp 22,8080,8090 in /etc/host-firewall/rules4.txt, applied with `systemctl restart host-firewall`",
     ] {
         assert!(out.contains(line), "{line}\n{out}");
@@ -129,7 +129,7 @@ fn plans_for_other_ways_to_route_and_to_firewall() {
 
     let out =
         plan(&host(), "plan-routing-none.txt", &["--domain", "example.com", "--routing", "none"]);
-    assert!(out.contains("left to you: route https://code.example.com and https://agents.example.com to http://devbox-gateway:8080"), "{out}");
+    assert!(out.contains("left to you: route https://code.example.com, https://agents.example.com and https://devbox.example.com to http://devbox-gateway:8080"), "{out}");
 
     let ufw = dokploy();
     ufw.prints("ufw", "Status: active\n\nTo                         Action      From\n--                         ------      ----\n10.77.0.10 22,8080/tcp     ALLOW FWD   172.16.0.0/12              # devbox: proxies to VM\n");
@@ -277,7 +277,7 @@ fn a_fresh_host_is_set_up_and_a_second_run_changes_nothing() {
     args.push("--yes");
     let (code, out, err) = devbox(&system, &args);
     assert_eq!((code, err.as_str()), (ExitCode::SUCCESS, ""), "{out}");
-    assert!(out.ends_with("    ProxyJump <this server>\n") && out.contains("\nDone.\n\nYour devbox\n\n  Editor       https://code.example.com\n  Agents app   https://agents.example.com\n"), "{out}");
+    assert!(out.contains("\nDone.\n\nYour devbox\n\n  Editor       https://code.example.com\n  Agents app   https://agents.example.com\n  SSH          ssh devbox\n") && out.contains("\n  curl -fsSL https://devbox.example.com/setup | sh\n"), "{out}");
 
     // The instance, exactly as asked of Incus.
     let created = system.incus(|incus| incus.instances["devbox"].created_from.clone());
@@ -359,8 +359,12 @@ fn a_fresh_host_is_set_up_and_a_second_run_changes_nothing() {
         let waited = vm.executed.iter().position(|(command, _)| command.last().is_some_and(|script| script.contains("cloud-init status --wait")));
         let looked_up = vm.executed.iter().position(|(command, _)| command.last().is_some_and(|script| script.starts_with("id -u 'dev'")));
         assert!(waited.is_some() && waited < looked_up, "{:?}", vm.executed);
+        let installed = vm.executed.iter().position(|(command, user)| command == &["bash", "/var/lib/devbox-install/install.sh"] && user.is_none());
+        assert!(installed.is_some(), "{:?}", vm.executed);
+        // Then the VM lets the gateway's own key in, from the bridge and nowhere else.
         let last = vm.executed.last().unwrap();
-        assert_eq!((last.0.as_slice(), last.1), (&["bash".to_owned(), "/var/lib/devbox-install/install.sh".to_owned()][..], None));
+        assert!(installed < Some(vm.executed.len() - 1) && last.0[2].contains("authorized_keys") && last.1.is_none(), "{last:?}");
+        assert_eq!(last.0[4..], ["dev", "from=\"10.77.0.1\",no-X11-forwarding ssh-ed25519 AAAAFAKEGATEWAYUPSTREAMKEY devbox-gateway"]);
     });
 
     // The same command again: nothing to do, and nothing done.
@@ -379,7 +383,7 @@ fn a_fresh_host_is_set_up_and_a_second_run_changes_nothing() {
     assert_eq!((code, err.as_str()), (ExitCode::SUCCESS, ""));
     assert_eq!(
         out,
-        "removed /etc/devbox/secrets.toml\nremoved /etc/devbox/devbox.toml\nremoved /etc/dokploy/traefik/dynamic/devbox.yml\nkept the instance devbox, which `devbox up` created (delete it with `devbox down --destroy`)\n"
+        "removed /etc/devbox/secrets.toml\nremoved /etc/devbox/devbox.toml\nremoved /etc/dokploy/traefik/dynamic/devbox.yml\ntook the gateway's SSH key out of devbox\nkept the instance devbox, which `devbox up` created (delete it with `devbox down --destroy`)\n"
     );
     let left: Vec<String> =
         system.files().into_keys().filter(|path| path.starts_with("/etc/")).collect();
@@ -499,9 +503,17 @@ fn adopting_changes_only_what_sleeping_needs_and_down_puts_every_byte_back() {
     let after: BTreeMap<String, (u32, String)> = system
         .files()
         .into_iter()
-        .filter(|(path, _)| !path.starts_with("/var/lib/devbox/backup/"))
+        .filter(|(path, _)| {
+            !path.starts_with("/var/lib/devbox/backup/")
+                && !path.starts_with("/var/lib/devbox/gateway/")
+        })
         .collect();
-    assert_eq!(after, before_files);
+    let before: BTreeMap<String, (u32, String)> = before_files
+        .clone()
+        .into_iter()
+        .filter(|(path, _)| !path.starts_with("/var/lib/devbox/gateway/"))
+        .collect();
+    assert_eq!(after, before);
     assert_eq!(instance(&system, "devbox"), before_instance);
     assert_eq!(restarts(&system), restarts_before + 1, "the restored firewall rules are applied");
     assert_eq!(system.incus(|incus| incus.instances["devbox"].status.clone()), "Running");
@@ -581,6 +593,8 @@ fn dotfiles_are_cloned_read_and_applied() {
             let script = command.get(2).map_or_default(String::as_str);
             if script.starts_with("id -u") {
                 (0, "1000\n1000\n/home/dev\n".to_owned(), String::new())
+            } else if script.contains("ssh_host_ed25519_key.pub") {
+                (0, "ssh-ed25519 AAAAFAKEVMHOSTKEY root@devbox\n".to_owned(), String::new())
             } else {
                 (0, String::new(), String::new())
             }

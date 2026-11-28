@@ -5,6 +5,7 @@ use std::fmt::Write as _;
 
 use serde::Serialize;
 
+use crate::setup::ssh::{SshKeyChange, SshKeysReport, SshStatusReport};
 use crate::setup::{
     ConnectReport, DoctorReport, DownReport, Outcome, PasswordKind, PasswordReport, Plan,
     StatusReport, UpReport,
@@ -111,5 +112,23 @@ impl Report for PasswordReport {
             PasswordKind::App => "The password of the agents app",
         };
         format!("{which} is changed. Every device that was signed in has to sign in again.\n")
+    }
+}
+
+impl Report for SshKeysReport {
+    fn human(&self) -> String {
+        crate::setup::ssh::render_keys(self)
+    }
+}
+
+impl Report for SshKeyChange {
+    fn human(&self) -> String {
+        crate::setup::ssh::render_change(self)
+    }
+}
+
+impl Report for SshStatusReport {
+    fn human(&self) -> String {
+        crate::setup::ssh::render_status(self)
     }
 }

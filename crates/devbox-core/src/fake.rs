@@ -549,6 +549,13 @@ impl FakeSystem {
         }
     }
 
+    /// Gives a file that is there to a user and a group.
+    pub fn set_owner_of(&self, path: &str, owner: (u32, u32)) {
+        if let Some(file) = self.state().files.get_mut(Path::new(path)) {
+            file.owner = owner;
+        }
+    }
+
     /// Sets a variable of the environment.
     pub fn set_env(&self, name: &str, value: &str) {
         self.state().env.insert(name.to_owned(), value.to_owned());
