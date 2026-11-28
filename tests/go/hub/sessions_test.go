@@ -18,9 +18,14 @@ func TestAnAgentSessionFromStartToRestart(t *testing.T) {
 	h := start(t)
 	created := h.create(hub.NewSession{Agent: "claude", Cwd: "devbox", Prompt: "Fix the flaky sync test"})
 	if created.Name != "claude-devbox" || value(created.Tmux) != "claude-devbox" || created.Agent != "claude" || created.Kind != proto.SessionKindTmux ||
-		created.Cwd != filepath.Join(h.code, "devbox") || value(created.Repo) != "devbox" || created.State != proto.SessionStateStarting ||
+		created.Cwd != filepath.Join(h.code, "devbox") || value(created.Repo) != "devbox" ||
 		created.Title != "Fix the flaky sync test" || len(created.ID) != 8 || created.V != 1 || created.Adopted {
 		t.Fatalf("created: %+v", created)
+	}
+	// It is starting, unless the agent was quick enough to have reported already: what Create
+	// returns is the session as it is when its terminal exists, not as it was reserved.
+	if state := created.State; state != proto.SessionStateStarting && state != proto.SessionStateIdle && state != proto.SessionStateWorking {
+		t.Fatalf("created in state %s: %+v", state, created)
 	}
 
 	// The agent starts and takes the prompt it was started with.
@@ -368,4 +373,35 @@ func TestSessionsSurviveAHubRestart(t *testing.T) {
 	// The agent still reaches the new hub.
 	h.typeLine(agent.ID, "stop")
 	h.waitState(agent.ID, proto.SessionStateIdle)
+}
+
+// A tag that is lost, or could not be set when the session was adopted, is put back at the next
+// look at tmux: the session stays the same one, and a rename in tmux cannot lose it.
+func TestASessionThatLostItsTagIsTaggedAgain(t *testing.T) {
+	h := start(t)
+	if err := h.tmux.New(ctx, "by-hand", "", filepath.Join(h.code, "notes"), nil, []string{"sleep", "300"}); err != nil {
+		t.Fatal(err)
+	}
+	tag := func() string {
+		live, _ := h.tmux.List(ctx)
+		for _, l := range live {
+			if l.Name == "by-hand" {
+				return l.ID
+			}
+		}
+		return ""
+	}
+	eventually(t, "the session to be adopted and tagged", func() bool { return tag() != "" })
+	id := tag()
+	if err := h.tmux.SetID(ctx, "by-hand", ""); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the session to be tagged again", func() bool { return tag() == id })
+	if err := h.tmux.Rename(ctx, "by-hand", "renamed"); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the hub to follow the rename", func() bool { s := h.session(id); return s != nil && s.Name == "renamed" })
+	if sessions := h.hub.Sessions(); len(sessions) != 1 {
+		t.Errorf("one session was started, the hub lists %d: %+v", len(sessions), sessions)
+	}
 }

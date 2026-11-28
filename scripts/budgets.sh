@@ -3,7 +3,9 @@
 # (metric, budget, measured, result), also into the CI job summary. A metric fails when it is more than 10 % worse
 # than its budget; metrics ending in _rps are minimums, every other metric is a maximum.
 # Measurements are read from a TOML file of `metric = value` lines: $BUDGETS_MEASURED, default
-# target/budgets/measured.toml. A metric without a measurement is reported as pending.
+# target/budgets/measured.toml. A metric without a measurement fails as "not measured": a budget nobody
+# measures is not enforced. $BUDGETS_NOT_MEASURED_HERE names (separated by spaces) the metrics this run
+# cannot measure — the image size where there is no Docker — which are reported as that and do not fail.
 # The budgets are for Linux, where devbox runs. BUDGETS_REPORT_ONLY=1 prints the table without failing, for
 # measurements taken on a developer's machine.
 set -euo pipefail
@@ -32,10 +34,14 @@ unknown = sorted(set(measured) - set(budgets))
 if unknown:
     sys.exit(f"measurements without a budget in budgets.toml: {', '.join(unknown)}")
 
+not_here = set(os.environ.get("BUDGETS_NOT_MEASURED_HERE", "").split())
+if unknown := sorted(not_here - set(budgets)):
+    sys.exit(f"BUDGETS_NOT_MEASURED_HERE names metrics without a budget: {', '.join(unknown)}")
 rows, failed = [], False
 for metric, budget in budgets.items():
     if metric not in measured:
-        rows.append((metric, budget, "", "pending"))
+        failed |= metric not in not_here
+        rows.append((metric, budget, "", "not measured here" if metric in not_here else "not measured"))
         continue
     value = measured[metric]
     # Throughputs are minimums; everything else is a maximum.
@@ -50,7 +56,7 @@ if summary := os.environ.get("GITHUB_STEP_SUMMARY"):
     with open(summary, "a") as f:
         f.write("## Performance budgets\n\n" + "\n".join(table) + "\n")
 if failed and os.environ.get("BUDGETS_REPORT_ONLY") == "1":
-    print("\nover budget on this machine; not enforced (BUDGETS_REPORT_ONLY)")
+    print("\nover budget or not measured on this machine; not enforced (BUDGETS_REPORT_ONLY)")
     sys.exit(0)
 sys.exit(1 if failed else 0)
 PY

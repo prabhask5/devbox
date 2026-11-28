@@ -21,7 +21,7 @@ import (
 
 const sshHost = "devbox.example.com"
 
-func goldenFile(t *testing.T, name, actual string) {
+func goldenFile(t testing.TB, name, actual string) {
 	t.Helper()
 	path := filepath.Join(repo.Root(t), "tests/fixtures/gateway", name)
 	if os.Getenv("UPDATE_GOLDEN") != "" {

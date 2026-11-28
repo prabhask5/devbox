@@ -185,6 +185,7 @@ func (h *Hub) Kill(ctx context.Context, id string) error {
 	}
 	h.mu.Lock()
 	delete(h.sessions, id)
+	h.kills++
 	h.mu.Unlock()
 	h.changed()
 	if err := h.store.remove(ctx, id); err != nil {
@@ -329,6 +330,9 @@ func (h *Hub) Restart(ctx context.Context, id string) error {
 // reconcile brings the sessions in line with what tmux has: sessions that vanished are gone,
 // sessions the hub does not know are adopted, agents that exited or fell silent are noticed.
 func (h *Hub) reconcile(ctx context.Context) {
+	h.mu.Lock()
+	kills := h.kills
+	h.mu.Unlock()
 	live, err := h.opt.Tmux.List(ctx)
 	if err != nil {
 		h.log.Warn("tmux list failed", "error", err)
@@ -373,13 +377,26 @@ func (h *Hub) reconcile(ctx context.Context) {
 		} else {
 			claimed[l.Name] = true
 			h.observe(s, l, now)
+			if l.ID != id {
+				// Known by its name only: tagging it failed when it was adopted, or the tag was
+				// taken off. It is tagged again, so that a rename in tmux cannot lose it.
+				if err := h.opt.Tmux.SetID(ctx, l.Name, id); err != nil {
+					h.log.Warn("session not tagged", "session", l.Name, "error", err)
+				}
+			}
 		}
 		if !sameRecord(&before, &s.Session) {
 			h.persist(s)
 		}
 	}
 
-	// Sessions started elsewhere, e.g. `tmux -L devbox new -s scratch` in a terminal.
+	// Sessions started elsewhere, e.g. `tmux -L devbox new -s scratch` in a terminal. Not from a
+	// list that was taken before a session was killed: it may still hold that session, which
+	// would come back as one nobody started. The next look at tmux is as good.
+	if h.kills != kills {
+		live = nil
+		h.requestReconcile()
+	}
 	for i := range live {
 		l := &live[i]
 		if claimed[l.Name] || l.Name == observed {

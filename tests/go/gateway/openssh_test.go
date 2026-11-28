@@ -26,14 +26,14 @@ import (
 // `ssh devbox` goes through `devbox-ssh proxy` to the gateway's SSH host behind a TLS front
 // that plays Traefik, and `ssh direct` to the gateway's TCP listener.
 type openssh struct {
-	t      *testing.T
+	t      testing.TB
 	h      *harness
 	dir    string
 	config string
 	proxy  string // the ProxyCommand of `ssh devbox`
 }
 
-func newOpenSSH(t *testing.T, h *harness) *openssh {
+func newOpenSSH(t testing.TB, h *harness) *openssh {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("runs the OpenSSH client")
@@ -165,7 +165,7 @@ func TestOpenSSHDoesWhatItDoesAgainstSSHDThroughBothEntries(t *testing.T) {
 }
 
 // listening waits until something accepts connections at an address.
-func listening(t *testing.T, address string) {
+func listening(t testing.TB, address string) {
 	t.Helper()
 	eventually(t, address+" to listen", func() bool {
 		conn, err := net.DialTimeout("tcp", address, time.Second)
@@ -176,7 +176,7 @@ func listening(t *testing.T, address string) {
 	})
 }
 
-func freePort(t *testing.T) string {
+func freePort(t testing.TB) string {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

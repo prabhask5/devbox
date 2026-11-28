@@ -1,6 +1,6 @@
 # 13 — Performance budgets
 
-Speed is a product requirement. Budgets live in `budgets.toml` and are enforced by the `budgets` CI job (release builds, fixtures and fakes, median of 5 runs; fails when a metric exceeds its budget by more than 10 %). The job writes a table (metric, budget, measured, result) to the job summary. Metrics without a measurement yet are listed as "pending".
+Speed is a product requirement. Budgets live in `budgets.toml` and are enforced by the `budgets` CI job (release builds, fixtures and fakes, median of 5 runs; fails when a metric exceeds its budget by more than 10 %). The job writes a table (metric, budget, measured, result) to the job summary. A metric that was not measured fails like one over its budget; a run that cannot measure one (the image size where there is no Docker) names it in `BUDGETS_NOT_MEASURED_HERE`.
 
 The budgets are for Linux, where devbox runs, and are enforced there (CI). On another system `scripts/ci.sh` still measures and prints the table but does not fail: starting a process, for one, costs several milliseconds more on macOS.
 
@@ -19,16 +19,16 @@ The budgets are for Linux, where devbox runs, and are enforced there (CI). On an
 | `devbox-ssh` size / RSS while proxying | 6 MB / 15 MB | the largest of the four builds; peak RSS of the native build while it proxies 256 MiB to an echo (its heap is capped at 8 MiB) |
 | Wake overhead beyond Incus + VM | 300 ms | fake Incus with instant start: request → ready, minus fake delays |
 | Hook relay wall time p50 / p99 | 5 ms / 15 ms | `devbox-hub event` invoked 200 times against a running hub |
-| Hub idle RSS / CPU (10 sessions, no viewers) | 30 MB / 0.3 % | 10-minute run with real tmux |
-| Hub event → SSE state update | 20 ms | event posted → frame received by a test client |
-| Screen frame latency (pane output → SSE frame) | 60 ms | real tmux, output burst |
+| Hub idle RSS / CPU (10 sessions, no viewers) | 30 MB / 0.3 % | `tests/perf/hub`: the real binary with ten shell sessions in real tmux, watched for 60 s |
+| Hub event → SSE state update | 20 ms | same: an event posted on the hub's socket → the state frame received by a signed-in client. A change on its own is sent at once; changes that follow within 100 ms are coalesced into one frame |
+| Screen frame latency (pane output → SSE frame) | 60 ms | same: a loop in the pane prints 200 lines and a marker; from the trigger to the frame that shows the marker |
 | `devbox sync`, 11 repos, nothing to pull, local remotes | 600 ms | `tests/perf/sync`: the release binary, median of 9 runs |
 | `devbox context`, 11 repos, no network, no AI | 1.5 s | `tests/perf/context`: the release binary, median of 5 runs |
-| `devbox --version` | 10 ms | |
-| `devbox status` (fakes) | 150 ms | |
+| `devbox --version` | 10 ms | `tests/perf/cli`: the release binary, median of 21 runs |
+| `devbox status` (fakes) | 150 ms | same, against a fake Incus and stand-ins for `docker` and `curl`, median of 9 runs |
 | Boot screen bundle (HTML+JS+CSS) | 15 KB gzip | build output |
 | Hub app initial JS / CSS | 60 KB / 10 KB gzip | build output |
-| Hub app first render on a mid-range phone profile | 1 s | Playwright with CPU throttling ×4, cached shell |
+| Hub app first render on a mid-range phone profile | 1 s | `tests/e2e/budget.spec.ts`: Chromium with CPU throttling ×4, cached shell, navigation start → the session list on screen, median of 5 loads |
 
 Rules that make these achievable:
 

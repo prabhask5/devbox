@@ -56,7 +56,7 @@ type Session struct {
 
 // Start runs a fake sshd on a loopback port until the test ends. It accepts the user and no
 // key until Authorize is called.
-func Start(t *testing.T, user string) *Server {
+func Start(t testing.TB, user string) *Server {
 	t.Helper()
 	s, err := New(user, t.TempDir())
 	if err != nil {

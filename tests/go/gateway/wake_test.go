@@ -35,7 +35,7 @@ func finished(timing *proto.PhaseTiming) bool {
 	return timing != nil && timing.End != nil && !skipped(timing)
 }
 
-func history(t *testing.T, h *harness) []map[string]any {
+func history(t testing.TB, h *harness) []map[string]any {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(h.stateDir, "history.json"))
 	if os.IsNotExist(err) {

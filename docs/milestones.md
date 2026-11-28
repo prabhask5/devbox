@@ -137,9 +137,9 @@ Specs: 09 (adoption), 10, `reference/cestmoi.md`
 
 ## M12 — Performance and hardening
 Specs: 13, 14
-- [ ] Every budget measured and enforced (no "pending")
-- [ ] Fuzzing: config/TOML parsing (Rust `cargo fuzz`, Go native fuzzing for proxy header handling, agent-event parsing, sync-progress parsing)
-- [ ] Security review against spec 14 (Incus allowlist, auth boundaries, secrets never in output — a test greps every output surface for the fixture secrets)
+- [x] Every budget measured and enforced (no "pending"): a metric nobody measures fails — [`tests/perf/`](../tests/perf), [`tests/e2e/budget.spec.ts`](../tests/e2e/budget.spec.ts), `TestABudgetNobodyMeasuresFails`
+- [x] Fuzzing: config/TOML parsing (Rust property tests with `proptest` — `cargo fuzz` needs a nightly compiler — and a Go fuzz target), Go native fuzzing for proxy header handling, cookies, agent-event parsing, sync-progress parsing; `scripts/fuzz.sh` nightly — [`tests/go/fuzz`](../tests/go/fuzz), [`tests/rust/tests/config_property.rs`](../tests/rust/tests/config_property.rs)
+- [x] Security review against spec 14 (Incus allowlist, auth boundaries, secrets never in output — a test greps every output surface for the fixture secrets) — spec 14 "Checked by test"
 - [ ] Cleanup pass; `scripts/check-hygiene.sh` green
 
 ## M13 — Public release readiness (v1.0.0)
