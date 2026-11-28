@@ -342,10 +342,21 @@ impl Sandbox {
     ///
     /// When git cannot be started.
     pub fn try_git(&self, dir: &Path, args: &[&str]) -> (bool, String) {
-        let output = self
-            .system
-            .run(&system::Command::new("git", args.iter().copied()).in_dir(dir))
-            .unwrap_or_else(|err| panic!("git: {err}"));
+        // The sandbox's `git` is a script it has just written. Another test's thread that forks at
+        // that moment holds the script open for writing for an instant, and starting it then is
+        // refused as "Text file busy": it is started again.
+        let command = system::Command::new("git", args.iter().copied()).in_dir(dir);
+        let mut tries = 0;
+        let output = loop {
+            match self.system.run(&command) {
+                Ok(output) => break output,
+                Err(err) if tries < 50 && err.to_string().contains("Text file busy") => {
+                    tries += 1;
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                Err(err) => panic!("git: {err}"),
+            }
+        };
         // Only the end is trimmed: `git status` puts meaning in a leading space.
         let mut text = String::from_utf8_lossy(&output.stdout).trim_end().to_owned();
         if !output.success() {
