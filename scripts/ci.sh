@@ -46,7 +46,9 @@ static() {
   step "pnpm audit";    pnpm -C web audit --prod --audit-level high
 }
 
-go_() { step "go test"; go test -race ./...; }
+# Two packages at a time: several of them build and run the real programs, and the ones that
+# measure time (wakes, idle, tmux) fail when the machine has nothing left for them.
+go_() { step "go test"; go test -race -p 2 ./...; }
 
 rust() { step "cargo test"; cargo test --workspace --locked; }
 
