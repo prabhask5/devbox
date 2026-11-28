@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"strings"
 
 	"golang.org/x/crypto/argon2"
@@ -22,6 +23,16 @@ const (
 	saltLen   = 16
 	hashLen   = 32
 )
+
+// release gives the memory a hash took back to the system. A hash needs 64 MiB for a moment;
+// left to the runtime, a service that verified one password would hold on to them for
+// minutes, several times its own size. Passwords are verified rarely, so the collection this
+// costs does not matter. (Hashes with little memory, as tests use them, are not worth it.)
+func release(memoryKiB uint32) {
+	if memoryKiB >= 8*1024 {
+		debug.FreeOSMemory()
+	}
+}
 
 // ErrMalformed reports a hash that is not an argon2id PHC string this package accepts.
 var ErrMalformed = errors.New("not a valid argon2id hash")
@@ -41,6 +52,7 @@ func Hash(password string) (string, error) {
 // HashWithSalt returns the hash of password with the given salt. Use [Hash] except to
 // reproduce a known hash.
 func HashWithSalt(password string, salt []byte) string {
+	defer release(memoryKiB)
 	hash := argon2.IDKey([]byte(password), salt, passes, memoryKiB, lanes, hashLen)
 	return fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s", argon2.Version, memoryKiB, passes, lanes, b64.EncodeToString(salt), b64.EncodeToString(hash))
 }
@@ -65,6 +77,7 @@ func Verify(encoded, password string) (bool, error) {
 		threads < 1 || threads > 16 || time < 1 || time > 16 || memory < 8*uint32(threads) || memory > 1024*1024 {
 		return false, ErrMalformed
 	}
+	defer release(memory)
 	got := argon2.IDKey([]byte(password), salt, time, memory, threads, uint32(len(want))) //nolint:gosec // len(want) ≤ 64, checked above
 	return subtle.ConstantTimeCompare(got, want) == 1, nil
 }

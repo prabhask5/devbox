@@ -78,15 +78,16 @@ step "build"
 cargo build --release --locked -p devbox-cli
 mkdir -p "$work/bin"
 CGO_ENABLED=0 go build -trimpath -o "$work/bin/devbox-hub" ./cmd/devbox-hub
+CGO_ENABLED=0 go build -trimpath -o "$work/devbox-ssh" ./cmd/devbox-ssh
 cp target/release/devbox "$work/bin/devbox"
 
 step "a Traefik in front, with a certificate the machine trusts"
 openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 2 -subj "/CN=devbox nightly" \
-  -addext "subjectAltName=DNS:code.$domain,DNS:agents.$domain" \
+  -addext "subjectAltName=DNS:code.$domain,DNS:agents.$domain,DNS:devbox.$domain" \
   -keyout "$work/tls.key" -out "$work/tls.crt" 2>/dev/null
 sudo cp "$work/tls.crt" /usr/local/share/ca-certificates/devbox-nightly.crt
 sudo update-ca-certificates >/dev/null
-echo "127.0.0.1 code.$domain agents.$domain" | sudo tee -a /etc/hosts >/dev/null
+echo "127.0.0.1 code.$domain agents.$domain devbox.$domain" | sudo tee -a /etc/hosts >/dev/null
 sudo install -d -m 755 /etc/traefik/dynamic /etc/traefik/certs
 sudo install -m 644 "$work/tls.crt" "$work/tls.key" /etc/traefik/certs/
 printf 'tls:\n  certificates:\n    - certFile: /etc/traefik/certs/tls.crt\n      keyFile: /etc/traefik/certs/tls.key\n' |
@@ -117,6 +118,29 @@ devbox doctor | tee "$out/doctor.txt"
 devbox up --yes | tee "$out/up-again.txt"
 grep -q "Everything is already up to date." "$out/up-again.txt"
 
+step "ssh devbox: the real OpenSSH client, through Traefik and the gateway, to the VM's own sshd"
+# What the setup script writes on a computer, by hand: the key `devbox up` let in, the gateway's
+# host key pinned, the client as the ProxyCommand.
+echo "devbox.$domain $(sudo cut -d' ' -f1,2 /var/lib/devbox/gateway/ssh/host_ed25519_key.pub)" > "$work/known_hosts"
+ssh_devbox() {
+  ssh -o BatchMode=yes -o IdentitiesOnly=yes -i "$work/key" -o IdentityAgent=none \
+    -o UserKnownHostsFile="$work/known_hosts" -o StrictHostKeyChecking=yes -o HostKeyAlias="devbox.$domain" \
+    -o ProxyCommand="$work/devbox-ssh proxy https://devbox.$domain" "dev@devbox.$domain" "$@"
+}
+[[ $(ssh_devbox 'echo "$USER on $(hostname)"') == "dev on devbox" ]]
+head -c 1048576 /dev/urandom > "$work/megabyte"
+ssh_devbox 'cat > megabyte' < "$work/megabyte"
+ssh_devbox 'cat megabyte' | cmp - "$work/megabyte"
+devbox ssh keys | tee "$out/ssh-keys.txt"
+devbox ssh status | tee "$out/ssh-status.txt"
+# A key that is not paired gets no further than the gateway.
+ssh-keygen -q -t ed25519 -N '' -f "$work/stranger"
+if ssh -o BatchMode=yes -o IdentitiesOnly=yes -i "$work/stranger" -o IdentityAgent=none -o UserKnownHostsFile="$work/known_hosts" \
+  -o HostKeyAlias="devbox.$domain" -o ProxyCommand="$work/devbox-ssh proxy https://devbox.$domain" "dev@devbox.$domain" true 2>"$out/stranger.txt"; then
+  echo "a key that is not paired got in"; exit 1
+fi
+grep -q "Permission denied (publickey)" "$out/stranger.txt"
+
 step "the Incus client against this Incus; its answers recorded"
 sudo DEVBOX_REAL_INCUS=/var/lib/incus/unix.socket DEVBOX_REAL_INSTANCE=devbox DEVBOX_RECORD_DIR="$out/incus" \
   "$(command -v go)" test ./tests/go/incus -run TestTheClientAgainstARealIncus -count=1 -v
@@ -143,6 +167,16 @@ wait_for 60 "the VM's agent answers again" in_vm true
 after=$(in_vm sh -c 'cat /proc/sys/kernel/random/boot_id; pgrep -f "sleep 1000000" | head -n 1')
 [[ $before == "$after" ]] || { printf 'the VM did not resume where it was:\nbefore: %s\nafter: %s\n' "$before" "$after"; exit 1; }
 in_vm sudo -u dev -H tmux has-session -t nightly
+
+step "sleep again, and wake over SSH"
+wait_for 120 "the gateway sees the VM running and idle again" vm_is running
+gateway -H 'Content-Type: application/json' -d '{}' "https://code.$domain/__devbox/sleep" | jq -e .ok >/dev/null
+wait_for 300 "asleep again" vm_is stopped
+[[ $(sudo incus query /1.0/instances/devbox | jq -r .stateful) == true ]] || { echo "the VM is stopped without its memory saved"; exit 1; }
+woken=$(ssh_devbox 'cat /proc/sys/kernel/random/boot_id; pgrep -f "sleep 1000000" | head -n 1' 2>"$out/ssh-wake.txt")
+cat "$out/ssh-wake.txt"
+grep -q '^devbox: waking the VM' "$out/ssh-wake.txt" && grep -q '^devbox: ready in ' "$out/ssh-wake.txt"
+[[ $before == "$woken" ]] || { printf 'the VM did not resume where it was:\nbefore: %s\nafter: %s\n' "$before" "$woken"; exit 1; }
 
 step "devbox down"
 devbox down --destroy --yes | tee "$out/down.txt"

@@ -21,7 +21,7 @@ The VM should reach the internet but not the host's private networks; `devbox up
 ## Passwords and cookies
 
 - Passwords hashed with argon2id (Go `golang.org/x/crypto/argon2`, Rust `argon2`), parameters m=64 MiB, t=3, p=1, 16-byte salt, 32-byte hash; PHC string format (`$argon2id$v=19$m=65536,t=3,p=1$<salt>$<hash>`, unpadded base64) so both languages read the same hash. Verification uses the parameters in the string and refuses anything devbox would not write: another algorithm or version, reordered or padded fields, non-canonical base64, or parameters out of range (m ≤ 1 GiB, t ≤ 16, p ≤ 16), which also bounds the work a corrupt file can cause. `tests/fixtures/password/vectors.json` holds hashes both implementations must derive, accept and reject identically.
-- Cookies: `<expiry>.<HMAC-SHA256(secret, expiry)>`, HttpOnly, Secure, SameSite=Lax, constant-time verification. Login rate limit 6/min per client IP plus a global lockout after 50 failures/hour (30 min); one password is verified at a time, since each verification takes 64 MiB.
+- Cookies: `<expiry>.<HMAC-SHA256(secret, expiry)>`, HttpOnly, Secure, SameSite=Lax, constant-time verification. Login rate limit 6/min per client IP plus a global lockout after 50 failures/hour (30 min); one password is verified at a time, since each verification takes 64 MiB, which is given back to the system as soon as the hash is made (a service would otherwise hold it for minutes).
 - CSRF: state-changing endpoints accept only `POST`/`DELETE` with `Content-Type: application/json` (or the login form with an `Origin` check); SameSite=Lax covers cross-site requests.
 - `next` redirects accept same-origin paths only.
 
